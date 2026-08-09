@@ -1,7 +1,5 @@
 package io.veridex.support;
 
-import java.util.ArrayList;
-import java.util.List;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.opensearch.testcontainers.OpenSearchContainer;
@@ -26,7 +24,7 @@ abstract class InfrastructureContainers {
     static final OpenSearchContainer<?> OPENSEARCH = new OpenSearchContainer<>(
             "opensearchproject/opensearch:3.2.0");
 
-    private static final List<Startable> STARTED_CONTAINERS = new ArrayList<>();
+    private static final ContainerLifecycle LIFECYCLE = new ContainerLifecycle();
 
     @BeforeAll
     static void startInfrastructure() {
@@ -39,39 +37,10 @@ abstract class InfrastructureContainers {
 
     @AfterAll
     static void stopInfrastructure() {
-        stopStartedContainers();
+        LIFECYCLE.stopStartedContainers();
     }
 
     private static void start(Startable container) {
-        try {
-            container.start();
-            STARTED_CONTAINERS.add(container);
-        } catch (RuntimeException | Error startupFailure) {
-            try {
-                stopStartedContainers();
-            } catch (RuntimeException cleanupFailure) {
-                startupFailure.addSuppressed(cleanupFailure);
-            }
-            throw startupFailure;
-        }
-    }
-
-    private static void stopStartedContainers() {
-        RuntimeException cleanupFailure = null;
-        for (int index = STARTED_CONTAINERS.size() - 1; index >= 0; index--) {
-            try {
-                STARTED_CONTAINERS.get(index).stop();
-            } catch (RuntimeException stopFailure) {
-                if (cleanupFailure == null) {
-                    cleanupFailure = stopFailure;
-                } else {
-                    cleanupFailure.addSuppressed(stopFailure);
-                }
-            }
-        }
-        STARTED_CONTAINERS.clear();
-        if (cleanupFailure != null) {
-            throw cleanupFailure;
-        }
+        LIFECYCLE.start(container);
     }
 }
