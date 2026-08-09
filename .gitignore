@@ -1,0 +1,21 @@
+.codetui/
+.idea/
+*.iml
+.DS_Store
+
+# Build outputs
+**/target/
+**/build/
+node_modules/
+dist/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+application-local.yml
+application-local.yaml
+
+# Runtime data
+.data/
+logs/
