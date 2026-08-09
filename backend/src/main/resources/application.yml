@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: veridex
+  ai:
+    chat:
+      client:
+        observations:
+          log-prompt: false
+          log-completion: false
+    vectorstore:
+      observations:
+        log-query-response: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
