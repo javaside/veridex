@@ -1,0 +1,9 @@
+:root { font-family: Inter, "PingFang SC", sans-serif; color: #142033; background: #f4f7fb; }
+body { margin: 0; }
+.app-shell { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+aside { padding: 24px; color: white; background: #10233a; }
+nav { display: grid; gap: 8px; margin-top: 24px; }
+nav a { display: grid; gap: 2px; padding: 10px 12px; color: #b9c8d8; text-decoration: none; border-radius: 8px; }
+nav a small { font-size: 11px; letter-spacing: 0.04em; }
+nav a.active { color: #06251f; background: #43d9c3; }
+main { padding: 32px; }
