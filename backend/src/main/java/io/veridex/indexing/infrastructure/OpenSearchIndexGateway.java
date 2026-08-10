@@ -97,6 +97,9 @@ public class OpenSearchIndexGateway implements SearchIndexGateway {
     @Override
     @SuppressWarnings("unchecked")
     public List<ChunkRecord> findChunksByDocumentVersion(String indexName, UUID documentVersionId) {
+        if (!indexExists(indexName)) {
+            return List.of(); // 索引不存在（如已 offline 移除 alias）视为空结果
+        }
         try {
             var response = client.search(SearchRequest.of(s -> s
                     .index(indexName)
