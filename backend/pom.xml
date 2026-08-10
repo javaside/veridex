@@ -70,6 +70,11 @@
             <version>3.3.1</version>
         </dependency>
         <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-core</artifactId>
+            <version>3.3.1</version>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-flyway</artifactId>
         </dependency>
@@ -168,6 +173,10 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- Tika 加载全部解析器模块占用较大堆 -->
+                    <argLine>-Xmx2g</argLine>
+                </configuration>
             </plugin>
         </plugins>
     </build>
