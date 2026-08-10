@@ -1,5 +1,5 @@
 @org.springframework.modulith.ApplicationModule(
         displayName = "Indexing",
-        allowedDependencies = {"shared", "knowledge"}
+        allowedDependencies = {"shared::config", "knowledge::api"}
 )
 package io.veridex.indexing;

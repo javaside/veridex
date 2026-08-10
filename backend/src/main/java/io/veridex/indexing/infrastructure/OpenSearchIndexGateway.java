@@ -33,6 +33,9 @@ public class OpenSearchIndexGateway implements SearchIndexGateway {
     @Override
     public void createIndex(String indexName, int dimensions) {
         try {
+            if (indexExists(indexName)) {
+                return; // 幂等：已存在则跳过
+            }
             IndexSettings settings = new IndexSettings.Builder()
                     .numberOfShards(1).numberOfReplicas(0).build();
             TypeMapping mapping = new TypeMapping.Builder()

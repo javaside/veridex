@@ -1,5 +1,6 @@
 package io.veridex.knowledge.application;
 
+import io.veridex.knowledge.api.DocumentVersionProcessing;
 import io.veridex.knowledge.api.KnowledgeBaseAuthorization;
 import io.veridex.knowledge.domain.Document;
 import io.veridex.knowledge.domain.DocumentRepository;
@@ -15,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
-public class DocumentService {
+public class DocumentService implements DocumentVersionProcessing {
 
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of("pdf", "docx", "txt", "md");
     private static final long MAX_BYTES = 50L * 1024 * 1024;
@@ -84,6 +85,11 @@ public class DocumentService {
 
     public DocumentVersion findVersion(UUID versionId) {
         return require(versionId);
+    }
+
+    @Override
+    public String findVersionStatus(UUID versionId) {
+        return require(versionId).getStatus().name();
     }
 
     private DocumentVersion require(UUID versionId) {

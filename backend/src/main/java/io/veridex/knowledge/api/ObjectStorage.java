@@ -1,4 +1,4 @@
-package io.veridex.knowledge.application;
+package io.veridex.knowledge.api;
 
 import java.io.InputStream;
 

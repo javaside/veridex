@@ -7,7 +7,7 @@ import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
 import io.minio.StatObjectArgs;
-import io.veridex.knowledge.application.ObjectStorage;
+import io.veridex.knowledge.api.ObjectStorage;
 import io.veridex.shared.infrastructure.config.MinioProperties;
 import java.io.InputStream;
 import org.springframework.stereotype.Component;

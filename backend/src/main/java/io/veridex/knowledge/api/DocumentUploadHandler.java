@@ -2,7 +2,7 @@ package io.veridex.knowledge.api;
 
 import io.veridex.audit.api.AuditRecorder;
 import io.veridex.knowledge.application.DocumentService;
-import io.veridex.knowledge.application.ObjectStorage;
+import io.veridex.knowledge.api.ObjectStorage;
 import io.veridex.knowledge.domain.DocumentVersion;
 import io.veridex.shared.outbox.OutboxWriter;
 import java.security.MessageDigest;

@@ -15,9 +15,11 @@ import org.springframework.amqp.core.QueueInformation;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.TestPropertySource;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 @Testcontainers
+@TestPropertySource(properties = "spring.rabbitmq.listener.simple.auto-startup=false")
 @Import({MinioContainerConfiguration.class, RabbitContainerConfiguration.class})
 class OutboxPublishingIntegrationTest extends PostgresIntegrationTest {
 

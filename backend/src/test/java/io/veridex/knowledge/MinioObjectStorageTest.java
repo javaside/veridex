@@ -2,7 +2,7 @@ package io.veridex.knowledge;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.veridex.knowledge.application.ObjectStorage;
+import io.veridex.knowledge.api.ObjectStorage;
 import io.veridex.support.MinioContainerConfiguration;
 import io.veridex.support.PostgresIntegrationTest;
 import java.io.ByteArrayInputStream;

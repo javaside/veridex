@@ -1,5 +1,5 @@
 @org.springframework.modulith.ApplicationModule(
         displayName = "Ingestion",
-        allowedDependencies = {"shared", "knowledge"}
+        allowedDependencies = {"shared::messaging", "knowledge::api", "indexing::api", "audit::api"}
 )
 package io.veridex.ingestion;

@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.springframework.stereotype.Component;
 
 /**
  * 结构优先分块器（v1）：
@@ -12,6 +13,7 @@ import java.util.regex.Pattern;
  * - 无标题的纯文本按段落聚合；
  * - 超长块按 MAX_CHARS 硬切（含 overlap）。
  */
+@Component
 public class StructureFirstChunker implements StructureChunker {
 
     private static final int MAX_CHARS = 2000;
