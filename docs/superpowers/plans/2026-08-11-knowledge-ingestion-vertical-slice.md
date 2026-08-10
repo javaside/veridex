@@ -25,6 +25,7 @@
 ## 关键外部 API（已验证，2026-08-11）
 
 - Spring AI 2.0.0 GA：`org.springframework.ai.document.Document`（构造 `Document(String)`、`Document(String, Map)`、`Document(String id, String, Map)`；方法 `getId()`/`getText()`/`getMetadata()`，无 `getContent()`）；`org.springframework.ai.embedding.EmbeddingModel`（`float[] embed(String)`、`List<float[]> embed(List<String>)`、`int dimensions()`）；`org.springframework.ai.vectorstore.VectorStore`（`add(List<Document>)`、`delete(List<String>)`）；`DocumentReader/DocumentTransformer/DocumentWriter` 位于 `org.springframework.ai.document` 顶层包。
+- Spring Boot 4 / Spring Framework 7 迁移到 **Jackson 3**：`JsonMapper`（`tools.jackson.databind.json.JsonMapper`）取代 Jackson 2 的 `ObjectMapper` 成为自动配置的 bean；`com.fasterxml.jackson.databind.ObjectMapper`（Jackson 2）仍随 web starter 传递但在自动配置中不再注册。所有序列化代码统一用 `JsonMapper`。
 - opensearch-java `3.9.0` + opensearch-rest-client `3.8.0`（配 OpenSearch 3.2.0）；`OpenSearchClient` 构造：`new OpenSearchClient(new RestClientTransport(RestClient.builder(HttpHost.create(uri)).build(), new JacksonJsonpMapper()))`。
 - MinIO Java SDK `8.6.0`：`MinioClient.builder().endpoint(uri).credentials(ak, sk).build()`；`bucketExists`、`makeBucket`、`putObject`、`getObject`、`removeObject`、`statObject`。
 - Apache Tika `3.3.1`（`tika-parsers-standard-package`）：`AutoDetectParser` + `BodyContentHandler(-1)` + `Metadata` + `ParseContext`。注意：该包经 Apache POI 传递依赖，与 Spring Boot 存在冲突风险，Task 1 必须做 `mvn dependency:tree` + `clean verify` 验证。
@@ -377,36 +378,42 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.veridex.support.PostgresIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
+import org.springframework.test.web.servlet.client.RestTestClient;
 
+@AutoConfigureRestTestClient
 class AuthFlowIntegrationTest extends PostgresIntegrationTest {
 
-    @Autowired TestRestTemplate rest;
+    @Autowired RestTestClient rest;
 
     @Test
     void loginWithSeedUserEstablishesSessionAndMeReturnsProfile() {
-        var login = rest.postForEntity(
-                "/api/auth/login?username=admin&password=veridex", null, String.class);
-        assertThat(login.getStatusCode()).isEqualTo(HttpStatus.OK); // 200 + 当前用户 JSON
-        assertThat(login.getBody()).contains("\"username\":\"admin\"");
+        rest.post().uri("/api/auth/login?username=admin&password=veridex")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.username").isEqualTo("admin");
 
-        var me = rest.getForEntity("/api/auth/me", String.class);
-        assertThat(me.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(me.getBody()).contains("\"username\":\"admin\"");
+        // RestTestClient 自动保持 session：第二次请求携带 JSESSIONID
+        rest.get().uri("/api/auth/me")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.username").isEqualTo("admin");
     }
 
     @Test
     void unknownUserLoginIsRejected() {
-        var login = rest.postForEntity(
-                "/api/auth/login?username=nobody&password=veridex", null, String.class);
-        assertThat(login.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        rest.post().uri("/api/auth/login?username=nobody&password=veridex")
+                .exchange()
+                .expectStatus().isUnauthorized();
     }
 }
 ```
 
-**提示：** `TestRestTemplate` 默认带 cookie jar（`HttpComponentsClientHttpRequestFactory`），同一实例上连续请求共享 session——这是本测试依赖的前提。`PostgresIntegrationTest` 需补充 `@SpringBootTest(webEnvironment = RANDOM_PORT)` + `@AutoConfigureTestDatabase(replace = NONE)` 变体（见 Step 5）。
+**实现要点（实测修正，Spring Boot 4）：**
+- `TestRestTemplate` 已移到 `org.springframework.boot.resttestclient` 包，且 Boot 4 的 resttestclient **不再自动管理 JSESSIONID cookie**——认证成功后建立的 session 不会带到后续请求，导致 `/api/auth/me` 变匿名。**统一改用 `RestTestClient`**（MockMvc 系，session 自动保持）+ `@AutoConfigureRestTestClient`。
+- `PostgresIntegrationTest` 必须是**共享单例容器**（见 Step 5），否则每个测试类各起一个 `@Container` 会让 Spring context 缓存指向已停止的容器。
 
 - [ ] **Step 4: 运行并确认失败**
 
@@ -422,27 +429,41 @@ package io.veridex.support;
 
 import io.veridex.VeridexApplication;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.context.annotation.Import;
-import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 
-@Testcontainers
 @SpringBootTest(classes = VeridexApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "spring.jpa.hibernate.ddl-auto=validate")
-@Import(PostgresContainerConfiguration.class)
 public abstract class PostgresIntegrationTest {
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17-alpine")
-            .withDatabaseName("veridex").withUsername("veridex").withPassword("veridex");
+
+    /**
+     * 共享单例 PostgreSQL 容器：静态初始化只执行一次，所有继承类复用同一容器与
+     * 同一 JDBC URL，避免 Spring context 缓存指向已停止的容器（每个测试类各起
+     * 一个 @Container 会导致此问题）。
+     */
+    static final PostgreSQLContainer<?> POSTGRES;
 
     static {
+        POSTGRES = new PostgreSQLContainer<>("postgres:17-alpine")
+                .withDatabaseName("veridex")
+                .withUsername("veridex")
+                .withPassword("veridex");
         POSTGRES.start();
+        Runtime.getRuntime().addShutdownHook(new Thread(POSTGRES::stop));
+    }
+
+    @DynamicPropertySource
+    static void postgresProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+        registry.add("spring.datasource.username", POSTGRES::getUsername);
+        registry.add("spring.datasource.password", POSTGRES::getPassword);
     }
 }
 ```
 
-> 说明：把 PostgreSQL 容器提升为静态字段并显式 `start()`，避免每个继承测试类重复启动；原有 `DatabaseMigrationTest` 等若继承此类会自动复用。若既有测试因 web 环境变化失败，用 `@SpringBootTest(webEnvironment = MOCK)` 覆盖（Phase 1 的 `VeridexApplicationTest` 保持 MOCK 即可）。
+> 说明（实测修正）：不要用 `@Testcontainers` + 每个测试类独立的 `@Container` 静态字段——多个继承类会让每个类各起一个容器，而 Spring context 缓存只记住第一个容器的 JDBC URL，第一个类结束后容器被销毁，后续类连不上数据库。改用**共享单例容器**（静态初始化 + shutdown hook + `@DynamicPropertySource`），整个 JVM 只启动一次。`spring.jpa.hibernate.ddl-auto=validate` 让 Hibernate 校验实体与 Flyway schema 一致（Phase 2 起有 JPA 实体）。
 
 - [ ] **Step 6: 实现 IAM 代码**
 
@@ -575,7 +596,7 @@ public class PlatformUserDetailsService implements UserDetailsService {
 ```java
 package io.veridex.iam.infrastructure;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import io.veridex.iam.domain.PlatformUser;
 import java.util.Map;
 import org.springframework.context.annotation.Bean;
@@ -592,9 +613,9 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
 
-    public SecurityConfig(ObjectMapper objectMapper) {
+    public SecurityConfig(JsonMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
 
@@ -1498,7 +1519,7 @@ public interface OutboxEventRepository extends CrudRepository<OutboxEventEntity,
 ```java
 package io.veridex.shared.outbox;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -1507,9 +1528,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class OutboxWriter {
 
     private final OutboxEventRepository repository;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
 
-    public OutboxWriter(OutboxEventRepository repository, ObjectMapper objectMapper) {
+    public OutboxWriter(OutboxEventRepository repository, JsonMapper objectMapper) {
         this.repository = repository;
         this.objectMapper = objectMapper;
     }
@@ -1530,7 +1551,7 @@ public class OutboxWriter {
 package io.veridex.shared.outbox;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -1543,9 +1564,9 @@ public class OutboxPublisher {
 
     private final OutboxEventRepository repository;
     private final RabbitTemplate rabbit;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
 
-    public OutboxPublisher(OutboxEventRepository repository, RabbitTemplate rabbit, ObjectMapper objectMapper) {
+    public OutboxPublisher(OutboxEventRepository repository, RabbitTemplate rabbit, JsonMapper objectMapper) {
         this.repository = repository;
         this.rabbit = rabbit;
         this.objectMapper = objectMapper;
@@ -1680,99 +1701,87 @@ package io.veridex.knowledge;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.veridex.support.PostgresContainerConfiguration;
-import io.veridex.support.MinioContainerConfiguration;
-import io.veridex.support.RabbitContainerConfiguration;
-import java.util.List;
+import io.veridex.support.PostgresIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.context.annotation.Import;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
+import org.springframework.test.web.servlet.client.RestTestClient;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-@Testcontainers
+@AutoConfigureRestTestClient
 @SpringBootTest(classes = io.veridex.VeridexApplication.class,
-        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "spring.rabbitmq.listener.simple.auto-startup=false")
-@Import({PostgresContainerConfiguration.class, MinioContainerConfiguration.class, RabbitContainerConfiguration.class})
-class KnowledgeApiIntegrationTest {
+@Import({MinioContainerConfiguration.class, RabbitContainerConfiguration.class})
+class KnowledgeApiIntegrationTest extends PostgresIntegrationTest {
 
-    @Autowired TestRestTemplate rest;
+    @Autowired RestTestClient rest;
 
-    private HttpHeaders loginAsAdmin() {
-        var resp = rest.postForEntity("/api/auth/login?username=admin&password=veridex", null, String.class);
-        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
-        return new HttpHeaders();
+    private void loginAs(String username) {
+        rest.post().uri("/api/auth/login?username=" + username + "&password=veridex")
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
     void createKnowledgeBaseThenUploadDocument() {
-        HttpHeaders headers = loginAsAdmin();
-        headers.setContentType(MediaType.APPLICATION_JSON);
+        loginAs("admin");
 
-        var create = rest.postForEntity("/api/knowledge-bases",
-                new HttpEntity<>("{\"name\":\"产品手册\",\"description\":\"产品文档\"}", headers), String.class);
-        assertThat(create.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        String kbId = extractId(create.getBody());
+        var create = rest.post().uri("/api/knowledge-bases")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"产品手册\",\"description\":\"产品文档\"}")
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody()
+                .jsonPath("$.id").isNotEmpty();
+        String kbId = extractIdFromPath(create);
 
-        var form = new LinkedMultiValueMap<String, Object>();
-        form.add("file", new ByteArrayResource("# 产品介绍\n\n内容".getBytes()) {
-            @Override
-            public String getFilename() { return "intro.md"; }
-        });
-        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-        var upload = rest.postForEntity("/api/knowledge-bases/" + kbId + "/documents",
-                new HttpEntity<>(form, headers), String.class);
-        assertThat(upload.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
-        assertThat(upload.getBody()).contains("\"status\":\"UPLOADED\"");
+        var upload = rest.post().uri("/api/knowledge-bases/{kbId}/documents", kbId)
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(part("intro.md", "# 产品介绍\n\n内容"))
+                .exchange()
+                .expectStatus().isAccepted()
+                .expectBody()
+                .jsonPath("$.status").isEqualTo("UPLOADED");
 
-        var list = rest.getForEntity("/api/knowledge-bases/" + kbId + "/documents", String.class);
-        assertThat(list.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(list.getBody()).contains("intro.md");
+        rest.get().uri("/api/knowledge-bases/{kbId}/documents", kbId)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$[0].filename").isEqualTo("intro.md");
     }
 
     @Test
     void employeeWithoutGrantCannotUpload() {
         // admin 建库（owner=admin），employee 无 MANAGE grant，上传被拒
-        HttpHeaders adminHeaders = loginAs("admin", "veridex");
-        adminHeaders.setContentType(MediaType.APPLICATION_JSON);
-        var create = rest.postForEntity("/api/knowledge-bases",
-                new HttpEntity<>("{\"name\":\"受限库\"}", adminHeaders), String.class);
-        assertThat(create.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        loginAs("admin");
+        var create = rest.post().uri("/api/knowledge-bases")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"受限库\"}")
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody()
+                .jsonPath("$.id").isNotEmpty();
 
-        HttpHeaders employeeHeaders = loginAs("employee", "veridex");
-        var form = new LinkedMultiValueMap<String, Object>();
-        form.add("file", new ByteArrayResource("x".getBytes()) {
-            @Override
-            public String getFilename() { return "x.md"; }
-        });
-        employeeHeaders.setContentType(MediaType.MULTIPART_FORM_DATA);
-        var upload = rest.postForEntity("/api/knowledge-bases/" + extractId(create.getBody()) + "/documents",
-                new HttpEntity<>(form, employeeHeaders), String.class);
-        assertThat(upload.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        // 切换到 employee 会话
+        loginAs("employee");
+        rest.post().uri("/api/knowledge-bases/{kbId}/documents", create.returnResult().getResponseBodyAsString())
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(part("x.md", "x"))
+                .exchange()
+                .expectStatus().isForbidden();
     }
 
-    private HttpHeaders loginAs(String username, String password) {
-        var resp = rest.postForEntity("/api/auth/login?username=" + username + "&password=" + password,
-                null, String.class);
-        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
-        return new HttpHeaders();
+    private static MockMultipartFile part(String filename, String content) {
+        return new MockMultipartFile("file", filename, "text/markdown", content.getBytes());
     }
 
-    private static String extractId(String body) {
-        return body.replaceAll(".*\"id\":\"([^\"]+)\".*", "$1");
+    private static String extractIdFromPath(org.springframework.test.web.servlet.MvcResult result) {
+        return null; // 占位——实现时改为从 response 解析 id
     }
 }
 ```
+
+> **实现要点（实测修正，Spring Boot 4）：** 本测试改用 `RestTestClient` + `MockMultipartFile`（而非 `TestRestTemplate`/`ByteArrayResource`），原因同 Task 2：Boot 4 resttestclient 不自动管理 JSESSIONID。**同一个 `RestTestClient` 实例的连续请求共享 session**——`loginAs("admin")` 后再用 `loginAs("employee")` 会切换会话（新登录覆盖 session）。解析新建知识库 id 用 `MvcResult.getResponse().getContentAsString()` 提取 `id` 字段（删除上面 `extractIdFromPath` 占位方法，直接内联解析）。
 
 - [ ] **Step 2: 运行并确认失败**
 
@@ -1857,7 +1866,7 @@ public class JdbcAuditRecorder implements AuditRecorder {
 
     private static String toJson(Map<String, Object> details) {
         try {
-            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(details);
+            return new tools.jackson.databind.json.JsonMapper().writeValueAsString(details);
         } catch (Exception e) {
             return "{}";
         }
@@ -3201,7 +3210,7 @@ public class ReleaseChunkIndexer implements ChunkIndexer {
 ```java
 package io.veridex.ingestion.application;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import io.veridex.audit.application.AuditRecorder;
 import io.veridex.indexing.api.ChunkRecord;
 import io.veridex.indexing.application.ChunkIndexer;
@@ -3236,12 +3245,12 @@ public class DocumentIngestionWorker {
     private final IndexReleaseService releaseService;
     private final ChunkIndexer chunkIndexer;
     private final AuditRecorder audit;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
 
     public DocumentIngestionWorker(DocumentService documents, ObjectStorage storage,
                                    DocumentParser parser, StructureChunker chunker,
                                    IndexReleaseService releaseService, ChunkIndexer chunkIndexer,
-                                   AuditRecorder audit, ObjectMapper objectMapper) {
+                                   AuditRecorder audit, JsonMapper objectMapper) {
         this.documents = documents;
         this.storage = storage;
         this.parser = parser;
