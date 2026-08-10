@@ -8,6 +8,15 @@ spring:
   flyway:
     enabled: true
     validate-on-migrate: true
+  rabbitmq:
+    host: ${VERIDEX_RABBITMQ_HOST:localhost}
+    port: ${VERIDEX_RABBITMQ_PORT:5672}
+    username: ${VERIDEX_RABBITMQ_USERNAME:veridex}
+    password: ${VERIDEX_RABBITMQ_PASSWORD:veridex-local}
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 55MB
   ai:
     chat:
       client:
@@ -22,6 +31,22 @@ spring:
         # future upgrade the default can be verified here; without this note the key would read
         # as dead-but-intentional configuration.
         log-query-response: false
+
+veridex:
+  storage:
+    minio:
+      endpoint: ${VERIDEX_MINIO_ENDPOINT:http://localhost:9000}
+      access-key: ${VERIDEX_MINIO_ACCESS_KEY:veridex}
+      secret-key: ${VERIDEX_MINIO_SECRET_KEY:veridex-local-secret}
+      bucket: ${VERIDEX_MINIO_BUCKET:veridex-documents}
+  search:
+    opensearch:
+      uris: ${VERIDEX_OPENSEARCH_URIS:http://localhost:9200}
+      index-prefix: ${VERIDEX_OPENSEARCH_INDEX_PREFIX:veridex}
+      dimensions: ${VERIDEX_EMBEDDING_DIMENSIONS:128}
+  embedding:
+    provider: ${VERIDEX_EMBEDDING_PROVIDER:deterministic}
+    dimensions: ${VERIDEX_EMBEDDING_DIMENSIONS:128}
 
 management:
   endpoints:

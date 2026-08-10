@@ -1,0 +1,41 @@
+package io.veridex;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import io.veridex.shared.infrastructure.config.EmbeddingProperties;
+import io.veridex.shared.infrastructure.config.MinioProperties;
+import io.veridex.shared.infrastructure.config.OpenSearchProperties;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+
+@SpringBootTest(properties = {
+        "spring.autoconfigure.exclude=org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration"
+})
+class ConfigurationPropertiesBindingTest {
+
+    @Autowired MinioProperties minio;
+    @Autowired OpenSearchProperties openSearch;
+    @Autowired EmbeddingProperties embedding;
+
+    @Test
+    void minioPropertiesBindWithDefaults() {
+        assertThat(minio.endpoint()).isEqualTo("http://localhost:9000");
+        assertThat(minio.accessKey()).isEqualTo("veridex");
+        assertThat(minio.secretKey()).isEqualTo("veridex-local-secret");
+        assertThat(minio.bucket()).isEqualTo("veridex-documents");
+    }
+
+    @Test
+    void openSearchPropertiesBindWithDefaults() {
+        assertThat(openSearch.uris()).containsExactly("http://localhost:9200");
+        assertThat(openSearch.indexPrefix()).isEqualTo("veridex");
+        assertThat(openSearch.dimensions()).isEqualTo(128);
+    }
+
+    @Test
+    void embeddingPropertiesBindWithDefaults() {
+        assertThat(embedding.provider()).isEqualTo("deterministic");
+        assertThat(embedding.dimensions()).isEqualTo(128);
+    }
+}
