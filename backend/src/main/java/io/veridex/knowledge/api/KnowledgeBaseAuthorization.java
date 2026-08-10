@@ -29,6 +29,11 @@ public class KnowledgeBaseAuthorization {
         return canView(kbId, userId, SecurityContextRole.currentRole());
     }
 
+    public boolean isAdmin() {
+        Role role = SecurityContextRole.currentRole();
+        return role == Role.PLATFORM_ADMIN || role == Role.KNOWLEDGE_ADMIN;
+    }
+
     public boolean canManage(UUID kbId, UUID userId, Role role) {
         if (role == Role.PLATFORM_ADMIN || role == Role.KNOWLEDGE_ADMIN) {
             return true;

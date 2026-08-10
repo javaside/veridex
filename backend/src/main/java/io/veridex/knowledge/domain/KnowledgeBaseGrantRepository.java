@@ -11,5 +11,7 @@ public interface KnowledgeBaseGrantRepository extends CrudRepository<KnowledgeBa
 
     List<KnowledgeBaseGrant> findByKnowledgeBaseId(UUID knowledgeBaseId);
 
+    List<KnowledgeBaseGrant> findByUserId(UUID userId);
+
     void deleteByKnowledgeBaseIdAndUserId(UUID knowledgeBaseId, UUID userId);
 }
