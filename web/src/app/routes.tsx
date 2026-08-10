@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react'
+import { KnowledgePage } from '../features/knowledge/KnowledgePage'
+import { LoginPage } from '../features/auth/LoginPage'
 
 export type WorkspaceRoute = {
   path: string
@@ -18,7 +20,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     path: '/knowledge',
     label: '知识管理',
     englishLabel: 'Knowledge',
-    content: <h1>知识管理</h1>,
+    content: <KnowledgePage />,
   },
   {
     path: '/evaluation',
@@ -33,3 +35,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     content: <h1>平台管理</h1>,
   },
 ]
+
+export function LoginRoute() {
+  return <LoginPage />
+}

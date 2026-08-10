@@ -1,9 +1,45 @@
 :root { font-family: Inter, "PingFang SC", sans-serif; color: #142033; background: #f4f7fb; }
 body { margin: 0; }
 .app-shell { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+.app-shell.loading { place-items: center; }
 aside { padding: 24px; color: white; background: #10233a; }
 nav { display: grid; gap: 8px; margin-top: 24px; }
 nav a { display: grid; gap: 2px; padding: 10px 12px; color: #b9c8d8; text-decoration: none; border-radius: 8px; }
 nav a small { font-size: 11px; letter-spacing: 0.04em; }
 nav a.active { color: #06251f; background: #43d9c3; }
 main { padding: 32px; }
+.user-info { margin-top: 32px; display: grid; gap: 2px; color: #b9c8d8; }
+.user-info small { font-size: 11px; }
+
+/* 登录页 */
+.login-page { min-height: 100vh; display: grid; place-items: center; }
+.login-form { display: grid; gap: 12px; width: 320px; padding: 32px; background: white; border-radius: 12px; box-shadow: 0 8px 24px rgba(16, 35, 58, 0.08); }
+.login-form h1 { margin: 0; font-size: 24px; }
+.login-hint { margin: 0 0 8px; color: #6b7a8d; }
+.login-form label { display: grid; gap: 4px; font-size: 13px; color: #4a5a6e; }
+.login-form input { padding: 8px 10px; border: 1px solid #d5dde6; border-radius: 6px; font-size: 14px; }
+.login-form button { padding: 10px; border: 0; border-radius: 6px; background: #10233a; color: white; font-size: 14px; cursor: pointer; }
+.login-error { margin: 0; color: #c0392b; font-size: 13px; }
+
+/* 知识管理页 */
+.knowledge-page { display: grid; grid-template-columns: 240px 1fr; gap: 24px; }
+.kb-sidebar h2, .kb-content h2, .version-list h3 { margin-top: 0; }
+.kb-create { display: flex; gap: 8px; margin-bottom: 16px; }
+.kb-create input { flex: 1; padding: 6px 8px; border: 1px solid #d5dde6; border-radius: 6px; }
+.kb-sidebar ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.kb-sidebar li button { width: 100%; text-align: left; padding: 8px 10px; border: 1px solid #e3e9f0; border-radius: 6px; background: white; cursor: pointer; }
+.kb-sidebar li button.active { background: #e8f7f4; border-color: #43d9c3; }
+.kb-placeholder { color: #8a98aa; }
+.upload-form { display: flex; gap: 8px; margin: 12px 0 24px; }
+.version-list ul { list-style: none; padding: 0; }
+.version-list li { padding: 6px 0; border-bottom: 1px solid #eef2f6; }
+.doc-toggle { border: 0; background: none; font-size: 14px; cursor: pointer; color: #142033; }
+.doc-versions { margin: 6px 0 6px 16px; display: grid; gap: 4px; }
+.version-row, .release-row { display: flex; gap: 12px; align-items: center; font-size: 13px; }
+.status { padding: 2px 8px; border-radius: 10px; font-size: 12px; background: #eef2f6; }
+.status-ready { background: #d9f2e4; color: #0a6b3a; }
+.status-failed { background: #fde7e7; color: #a93226; }
+.status-processing { background: #fff3d6; color: #8a6d00; }
+.status-offline { background: #e7eaf0; color: #5c6a7c; }
+.version-row button, .release-row button { padding: 2px 10px; border: 1px solid #c9d4e0; border-radius: 6px; background: white; cursor: pointer; font-size: 12px; }
+.preview-box { white-space: pre-wrap; background: #0f2238; color: #dce7f2; padding: 16px; border-radius: 8px; margin-top: 16px; cursor: pointer; font-size: 13px; }

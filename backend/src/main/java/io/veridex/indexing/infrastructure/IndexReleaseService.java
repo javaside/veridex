@@ -2,11 +2,13 @@ package io.veridex.indexing.infrastructure;
 
 import io.veridex.indexing.api.DraftRelease;
 import io.veridex.indexing.api.IndexReleaseManager;
+import io.veridex.indexing.api.ReleaseView;
 import io.veridex.indexing.application.SearchIndexGateway;
 import io.veridex.indexing.domain.IndexRelease;
 import io.veridex.indexing.domain.IndexReleaseRepository;
 import io.veridex.indexing.domain.IndexReleaseStatus;
 import io.veridex.shared.infrastructure.config.OpenSearchProperties;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -79,6 +81,14 @@ public class IndexReleaseService implements IndexReleaseManager {
         IndexRelease release = require(releaseId);
         gateway.deleteIndex(release.getIndexName());
         releases.delete(release);
+    }
+
+    @Override
+    public List<ReleaseView> listReleases(UUID knowledgeBaseId) {
+        return releases.findByKnowledgeBaseIdOrderByVersionNoDesc(knowledgeBaseId).stream()
+                .map(r -> new ReleaseView(r.getId(), r.getVersionNo(), r.getStatus().name(),
+                        r.getIndexName(), r.getAliasName()))
+                .toList();
     }
 
     private IndexRelease require(UUID releaseId) {

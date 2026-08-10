@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { describe, expect, test } from 'vitest'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { App } from './App'
 
 const workspaces = [
@@ -14,18 +14,43 @@ function LocationProbe() {
   return <output aria-label="当前路径">{useLocation().pathname}</output>
 }
 
+const meJson = JSON.stringify({ id: '1', username: 'admin', displayName: '管理员', role: 'PLATFORM_ADMIN' })
+
+beforeEach(() => {
+  vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.includes('/api/auth/me')) {
+      return Promise.resolve(new Response(meJson, { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    }
+    return Promise.resolve(new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }))
+  }))
+})
+
 describe('App routes', () => {
-  test.each(workspaces)('renders the exact heading for %s', (path, title) => {
+  test.each(workspaces.filter(([p]) => p !== '/knowledge'))(
+    'renders the exact heading for %s',
+    async (path, title) => {
+      render(
+        <MemoryRouter initialEntries={[path]}>
+          <App />
+        </MemoryRouter>,
+      )
+
+      expect(await screen.findByRole('heading', { name: title, level: 1 })).toBeInTheDocument()
+    },
+  )
+
+  test('renders the knowledge workspace page for /knowledge', async () => {
     render(
-      <MemoryRouter initialEntries={[path]}>
+      <MemoryRouter initialEntries={['/knowledge']}>
         <App />
       </MemoryRouter>,
     )
 
-    expect(screen.getByRole('heading', { name: title, level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '知识库', level: 2 })).toBeInTheDocument()
   })
 
-  test('renders navigation links with their workspace hrefs', () => {
+  test('renders navigation links with their workspace hrefs', async () => {
     render(
       <MemoryRouter initialEntries={['/workbench']}>
         <App />
@@ -33,7 +58,7 @@ describe('App routes', () => {
     )
 
     for (const [path, title] of workspaces) {
-      expect(screen.getByRole('link', { name: title })).toHaveAttribute('href', path)
+      expect(await screen.findByRole('link', { name: title })).toHaveAttribute('href', path)
     }
   })
 

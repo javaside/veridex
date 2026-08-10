@@ -16,6 +16,8 @@ public interface IndexReleaseRepository extends CrudRepository<IndexRelease, UUI
     List<IndexRelease> findByKnowledgeBaseIdAndStatusOrderByVersionNoDesc(
             UUID knowledgeBaseId, IndexReleaseStatus status);
 
+    List<IndexRelease> findByKnowledgeBaseIdOrderByVersionNoDesc(UUID knowledgeBaseId);
+
     @Query("select r from IndexRelease r where r.knowledgeBaseId = :kb and r.status = 'PUBLISHED' and r.id <> :exclude order by r.publishedAt desc")
     List<IndexRelease> findOtherPublished(@Param("kb") UUID kb, @Param("exclude") UUID exclude);
 }
