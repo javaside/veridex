@@ -1330,8 +1330,8 @@ git commit -m "feat: add MinIO object storage adapter"
 **Interfaces:**
 - Consumes: V1 的 `outbox_event` 表、`RabbitTemplate`。
 - Produces:
-  - `OutboxWriter.record(String aggregateType, UUID aggregateId, String eventType, Object payload)`：事务内写 `outbox_event`（payload 经 Jackson 序列化为 JSONB，`schema_version = 1`，`occurred_at = now`）。
-  - `OutboxPublisher`：`@TransactionalEventListener(phase = AFTER_COMMIT)` 轮询未发布事件 → 发送到 `RabbitTopology.INGESTION_EXCHANGE` / routing key `document.ingest` → 成功更新 `published_at`；失败更新 `attempts`/`last_error`（留给后续重试）。
+  - `OutboxWriter.record(String aggregateType, UUID aggregateId, String eventType, Object payload)`：事务内写 `outbox_event`（payload 经 Jackson 序列化为 JSONB，`schema_version = 1`，`occurred_at = now`），并 `publishEvent(new OutboxCommitEvent())`。
+  - `OutboxPublisher`：`@TransactionalEventListener(phase = AFTER_COMMIT)` 监听 **`OutboxCommitEvent`**（必须带事件参数，Spring 要求）→ 轮询未发布事件 → 发送到 `RabbitTopology.INGESTION_EXCHANGE` / routing key `document.ingest` → 成功更新 `published_at`；失败更新 `attempts`/`last_error`（留给后续重试）。
   - `RabbitTopology`：声明 direct exchange `veridex.ingestion`、queue `ingestion.document`、binding `document.ingest`；DLX `veridex.dlx` + DLQ `ingestion.document.dlq`，queue 的 DLQ 绑定；队列 `x-dead-letter-exchange: veridex.dlx`。
   - 配置：`spring.rabbitmq.listener.simple.acknowledge-mode: manual`。
 
@@ -1407,21 +1407,25 @@ Expected: FAIL（编译失败：类不存在）。
 package io.veridex.support;
 
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 import org.testcontainers.containers.RabbitMQContainer;
 
 @TestConfiguration(proxyBeanMethods = false)
 public class RabbitContainerConfiguration {
 
-    @Bean(destroyMethod = "stop")
+    // 使用默认 guest/guest + @ServiceConnection 自动接线；RabbitMQ 4 的
+    // rabbitmqadmin 语法变更导致 withUser 不兼容，故不自定义用户。
+    @Bean
+    @ServiceConnection
     RabbitMQContainer rabbitContainer() {
-        return new RabbitMQContainer("rabbitmq:4-management-alpine")
-                .withUser("veridex", "veridex-local", "administrator");
+        return new RabbitMQContainer("rabbitmq:4-management-alpine");
     }
 }
 ```
 
-（`@ServiceConnection` 或手动把 `spring.rabbitmq.host/port/username/password` 指到容器——用 `org.springframework.boot.testcontainers.service.connection.ServiceConnection` 最省事，注解在 bean 上即可自动接线。）
+> 实测修正：`withUser` 对 RabbitMQ 4 报 `unexpected argument 'name=...'`（rabbitmqadmin 语法变更），改用默认 guest/guest + `@ServiceConnection` 自动接线。
+> 另外：任何加载完整应用 context 的测试都需要 `MinioClient` bean（`MinioObjectStorage` 构造时连 MinIO），因此生产 `InfrastructureBeans`（`MinioClient`，`@ConditionalOnMissingBean`）在 Task 5 就提前创建，测试用 `@Import(MinioContainerConfiguration.class)` 提供容器 bean 抢占生产 bean。
 
 - [ ] **Step 4: 实现 Outbox 与发布器**
 
