@@ -1,5 +1,6 @@
 package io.veridex.iam.domain;
 
+import io.veridex.iam.api.Role;
 import java.time.Instant;
 import java.util.UUID;
 import jakarta.persistence.Column;
