@@ -25,6 +25,10 @@
 ## 关键外部 API（已验证，2026-08-11）
 
 - Spring AI 2.0.0 GA：`org.springframework.ai.document.Document`（构造 `Document(String)`、`Document(String, Map)`、`Document(String id, String, Map)`；方法 `getId()`/`getText()`/`getMetadata()`，无 `getContent()`）；`org.springframework.ai.embedding.EmbeddingModel`（`float[] embed(String)`、`List<float[]> embed(List<String>)`、`int dimensions()`）；`org.springframework.ai.vectorstore.VectorStore`（`add(List<Document>)`、`delete(List<String>)`）；`DocumentReader/DocumentTransformer/DocumentWriter` 位于 `org.springframework.ai.document` 顶层包。
+- Spring Modulith 2.0 模块暴露规则（实测确认）：**unnamed interface 只包含模块根包的 public 类**，`api`/`domain`/`application`/`infrastructure` 子包的类**不会**自动对外可见。跨模块引用必须：
+  1. 被依赖模块的 `api` 子包声明 `@org.springframework.modulith.NamedInterface(name = "api")`（写在 `api/package-info.java`）；
+  2. 依赖方 `allowedDependencies` 写 `"模块名::api"`（如 `"iam::api"`）。
+  违反时报 `Module 'X' depends on module 'Y' via ... Allowed targets: ...`（尽管目标在 allowedDependencies 里也报）。同时 **`application` 子包的类不能直接依赖其他模块**——跨模块逻辑要放到本模块 `api` 子包的门面/端口（例：`knowledge.api.KnowledgeBaseAuthorization` 承载授权判断，`knowledge.application` 委托它）。
 - Spring Boot 4 / Spring Framework 7 迁移到 **Jackson 3**：`JsonMapper`（`tools.jackson.databind.json.JsonMapper`）取代 Jackson 2 的 `ObjectMapper` 成为自动配置的 bean；`com.fasterxml.jackson.databind.ObjectMapper`（Jackson 2）仍随 web starter 传递但在自动配置中不再注册。所有序列化代码统一用 `JsonMapper`。
 - opensearch-java `3.9.0` + opensearch-rest-client `3.8.0`（配 OpenSearch 3.2.0）；`OpenSearchClient` 构造：`new OpenSearchClient(new RestClientTransport(RestClient.builder(HttpHost.create(uri)).build(), new JacksonJsonpMapper()))`。
 - MinIO Java SDK `8.6.0`：`MinioClient.builder().endpoint(uri).credentials(ak, sk).build()`；`bucketExists`、`makeBucket`、`putObject`、`getObject`、`removeObject`、`statObject`。
@@ -1795,12 +1799,19 @@ Expected: FAIL（编译失败：Controller/DTO 不存在）。
 ```java
 @org.springframework.modulith.ApplicationModule(
         displayName = "Knowledge",
-        allowedDependencies = {"shared", "iam", "audit"}
+        allowedDependencies = {"shared", "iam::api", "audit::api"}
 )
 package io.veridex.knowledge;
 ```
 
-这是 Global Constraints 中记录的显式架构决策之一；`ArchitectureTest` 会在本任务验证。
+`backend/src/main/java/io/veridex/audit/api/package-info.java`（新建，声明 audit 的 api 命名接口）：
+
+```java
+@org.springframework.modulith.NamedInterface(name = "api")
+package io.veridex.audit.api;
+```
+
+这是 Global Constraints 中记录的显式架构决策之一；`ArchitectureTest` 会在本任务验证。注意 Modulith 2.0 规则：跨模块引用必须经对方 `api` 子包的 `@NamedInterface`，依赖声明用 `"模块名::api"`。
 
 - [ ] **Step 4: 生产 `MinioClient` bean 与 audit 最小实现**
 
@@ -2837,12 +2848,19 @@ CREATE TABLE index_release (
 ```java
 @org.springframework.modulith.ApplicationModule(
         displayName = "Ingestion",
-        allowedDependencies = {"shared", "knowledge", "indexing"}
+        allowedDependencies = {"shared", "knowledge::api", "indexing::api"}
 )
 package io.veridex.ingestion;
 ```
 
-这是 Global Constraints 中记录的显式架构决策；`ArchitectureTest` 在本任务验证 `ingestion → indexing` 新规则。
+`backend/src/main/java/io/veridex/indexing/api/package-info.java`（新建，声明 indexing 的 api 命名接口）：
+
+```java
+@org.springframework.modulith.NamedInterface(name = "api")
+package io.veridex.indexing.api;
+```
+
+这是 Global Constraints 中记录的显式架构决策；`ArchitectureTest` 在本任务验证 `ingestion → indexing` 新规则。`ChunkIndexer`/`IndexReleaseService` 等供 ingestion 调用的类型放在 `indexing.api`（或由 `indexing.application` 实现、经 `api` 端口暴露）。
 
 - [ ] **Step 3: 写失败的 IndexRelease 服务测试（域逻辑，用 mock gateway）**
 
