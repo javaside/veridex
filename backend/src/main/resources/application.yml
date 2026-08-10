@@ -4,7 +4,7 @@ spring:
   datasource:
     url: ${VERIDEX_DB_URL:jdbc:postgresql://localhost:5432/veridex}
     username: ${VERIDEX_DB_USERNAME:veridex}
-    password: ${VERIDEX_DB_PASSWORD:veridex}
+    password: ${VERIDEX_DB_PASSWORD:veridex-local}
   flyway:
     enabled: true
     validate-on-migrate: true
