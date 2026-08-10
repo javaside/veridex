@@ -33,10 +33,12 @@ class DatabaseMigrationTest extends PostgresIntegrationTest {
                     ORDER BY installed_rank
                     """);
                     var rows = statement.executeQuery()) {
-                assertThat(rows.next()).isTrue();
-                assertThat(rows.getString("version")).isEqualTo("1");
-                assertThat(rows.getBoolean("success")).isTrue();
-                assertThat(rows.next()).isFalse();
+                var versions = new java.util.ArrayList<String>();
+                while (rows.next()) {
+                    versions.add(rows.getString("version"));
+                    assertThat(rows.getBoolean("success")).isTrue();
+                }
+                assertThat(versions).containsExactly("1", "2");
             }
         }
     }

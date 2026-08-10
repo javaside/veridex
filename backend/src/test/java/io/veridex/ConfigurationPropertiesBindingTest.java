@@ -3,15 +3,15 @@ package io.veridex;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.veridex.shared.infrastructure.config.EmbeddingProperties;
+import io.veridex.shared.infrastructure.config.InfrastructurePropertiesConfiguration;
 import io.veridex.shared.infrastructure.config.MinioProperties;
 import io.veridex.shared.infrastructure.config.OpenSearchProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest(properties = {
-        "spring.autoconfigure.exclude=org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration"
-})
+// 只加载配置属性装配（不加载整个应用，避免 Security/JPA 依赖）
+@SpringBootTest(classes = InfrastructurePropertiesConfiguration.class)
 class ConfigurationPropertiesBindingTest {
 
     @Autowired MinioProperties minio;
