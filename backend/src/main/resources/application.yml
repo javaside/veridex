@@ -13,6 +13,10 @@ spring:
     port: ${VERIDEX_RABBITMQ_PORT:5672}
     username: ${VERIDEX_RABBITMQ_USERNAME:veridex}
     password: ${VERIDEX_RABBITMQ_PASSWORD:veridex-local}
+    listener:
+      simple:
+        acknowledge-mode: manual
+        default-requeue-rejected: false
   servlet:
     multipart:
       max-file-size: 50MB
