@@ -64,6 +64,13 @@
             <artifactId>opensearch-rest-client</artifactId>
             <version>3.8.0</version>
         </dependency>
+        <!-- opensearch-java 的 RestClientTransport 底层是 Apache HttpAsyncClient（org.apache.http 包，httpcore 4.x），
+             httpclient5 不提供该包 -->
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpclient</artifactId>
+            <version>4.5.14</version>
+        </dependency>
         <dependency>
             <groupId>org.apache.tika</groupId>
             <artifactId>tika-parsers-standard-package</artifactId>
