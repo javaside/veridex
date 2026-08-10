@@ -38,8 +38,9 @@
 ```text
 backend/pom.xml                                        Modify: 新增依赖
 backend/src/main/resources/application.yml             Modify: rabbitmq/minio/opensearch/embedding 配置
-backend/src/main/resources/db/migration/V2__identity_and_knowledge.sql   Create
-backend/src/main/resources/db/migration/V3__index_release.sql            Create
+backend/src/main/resources/db/migration/V2__identity.sql                    Create
+backend/src/main/resources/db/migration/V3__knowledge.sql                   Create
+backend/src/main/resources/db/migration/V4__index_release.sql              Create
 backend/src/main/java/io/veridex/shared/outbox/OutboxEventEntity.java    Create
 backend/src/main/java/io/veridex/shared/outbox/OutboxEventRepository.java
 backend/src/main/java/io/veridex/shared/outbox/OutboxWriter.java
@@ -303,7 +304,7 @@ git commit -m "build: add phase 2 infrastructure dependencies and configuration"
 ### Task 2: IAM 最小集（用户、角色、会话登录）
 
 **Files:**
-- Create: `backend/src/main/resources/db/migration/V2__identity_and_knowledge.sql`（本任务只建 `users` 表，其余表在 Task 3 追加——为保持单任务可验证，V2 一次性包含全部表，本任务仅依赖 `users`）
+- Create: `backend/src/main/resources/db/migration/V2__identity.sql`（users 表 + 种子数据——迁移文件一旦提交并被 Flyway 应用后不可修改，后续任务使用新迁移编号）
 - Create: `backend/src/main/java/io/veridex/iam/domain/Role.java`
 - Create: `backend/src/main/java/io/veridex/iam/domain/PlatformUser.java`
 - Create: `backend/src/main/java/io/veridex/iam/domain/PlatformUserRepository.java`
@@ -683,7 +684,7 @@ git commit -m "feat: add minimal identity and session authentication"
 ### Task 3: 知识域模型（KnowledgeBase、Document、DocumentVersion、授权）
 
 **Files:**
-- Modify: `backend/src/main/resources/db/migration/V2__identity_and_knowledge.sql`（追加 4 张表）
+- Create: `backend/src/main/resources/db/migration/V3__knowledge.sql`（knowledge_base/document/document_version/knowledge_base_grant 四表——独立的迁移编号，因 V2 已提交且被 Flyway 应用，不可修改）
 - Create: `backend/src/main/java/io/veridex/knowledge/domain/KnowledgeBaseStatus.java`
 - Create: `backend/src/main/java/io/veridex/knowledge/domain/GrantLevel.java`
 - Create: `backend/src/main/java/io/veridex/knowledge/domain/KnowledgeBase.java`
@@ -706,9 +707,9 @@ git commit -m "feat: add minimal identity and session authentication"
   - `DocumentVersionStatus`：`UPLOADED, PROCESSING, READY, FAILED, OFFLINE`。
   - `KnowledgeBaseStatus`：`ACTIVE, ARCHIVED`。
 
-- [ ] **Step 1: 在 V2 迁移中追加表**
+- [ ] **Step 1: 在 V3 迁移中创建表**
 
-在 `users` 种子数据之后追加：
+在 V2 之后新增迁移（V2 已提交并被 Flyway 应用，故用新编号 V3）：
 
 ```sql
 CREATE TABLE knowledge_base (
@@ -2770,7 +2771,7 @@ git commit -m "feat: add OpenSearch index gateway with alias management"
 
 **Files:**
 - Modify: `backend/src/main/java/io/veridex/ingestion/package-info.java`（`allowedDependencies` 增加 `indexing`）
-- Create: `backend/src/main/resources/db/migration/V3__index_release.sql`
+- Create: `backend/src/main/resources/db/migration/V4__index_release.sql`
 - Create: `backend/src/main/java/io/veridex/indexing/domain/IndexReleaseStatus.java`
 - Create: `backend/src/main/java/io/veridex/indexing/domain/IndexRelease.java`
 - Create: `backend/src/main/java/io/veridex/indexing/domain/IndexReleaseRepository.java`
@@ -2803,7 +2804,7 @@ git commit -m "feat: add OpenSearch index gateway with alias management"
     7. `AuditRecorder.record(... "ingestion.completed" ...)` + `channel.basicAck(deliveryTag, false)`
     8. 任何异常：`DocumentService.markFailed(versionId, reason)` + `channel.basicReject(deliveryTag, false)`（进 DLQ）；对幂等冲突（已 READY）直接 ack。
 
-- [ ] **Step 1: 创建 V3 迁移（index_release 表）**
+- [ ] **Step 1: 创建 V4 迁移（index_release 表）**
 
 ```sql
 CREATE TABLE index_release (
@@ -3331,7 +3332,7 @@ Expected: 全部通过。`ArchitectureTest` 验证新的 `ingestion → indexing
 - [ ] **Step 10: 提交**
 
 ```bash
-git add backend/src/main/resources/db/migration/V3__index_release.sql backend/src/main/java/io/veridex/ingestion/package-info.java backend/src/main/java/io/veridex/knowledge/package-info.java backend/src/main/java/io/veridex/indexing backend/src/main/java/io/veridex/ingestion/application/DocumentIngestionWorker.java backend/src/test/java/io/veridex/indexing backend/src/test/java/io/veridex/ingestion/IngestionWorkerIntegrationTest.java
+git add backend/src/main/resources/db/migration/V4__index_release.sql backend/src/main/java/io/veridex/ingestion/package-info.java backend/src/main/java/io/veridex/knowledge/package-info.java backend/src/main/java/io/veridex/indexing backend/src/main/java/io/veridex/ingestion/application/DocumentIngestionWorker.java backend/src/test/java/io/veridex/indexing backend/src/test/java/io/veridex/ingestion/IngestionWorkerIntegrationTest.java
 git commit -m "feat: process documents end-to-end with index release workflow"
 ```
 
