@@ -16,6 +16,11 @@ spring:
           log-completion: false
     vectorstore:
       observations:
+        # Spring AI 2.0.0 GA has not yet shipped the vector store observations module
+        # (spring-ai-autoconfigure-vector-store-observation exists only as 1.x / 2.0.0-SNAPSHOT),
+        # so this key currently has no binding. It is kept so that when the module lands in a
+        # future upgrade the default can be verified here; without this note the key would read
+        # as dead-but-intentional configuration.
         log-query-response: false
 
 management:

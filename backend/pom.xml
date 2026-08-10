@@ -61,6 +61,16 @@
             <artifactId>spring-boot-testcontainers</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Anchor org.testcontainers:testcontainers at the Spring Boot 4.0.0 BOM-managed 2.0.2.
+             An explicit version on a direct dependency takes precedence over dependencyManagement,
+             so this pins the Testcontainers core shared by all testcontainers-* artifacts here and
+             by opensearch-testcontainers below. Keep in sync with spring-boot-dependencies. -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <version>2.0.2</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers-junit-jupiter</artifactId>
@@ -76,6 +86,18 @@
             <artifactId>testcontainers-rabbitmq</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- opensearch-testcontainers 4.0.0 is not managed by any imported BOM
+             (spring-boot-dependencies / spring-ai-bom / spring-modulith-bom), hence the explicit
+             hardcoded version. Its POM pulls org.testcontainers:testcontainers:2.0.0 transitively
+             (runtime scope), one minor below the BOM-managed 2.0.2.
+             Arbitration: Maven dependencyManagement coerces that transitive 2.0.0 to 2.0.2
+             ("version managed from 2.0.0"), then the result is deduplicated against the 2.0.2
+             already on the classpath via the earlier-declared spring-boot-testcontainers chain
+             ("omitted for duplicate"), so the effective version is the same 2.0.2 used everywhere
+             else. Compatibility: 2.0.2 preserves the Testcontainers API (container lifecycle, wait
+             strategies) that opensearch-testcontainers relies on, and the explicit
+             org.testcontainers:testcontainers:2.0.2 declared above anchors the version so
+             resolution no longer depends on dependency declaration order. -->
         <dependency>
             <groupId>org.opensearch</groupId>
             <artifactId>opensearch-testcontainers</artifactId>
