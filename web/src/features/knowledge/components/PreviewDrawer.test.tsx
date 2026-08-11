@@ -13,16 +13,22 @@ test('keeps keyboard focus inside the preview and returns it after closing', () 
     </>,
   )
 
-  const closeButton = screen.getByRole('dialog', { name: '文档预览' }).querySelector<HTMLButtonElement>('button')!
-  expect(closeButton).toHaveFocus()
-
+  const dialog = screen.getByRole('dialog', { name: '文档预览' })
+  const closeButton = dialog.querySelector<HTMLButtonElement>('button')!
   const previewContent = screen.getByText('解析内容')
+  const backdrop = screen.getAllByRole('button', { name: '关闭预览' })[0]
+  expect(backdrop).toHaveAttribute('tabindex', '-1')
+  expect(closeButton).toHaveFocus()
   expect(previewContent).toHaveAttribute('tabindex', '0')
-  previewContent.focus()
+
+  fireEvent.keyDown(document, { key: 'Tab' })
+  expect(previewContent).toHaveFocus()
   fireEvent.keyDown(document, { key: 'Tab' })
   expect(closeButton).toHaveFocus()
   fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
   expect(previewContent).toHaveFocus()
+  fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+  expect(closeButton).toHaveFocus()
 
   rerender(
     <>

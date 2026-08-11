@@ -12,7 +12,7 @@ export function PreviewDrawer({ title, content, open, onClose, returnFocusRef }:
       if (event.key === 'Escape') onClose()
       if (event.key !== 'Tab') return
       event.preventDefault()
-      if (event.shiftKey) contentRef.current?.focus()
+      if (document.activeElement === closeRef.current) contentRef.current?.focus()
       else closeRef.current?.focus()
     }
     document.addEventListener('keydown', handleKey)
@@ -23,7 +23,7 @@ export function PreviewDrawer({ title, content, open, onClose, returnFocusRef }:
   if (!open) return null
   return (
     <div className="drawer-layer">
-      <button className="drawer-backdrop" type="button" onClick={onClose} aria-label="关闭预览" />
+      <button className="drawer-backdrop" type="button" tabIndex={-1} onClick={onClose} aria-label="关闭预览" />
       <aside className="preview-drawer" role="dialog" aria-modal="true" aria-label={title}>
         <header><div><p className="section-kicker">解析结果</p><h2>{title}</h2></div><button ref={closeRef} className="icon-button" type="button" onClick={onClose} aria-label="关闭预览"><X size={20} /></button></header>
         <pre ref={contentRef} tabIndex={0}>{content}</pre>

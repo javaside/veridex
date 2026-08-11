@@ -37,6 +37,8 @@ describe('App routes', () => {
       )
 
       expect(await screen.findByRole('heading', { name: title, level: 1 })).toBeInTheDocument()
+      expect(screen.getAllByText(path === '/workbench' ? 'Phase 3' : path === '/evaluation' ? 'Phase 4' : 'Phase 5')).not.toHaveLength(0)
+      expect(screen.getByRole('link', { name: '前往知识管理' })).toHaveAttribute('href', '/knowledge')
     },
   )
 
@@ -74,8 +76,27 @@ describe('App routes', () => {
     expect(screen.getByRole('status', { name: '当前路径' })).toHaveTextContent('/workbench')
   })
 
+  test('renders authenticated identity and logs out to the login page', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/auth/me')) {
+        return Promise.resolve(new Response(meJson, { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      }
+      if (url.includes('/api/auth/logout')) return Promise.resolve(new Response(null, { status: 204 }))
+      return Promise.resolve(new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    })
+
+    render(<MemoryRouter initialEntries={['/workbench']}><App /></MemoryRouter>)
+
+    expect(await screen.findByText('管理员')).toBeInTheDocument()
+    expect(screen.getByText('PLATFORM_ADMIN')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '退出登录' }))
+    expect(await screen.findByRole('heading', { name: '欢迎回来' })).toBeInTheDocument()
+  })
+
   test('disables logout while pending and reports failures without ending the session', async () => {
-    let rejectLogout: ((error: Error) => void) | undefined
+    let resolveLogout: ((response: Response) => void) | undefined
     const fetchMock = vi.mocked(fetch)
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input)
@@ -83,7 +104,7 @@ describe('App routes', () => {
         return Promise.resolve(new Response(meJson, { status: 200, headers: { 'Content-Type': 'application/json' } }))
       }
       if (url.includes('/api/auth/logout')) {
-        return new Promise((_, reject) => { rejectLogout = reject })
+        return new Promise((resolve) => { resolveLogout = resolve })
       }
       return Promise.resolve(new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }))
     })
@@ -93,7 +114,7 @@ describe('App routes', () => {
     fireEvent.click(await screen.findByRole('button', { name: '退出登录' }))
     expect(screen.getByRole('button', { name: '正在退出' })).toBeDisabled()
 
-    rejectLogout?.(new Error('退出失败'))
+    resolveLogout?.(new Response('', { status: 500 }))
     expect(await screen.findByRole('alert')).toHaveTextContent('退出失败')
     await waitFor(() => expect(screen.getByRole('button', { name: '退出登录' })).toBeEnabled())
     expect(screen.getByRole('heading', { name: '员工问答', level: 1 })).toBeInTheDocument()
