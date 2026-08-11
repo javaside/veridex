@@ -48,6 +48,33 @@ class OpenSearchIndexGatewayTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void switchingAliasMovesItFromOldIndexToNewIndex() {
+        String oldIndex = "veridex-alias-old";
+        String newIndex = "veridex-alias-new";
+        String alias = "veridex-alias-active";
+        UUID kb = UUID.randomUUID();
+        UUID oldVersion = UUID.randomUUID();
+        UUID newVersion = UUID.randomUUID();
+
+        gateway.deleteIndex(oldIndex);
+        gateway.deleteIndex(newIndex);
+        gateway.createIndex(oldIndex, 128);
+        gateway.createIndex(newIndex, 128);
+        gateway.indexChunks(oldIndex, kb, oldVersion, UUID.randomUUID(),
+                List.of(new ChunkRecord(0, "旧内容", "旧", "1")));
+        gateway.indexChunks(newIndex, kb, newVersion, UUID.randomUUID(),
+                List.of(new ChunkRecord(0, "新内容", "新", "1")));
+        gateway.aliasTo(alias, oldIndex);
+
+        gateway.aliasTo(alias, newIndex);
+
+        assertThat(gateway.findChunksByDocumentVersion(alias, oldVersion)).isEmpty();
+        assertThat(gateway.findChunksByDocumentVersion(alias, newVersion)).hasSize(1);
+        gateway.deleteIndex(oldIndex);
+        gateway.deleteIndex(newIndex);
+    }
+
+    @Test
     void deterministicEmbeddingHasFixedDimension() {
         assertThat(embeddings.dimensions()).isEqualTo(128);
         assertThat(embeddings.embed("测试文本")).hasSize(128);

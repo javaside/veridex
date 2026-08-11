@@ -1,5 +1,7 @@
 package io.veridex.indexing.api;
 
+import io.veridex.iam.api.CurrentActor;
+import io.veridex.knowledge.api.KnowledgeBaseAuthorization;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
@@ -14,37 +16,45 @@ import org.springframework.web.bind.annotation.RestController;
 public class IndexReleaseController {
 
     private final IndexReleaseManager releases;
+    private final KnowledgeBaseAuthorization authorization;
 
-    public IndexReleaseController(IndexReleaseManager releases) {
+    public IndexReleaseController(IndexReleaseManager releases, KnowledgeBaseAuthorization authorization) {
         this.releases = releases;
+        this.authorization = authorization;
     }
 
     @GetMapping
     public List<ReleaseView> list(@PathVariable UUID kbId) {
+        if (!authorization.canView(kbId, CurrentActor.id())) {
+            throw new SecurityException("no VIEW grant on knowledge base " + kbId);
+        }
         return releases.listReleases(kbId);
     }
 
-    @PostMapping("/{releaseId}/publish")
-    public ResponseEntity<Void> publish(@PathVariable UUID releaseId) {
-        releases.publish(releaseId);
-        return ResponseEntity.noContent().build();
-    }
-
     @PostMapping("/{releaseId}/rollback")
-    public ResponseEntity<Void> rollback(@PathVariable UUID releaseId) {
-        releases.rollback(releaseId);
+    public ResponseEntity<Void> rollback(@PathVariable UUID kbId, @PathVariable UUID releaseId) {
+        requireManage(kbId);
+        releases.rollback(kbId, releaseId);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{releaseId}/offline")
-    public ResponseEntity<Void> offline(@PathVariable UUID releaseId) {
-        releases.offline(releaseId);
+    public ResponseEntity<Void> offline(@PathVariable UUID kbId, @PathVariable UUID releaseId) {
+        requireManage(kbId);
+        releases.offline(kbId, releaseId);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{releaseId}/delete")
-    public ResponseEntity<Void> delete(@PathVariable UUID releaseId) {
-        releases.delete(releaseId);
+    public ResponseEntity<Void> delete(@PathVariable UUID kbId, @PathVariable UUID releaseId) {
+        requireManage(kbId);
+        releases.delete(kbId, releaseId);
         return ResponseEntity.noContent().build();
+    }
+
+    private void requireManage(UUID kbId) {
+        if (!authorization.canManage(kbId, CurrentActor.id())) {
+            throw new SecurityException("no MANAGE grant on knowledge base " + kbId);
+        }
     }
 }

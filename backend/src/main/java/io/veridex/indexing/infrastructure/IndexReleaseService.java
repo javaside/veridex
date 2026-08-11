@@ -31,26 +31,41 @@ public class IndexReleaseService implements IndexReleaseManager {
 
     @Override
     public DraftRelease createDraft(UUID knowledgeBaseId, UUID documentVersionId, String aliasName) {
-        long next = releases.countByKnowledgeBaseId(knowledgeBaseId) + 1;
-        String indexName = "veridex-" + next;
-        IndexRelease release = new IndexRelease(knowledgeBaseId, documentVersionId, (int) next,
+        int next = releases.findMaxVersionNo(knowledgeBaseId) + 1;
+        String indexName = properties.indexPrefix() + "-" + knowledgeBaseId + "-" + next;
+        IndexRelease release = new IndexRelease(knowledgeBaseId, documentVersionId, next,
                 indexName, aliasName);
         IndexRelease saved = releases.save(release);
         return new DraftRelease(saved.getId(), saved.getIndexName(), saved.getAliasName());
     }
 
     @Override
-    public void publish(UUID releaseId) {
+    public void prepare(UUID releaseId) {
         IndexRelease release = require(releaseId);
         gateway.createIndex(release.getIndexName(), properties.dimensions());
+    }
+
+    @Override
+    public void publish(UUID releaseId) {
+        IndexRelease release = require(releaseId);
         gateway.aliasTo(release.getAliasName(), release.getIndexName());
         release.publish();
         releases.save(release);
     }
 
     @Override
-    public void rollback(UUID releaseId) {
+    public void discardDraft(UUID releaseId) {
         IndexRelease release = require(releaseId);
+        if (release.getStatus() != IndexReleaseStatus.DRAFT) {
+            return;
+        }
+        gateway.deleteIndex(release.getIndexName());
+        releases.delete(release);
+    }
+
+    @Override
+    public void rollback(UUID knowledgeBaseId, UUID releaseId) {
+        IndexRelease release = requireOwned(knowledgeBaseId, releaseId);
         if (release.getStatus() != IndexReleaseStatus.PUBLISHED) {
             throw new IllegalStateException("only PUBLISHED release can be rolled back");
         }
@@ -66,8 +81,8 @@ public class IndexReleaseService implements IndexReleaseManager {
     }
 
     @Override
-    public void offline(UUID releaseId) {
-        IndexRelease release = require(releaseId);
+    public void offline(UUID knowledgeBaseId, UUID releaseId) {
+        IndexRelease release = requireOwned(knowledgeBaseId, releaseId);
         if (release.getStatus() != IndexReleaseStatus.PUBLISHED) {
             throw new IllegalStateException("only PUBLISHED release can be taken offline");
         }
@@ -77,8 +92,8 @@ public class IndexReleaseService implements IndexReleaseManager {
     }
 
     @Override
-    public void delete(UUID releaseId) {
-        IndexRelease release = require(releaseId);
+    public void delete(UUID knowledgeBaseId, UUID releaseId) {
+        IndexRelease release = requireOwned(knowledgeBaseId, releaseId);
         gateway.deleteIndex(release.getIndexName());
         releases.delete(release);
     }
@@ -89,6 +104,14 @@ public class IndexReleaseService implements IndexReleaseManager {
                 .map(r -> new ReleaseView(r.getId(), r.getVersionNo(), r.getStatus().name(),
                         r.getIndexName(), r.getAliasName()))
                 .toList();
+    }
+
+    private IndexRelease requireOwned(UUID knowledgeBaseId, UUID releaseId) {
+        IndexRelease release = require(releaseId);
+        if (!release.getKnowledgeBaseId().equals(knowledgeBaseId)) {
+            throw new IllegalArgumentException("index release does not belong to knowledge base " + knowledgeBaseId);
+        }
+        return release;
     }
 
     private IndexRelease require(UUID releaseId) {

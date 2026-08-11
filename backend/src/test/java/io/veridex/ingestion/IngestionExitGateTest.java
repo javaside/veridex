@@ -86,7 +86,7 @@ class IngestionExitGateTest extends PostgresIntegrationTest {
 
         // 找到该版本对应的 release 并 offline（移除 alias）
         var releaseId = releaseRepository.findByDocumentVersionId(u.version().getId()).orElseThrow().getId();
-        releaseManager.offline(releaseId);
+        releaseManager.offline(u.kbId(), releaseId);
 
         assertThat(gateway.findChunksByDocumentVersion(alias, u.version().getId())).isEmpty();
     }

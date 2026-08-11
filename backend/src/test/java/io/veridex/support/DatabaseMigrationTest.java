@@ -44,6 +44,24 @@ class DatabaseMigrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void identitySeedUsersHaveStableIdsAndRoles() throws Exception {
+        try (Connection connection = dataSource.getConnection();
+             var statement = connection.prepareStatement("""
+                     SELECT id, username, role FROM users ORDER BY username
+                     """);
+             var rows = statement.executeQuery()) {
+            var users = new HashMap<String, String>();
+            while (rows.next()) {
+                users.put(rows.getString("username"), rows.getString("id") + ":" + rows.getString("role"));
+            }
+            assertThat(users).containsExactlyInAnyOrderEntriesOf(Map.of(
+                    "admin", "00000000-0000-0000-0000-000000000001:PLATFORM_ADMIN",
+                    "kadmin", "00000000-0000-0000-0000-000000000002:KNOWLEDGE_ADMIN",
+                    "employee", "00000000-0000-0000-0000-000000000003:EMPLOYEE"));
+        }
+    }
+
+    @Test
     void platformColumnsRetainPostgresTypesNullabilityAndDefaults() throws Exception {
         try (Connection connection = dataSource.getConnection()) {
             var columns = columns(connection);

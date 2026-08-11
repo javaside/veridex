@@ -59,6 +59,8 @@ public class DocumentIngestionWorker {
     public void onIngest(byte[] payload, Channel channel,
                          @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag) {
         UUID versionId = null;
+        DraftRelease draft = null;
+        boolean published = false;
         try {
             Map<String, Object> message = jsonMapper.readValue(payload, Map.class);
             versionId = UUID.fromString(String.valueOf(message.get("documentVersionId")));
@@ -95,10 +97,12 @@ public class DocumentIngestionWorker {
                     new java.io.ByteArrayInputStream(chunksBytes), "application/json", chunksBytes.length);
             documents.setParsedObjectKey(versionId, objectKey + ".parsed.json");
 
-            DraftRelease release = releaseService.createDraft(kbId, versionId, releaseAlias(kbId));
-            // 先建 index + 切换 alias，再写入 chunk（bulk 目标 index 必须已存在）
-            releaseService.publish(release.releaseId());
-            chunkIndexer.index(kbId, versionId, records, release.indexName(), release.releaseId());
+            draft = releaseService.createDraft(kbId, versionId, releaseAlias(kbId));
+            // 先准备索引并写完 chunk，最后才原子切换 alias；写入失败时旧发布仍可查询。
+            releaseService.prepare(draft.releaseId());
+            chunkIndexer.index(kbId, versionId, records, draft.indexName(), draft.releaseId());
+            releaseService.publish(draft.releaseId());
+            published = true;
 
             documents.markReady(versionId, chunks.size());
             audit.record(null, "ingestion.completed", "document_version", versionId, null,
@@ -108,6 +112,13 @@ public class DocumentIngestionWorker {
             log.info("ingestion completed for version {}", versionId);
         } catch (Exception e) {
             log.error("ingestion failed for message", e);
+            if (draft != null && !published) {
+                try {
+                    releaseService.discardDraft(draft.releaseId());
+                } catch (Exception cleanup) {
+                    log.error("failed to discard draft release {}", draft.releaseId(), cleanup);
+                }
+            }
             if (versionId != null) {
                 try {
                     documents.markFailed(versionId, e.getMessage());

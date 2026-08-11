@@ -127,10 +127,12 @@ public class OpenSearchIndexGateway implements SearchIndexGateway {
     @Override
     public void aliasTo(String aliasName, String indexName) {
         try {
+            var request = new org.opensearch.client.opensearch.indices.UpdateAliasesRequest.Builder();
             if (indexExists(aliasName)) {
-                client.indices().deleteAlias(d -> d.index("*").name(aliasName));
+                request.actions(a -> a.remove(r -> r.index("*").alias(aliasName)));
             }
-            client.indices().putAlias(a -> a.index(indexName).name(aliasName));
+            request.actions(a -> a.add(add -> add.index(indexName).alias(aliasName)));
+            client.indices().updateAliases(request.build());
         } catch (IOException e) {
             throw new RuntimeException("alias switch failed for " + aliasName, e);
         }

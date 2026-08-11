@@ -10,7 +10,8 @@ CREATE TABLE users (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-INSERT INTO users (username, password_hash, display_name, role) VALUES
-    ('admin', '$2a$10$smS4bF34/T/Nz8hCJHr6lOgQAoN/MqagALav7m02UHHSu9vJpfGyW', '平台管理员', 'PLATFORM_ADMIN'),
-    ('kadmin', '$2a$10$smS4bF34/T/Nz8hCJHr6lOgQAoN/MqagALav7m02UHHSu9vJpfGyW', '知识管理员', 'KNOWLEDGE_ADMIN'),
-    ('employee', '$2a$10$smS4bF34/T/Nz8hCJHr6lOgQAoN/MqagALav7m02UHHSu9vJpfGyW', '员工', 'EMPLOYEE');
+-- 固定 UUID：测试与业务代码可稳定引用（admin=...001, kadmin=...002, employee=...003）
+INSERT INTO users (id, username, password_hash, display_name, role) VALUES
+    ('00000000-0000-0000-0000-000000000001', 'admin', '$2a$10$smS4bF34/T/Nz8hCJHr6lOgQAoN/MqagALav7m02UHHSu9vJpfGyW', '平台管理员', 'PLATFORM_ADMIN'),
+    ('00000000-0000-0000-0000-000000000002', 'kadmin', '$2a$10$smS4bF34/T/Nz8hCJHr6lOgQAoN/MqagALav7m02UHHSu9vJpfGyW', '知识管理员', 'KNOWLEDGE_ADMIN'),
+    ('00000000-0000-0000-0000-000000000003', 'employee', '$2a$10$smS4bF34/T/Nz8hCJHr6lOgQAoN/MqagALav7m02UHHSu9vJpfGyW', '员工', 'EMPLOYEE');

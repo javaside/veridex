@@ -31,20 +31,47 @@ class IndexReleaseServiceTest {
     private static final UUID DV = UUID.randomUUID();
 
     @Test
-    void publishCreatesIndexAliasAndMarksPublished() {
+    void prepareCreatesIndexAndPublishAliasesItAndMarksPublished() {
+        when(properties.indexPrefix()).thenReturn("veridex");
         when(properties.dimensions()).thenReturn(128);
         when(releases.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(releases.countByKnowledgeBaseId(KB)).thenReturn(0L);
+        when(releases.findMaxVersionNo(KB)).thenReturn(0);
         DraftRelease draft = service.createDraft(KB, DV, "prod-active");
-        assertThat(draft.indexName()).isEqualTo("veridex-1");
+        assertThat(draft.indexName()).isEqualTo("veridex-" + KB + "-1");
 
         IndexRelease saved = releases.save(new IndexRelease(KB, DV, 1, draft.indexName(), "prod-active"));
         when(releases.findById(draft.releaseId())).thenReturn(Optional.of(saved));
+        service.prepare(draft.releaseId());
         service.publish(draft.releaseId());
 
-        verify(gateway).createIndex("veridex-1", 128);
-        verify(gateway).aliasTo("prod-active", "veridex-1");
+        verify(gateway).createIndex(draft.indexName(), 128);
+        verify(gateway).aliasTo("prod-active", draft.indexName());
         assertThat(saved.getStatus()).isEqualTo(IndexReleaseStatus.PUBLISHED);
+    }
+
+    @Test
+    void draftsForDifferentKnowledgeBasesUseDifferentIndexNames() {
+        UUID otherKnowledgeBase = UUID.randomUUID();
+        when(properties.indexPrefix()).thenReturn("veridex");
+        when(releases.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(releases.findMaxVersionNo(KB)).thenReturn(0);
+        when(releases.findMaxVersionNo(otherKnowledgeBase)).thenReturn(0);
+
+        DraftRelease first = service.createDraft(KB, DV, "first-active");
+        DraftRelease second = service.createDraft(otherKnowledgeBase, UUID.randomUUID(), "second-active");
+
+        assertThat(first.indexName()).isNotEqualTo(second.indexName());
+    }
+
+    @Test
+    void draftVersionContinuesAfterDeletedRelease() {
+        when(properties.indexPrefix()).thenReturn("veridex");
+        when(releases.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(releases.findMaxVersionNo(KB)).thenReturn(3);
+
+        DraftRelease draft = service.createDraft(KB, DV, "prod-active");
+
+        assertThat(draft.indexName()).isEqualTo("veridex-" + KB + "-4");
     }
 
     @Test
@@ -53,7 +80,7 @@ class IndexReleaseServiceTest {
         published.publish();
         when(releases.findById(published.getId())).thenReturn(Optional.of(published));
 
-        service.offline(published.getId());
+        service.offline(KB, published.getId());
 
         verify(gateway).removeAlias("prod-active");
         assertThat(published.getStatus()).isEqualTo(IndexReleaseStatus.OFFLINE);

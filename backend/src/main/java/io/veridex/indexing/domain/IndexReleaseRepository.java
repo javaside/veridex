@@ -9,7 +9,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface IndexReleaseRepository extends CrudRepository<IndexRelease, UUID> {
 
-    long countByKnowledgeBaseId(UUID knowledgeBaseId);
+    @Query("select coalesce(max(r.versionNo), 0) from IndexRelease r where r.knowledgeBaseId = :kb")
+    int findMaxVersionNo(@Param("kb") UUID knowledgeBaseId);
 
     Optional<IndexRelease> findByDocumentVersionId(UUID documentVersionId);
 

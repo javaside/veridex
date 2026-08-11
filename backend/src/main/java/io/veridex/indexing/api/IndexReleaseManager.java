@@ -11,13 +11,17 @@ public interface IndexReleaseManager {
 
     DraftRelease createDraft(UUID knowledgeBaseId, UUID documentVersionId, String aliasName);
 
+    void prepare(UUID releaseId);
+
     void publish(UUID releaseId);
 
-    void rollback(UUID releaseId);
+    void discardDraft(UUID releaseId);
 
-    void offline(UUID releaseId);
+    void rollback(UUID knowledgeBaseId, UUID releaseId);
 
-    void delete(UUID releaseId);
+    void offline(UUID knowledgeBaseId, UUID releaseId);
+
+    void delete(UUID knowledgeBaseId, UUID releaseId);
 
     List<ReleaseView> listReleases(UUID knowledgeBaseId);
 }
