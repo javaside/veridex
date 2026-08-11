@@ -9,7 +9,7 @@
   --surface-accent: #e2efeb;
   --text-primary: #1d2935;
   --text-secondary: #5d6a75;
-  --text-muted: #77838d;
+  --text-muted: #5f6d77;
   --border: #d9dfdf;
   --border-strong: #c5cecc;
   --accent: #286f62;
@@ -52,7 +52,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .workspace-nav a small { font-size: 10px; color: var(--text-muted); }
 .workspace-nav a:hover { background: color-mix(in srgb, var(--surface-panel) 76%, transparent); color: var(--text-primary); }
 .workspace-nav a.active { background: var(--surface-accent); border-color: #b9d3cc; color: var(--accent); }
-.workspace-nav a.active small { color: #52786f; }
+.workspace-nav a.active small { color: #41685f; }
 .sidebar-user { margin-top: auto; padding: 14px 7px 2px; display: grid; grid-template-columns: 34px minmax(0, 1fr) 34px; gap: 9px; align-items: center; border-top: 1px solid var(--border); }
 .user-avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: #d4dcda; color: #38544e; font-size: 11px; font-weight: 700; }
 .user-identity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
