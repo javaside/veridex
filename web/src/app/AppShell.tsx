@@ -20,7 +20,7 @@ export function AppShell({ user, onLogout, children }: { user: CurrentUser; onLo
             return (
               <NavLink key={route.path} to={route.path}>
                 <Icon size={20} weight="regular" aria-hidden="true" />
-                <span><strong>{route.label}</strong><small>{route.englishLabel}</small></span>
+                <span><strong>{route.label}</strong><small aria-hidden="true">{route.englishLabel}</small></span>
               </NavLink>
             )
           })}

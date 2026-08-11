@@ -28,7 +28,22 @@ export function KnowledgePage() {
     }
   }, [])
 
-  useEffect(() => { void loadBases() }, [loadBases])
+  useEffect(() => {
+    let active = true
+    knowledgeApi.list()
+      .then((next) => {
+        if (!active) return
+        setBases(next)
+        setSelected(next[0] ?? null)
+      })
+      .catch((caught) => {
+        if (active) setError(caught instanceof Error ? caught.message : '知识库加载失败')
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => { active = false }
+  }, [])
 
   const createBase = async (name: string) => {
     setCreating(true)

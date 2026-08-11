@@ -6,10 +6,11 @@ export function PreviewDrawer({ title, content, open, onClose, returnFocusRef }:
 
   useEffect(() => {
     if (!open) return
+    const returnFocusNode = returnFocusRef?.current
     const handleKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
     document.addEventListener('keydown', handleKey)
     closeRef.current?.focus()
-    return () => { document.removeEventListener('keydown', handleKey); returnFocusRef?.current?.focus() }
+    return () => { document.removeEventListener('keydown', handleKey); returnFocusNode?.focus() }
   }, [open, onClose, returnFocusRef])
 
   if (!open) return null

@@ -30,7 +30,12 @@ export function VersionList({ kbId, refreshKey }: { kbId: string; refreshKey: nu
     setExpandedDoc(doc.id)
     if (versions[doc.id]) return
     setVersionErrors((current) => ({ ...current, [doc.id]: '' }))
-    try { setVersions((current) => ({ ...current, [doc.id]: await knowledgeApi.versions(doc.id) })) } catch (caught) { setVersionErrors((current) => ({ ...current, [doc.id]: caught instanceof Error ? caught.message : '版本加载失败' })) }
+    try {
+      const loadedVersions = await knowledgeApi.versions(doc.id)
+      setVersions((current) => ({ ...current, [doc.id]: loadedVersions }))
+    } catch (caught) {
+      setVersionErrors((current) => ({ ...current, [doc.id]: caught instanceof Error ? caught.message : '版本加载失败' }))
+    }
   }
 
   const showPreview = async (doc: DocumentSummary, version: DocumentVersion, button: HTMLButtonElement) => {

@@ -21,18 +21,18 @@ const json = async <T>(response: Response): Promise<T> => {
 
 export const knowledgeApi = {
   list: (): Promise<KnowledgeBase[]> =>
-    fetch('/api/knowledge-bases', { credentials: 'include' }).then(json),
+    fetch('/api/knowledge-bases', { credentials: 'include' }).then((response) => json<KnowledgeBase[]>(response)),
   create: (name: string, description?: string): Promise<KnowledgeBase> =>
     fetch('/api/knowledge-bases', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, description }),
-    }).then(json),
+    }).then((response) => json<KnowledgeBase>(response)),
   documents: (kbId: string): Promise<DocumentSummary[]> =>
-    fetch(`/api/knowledge-bases/${kbId}/documents`, { credentials: 'include' }).then(json),
+    fetch(`/api/knowledge-bases/${kbId}/documents`, { credentials: 'include' }).then((response) => json<DocumentSummary[]>(response)),
   versions: (documentId: string): Promise<DocumentVersion[]> =>
-    fetch(`/api/documents/${documentId}/versions`, { credentials: 'include' }).then(json),
+    fetch(`/api/documents/${documentId}/versions`, { credentials: 'include' }).then((response) => json<DocumentVersion[]>(response)),
   upload: (kbId: string, file: File): Promise<DocumentVersion> => {
     const form = new FormData()
     form.append('file', file)
@@ -40,7 +40,7 @@ export const knowledgeApi = {
       method: 'POST',
       credentials: 'include',
       body: form,
-    }).then(json)
+    }).then((response) => json<DocumentVersion>(response))
   },
   parsed: (documentId: string, versionId: string): Promise<string> =>
     fetch(`/api/documents/${documentId}/versions/${versionId}/parsed`, { credentials: 'include' }).then(async (response) => {
@@ -48,12 +48,12 @@ export const knowledgeApi = {
       return response.text()
     }),
   chunks: (documentId: string, versionId: string): Promise<ChunkPreview[]> =>
-    fetch(`/api/documents/${documentId}/versions/${versionId}/chunks`, { credentials: 'include' }).then(json),
+    fetch(`/api/documents/${documentId}/versions/${versionId}/chunks`, { credentials: 'include' }).then((response) => json<ChunkPreview[]>(response)),
   releases: (kbId: string): Promise<Release[]> =>
-    fetch(`/api/knowledge-bases/${kbId}/releases`, { credentials: 'include' }).then(json),
+    fetch(`/api/knowledge-bases/${kbId}/releases`, { credentials: 'include' }).then((response) => json<Release[]>(response)),
   releaseAction: (kbId: string, releaseId: string, action: 'rollback' | 'offline' | 'delete'): Promise<null> =>
     fetch(`/api/knowledge-bases/${kbId}/releases/${releaseId}/${action}`, {
       method: 'POST',
       credentials: 'include',
-    }).then(json),
+    }).then((response) => json<null>(response)),
 }
