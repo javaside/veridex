@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { App } from './App'
@@ -72,5 +72,30 @@ describe('App routes', () => {
 
     expect(await screen.findByRole('heading', { name: '员工问答', level: 1 })).toBeInTheDocument()
     expect(screen.getByRole('status', { name: '当前路径' })).toHaveTextContent('/workbench')
+  })
+
+  test('disables logout while pending and reports failures without ending the session', async () => {
+    let rejectLogout: ((error: Error) => void) | undefined
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/auth/me')) {
+        return Promise.resolve(new Response(meJson, { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      }
+      if (url.includes('/api/auth/logout')) {
+        return new Promise((_, reject) => { rejectLogout = reject })
+      }
+      return Promise.resolve(new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    })
+
+    render(<MemoryRouter initialEntries={['/workbench']}><App /></MemoryRouter>)
+
+    fireEvent.click(await screen.findByRole('button', { name: '退出登录' }))
+    expect(screen.getByRole('button', { name: '正在退出' })).toBeDisabled()
+
+    rejectLogout?.(new Error('退出失败'))
+    expect(await screen.findByRole('alert')).toHaveTextContent('退出失败')
+    await waitFor(() => expect(screen.getByRole('button', { name: '退出登录' })).toBeEnabled())
+    expect(screen.getByRole('heading', { name: '员工问答', level: 1 })).toBeInTheDocument()
   })
 })

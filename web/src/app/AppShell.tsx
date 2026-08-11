@@ -4,7 +4,7 @@ import { NavLink } from 'react-router-dom'
 import type { CurrentUser } from '../features/auth/authApi'
 import { workspaceRoutes } from './routes'
 
-export function AppShell({ user, onLogout, children }: { user: CurrentUser; onLogout: () => void; children: ReactNode }) {
+export function AppShell({ user, onLogout, loggingOut, logoutError, children }: { user: CurrentUser; onLogout: () => void; loggingOut: boolean; logoutError: string | null; children: ReactNode }) {
   const initials = user.displayName.slice(0, 2).toUpperCase()
 
   return (
@@ -28,9 +28,10 @@ export function AppShell({ user, onLogout, children }: { user: CurrentUser; onLo
         <div className="sidebar-user">
           <span className="user-avatar" aria-hidden="true">{initials}</span>
           <div className="user-identity"><strong>{user.displayName}</strong><small>{user.role}</small></div>
-          <button className="icon-button" type="button" onClick={onLogout} aria-label="退出登录">
+          <button className="icon-button" type="button" onClick={onLogout} disabled={loggingOut} aria-label={loggingOut ? '正在退出' : '退出登录'}>
             <SignOut size={19} aria-hidden="true" />
           </button>
+          {logoutError && <p className="sidebar-error" role="alert">{logoutError}</p>}
         </div>
       </aside>
       <main className="app-main"><div className="app-content">{children}</div></main>

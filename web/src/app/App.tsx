@@ -8,6 +8,8 @@ import { workspaceRoutes } from './routes'
 export function App() {
   const [user, setUser] = useState<CurrentUser | null>(null)
   const [checking, setChecking] = useState(true)
+  const [loggingOut, setLoggingOut] = useState(false)
+  const [logoutError, setLogoutError] = useState<string | null>(null)
 
   useEffect(() => {
     authApi
@@ -31,12 +33,20 @@ export function App() {
   }
 
   const logout = async () => {
-    await authApi.logout()
-    setUser(null)
+    setLoggingOut(true)
+    setLogoutError(null)
+    try {
+      await authApi.logout()
+      setUser(null)
+    } catch (caught) {
+      setLogoutError(caught instanceof Error ? caught.message : '退出失败')
+    } finally {
+      setLoggingOut(false)
+    }
   }
 
   return (
-    <AppShell user={user} onLogout={logout}>
+    <AppShell user={user} onLogout={logout} loggingOut={loggingOut} logoutError={logoutError}>
       <Routes>
         {workspaceRoutes.map((route) => (
           <Route key={route.path} path={route.path} element={route.content} />

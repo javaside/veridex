@@ -15,5 +15,7 @@ export const authApi = {
       return r.json()
     }),
   logout: (): Promise<void> =>
-    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).then(() => undefined),
+    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).then((response) => {
+      if (!response.ok) throw new Error('退出失败')
+    }),
 }
