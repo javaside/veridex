@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Navigate, NavLink, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import { authApi, type CurrentUser } from '../features/auth/authApi'
 import { LoginPage } from '../features/auth/LoginPage'
+import { AppShell } from './AppShell'
 import { workspaceRoutes } from './routes'
 
 export function App() {
@@ -17,7 +18,7 @@ export function App() {
   }, [])
 
   if (checking) {
-    return <div className="app-shell loading">加载中…</div>
+    return <div className="app-loading" role="status"><span className="brand-mark" aria-hidden="true">V</span><span>正在加载工作区</span></div>
   }
 
   if (!user) {
@@ -29,32 +30,20 @@ export function App() {
     )
   }
 
+  const logout = async () => {
+    await authApi.logout()
+    setUser(null)
+  }
+
   return (
-    <div className="app-shell">
-      <aside>
-        <strong>Veridex</strong>
-        <nav aria-label="平台工作区">
-          {workspaceRoutes.map((route) => (
-            <NavLink key={route.path} to={route.path}>
-              <span>{route.label}</span>
-              <small aria-hidden="true">{route.englishLabel}</small>
-            </NavLink>
-          ))}
-        </nav>
-        <div className="user-info">
-          <span>{user.displayName}</span>
-          <small>{user.role}</small>
-        </div>
-      </aside>
-      <main>
-        <Routes>
-          {workspaceRoutes.map((route) => (
-            <Route key={route.path} path={route.path} element={route.content} />
-          ))}
-          <Route path="/login" element={<Navigate to="/workbench" replace />} />
-          <Route path="*" element={<Navigate to="/workbench" replace />} />
-        </Routes>
-      </main>
-    </div>
+    <AppShell user={user} onLogout={logout}>
+      <Routes>
+        {workspaceRoutes.map((route) => (
+          <Route key={route.path} path={route.path} element={route.content} />
+        ))}
+        <Route path="/login" element={<Navigate to="/workbench" replace />} />
+        <Route path="*" element={<Navigate to="/workbench" replace />} />
+      </Routes>
+    </AppShell>
   )
 }
