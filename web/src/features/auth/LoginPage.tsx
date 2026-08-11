@@ -44,8 +44,8 @@ export function LoginPage() {
             <h2>欢迎回来</h2>
             <p>登录后继续管理知识入库。</p>
           </header>
-          <label>用户名<input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" /></label>
-          <label>密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" /></label>
+          <label>用户名<input name="username" value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" /></label>
+          <label>密码<input name="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" /></label>
           {error && <p className="form-error" role="alert">{error}</p>}
           <button className="primary-button login-button" type="submit" disabled={submitting}>{submitting ? '正在登录' : '登录'}</button>
           <p className="local-account-note">本地开发账号：<strong>admin / veridex</strong></p>

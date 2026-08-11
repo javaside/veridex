@@ -9,7 +9,9 @@ test('renders labeled fields and local account guidance', () => {
 
   expect(screen.getByRole('heading', { name: '欢迎回来' })).toBeInTheDocument()
   expect(screen.getByLabelText('用户名')).toHaveAttribute('autocomplete', 'username')
+  expect(screen.getByLabelText('用户名')).toHaveAttribute('name', 'username')
   expect(screen.getByLabelText('密码')).toHaveAttribute('autocomplete', 'current-password')
+  expect(screen.getByLabelText('密码')).toHaveAttribute('name', 'password')
   expect(screen.getByText(/admin \/ veridex/)).toBeInTheDocument()
 })
 
