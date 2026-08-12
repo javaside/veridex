@@ -99,6 +99,22 @@ class IngestionExitGateTest extends PostgresIntegrationTest {
         assertThat(gateway.findChunksByDocumentVersion(alias, u.version().getId())).isEmpty();
     }
 
+    @Test
+    void makeCurrentRestoresOfflineReleaseToSearch() throws Exception {
+        Uploaded u = uploadAndPut("off.md", "# 离线\n\n敏感内容");
+        publishMessage(u);
+        awaitReady(u.version().getId());
+        var published = publishService.publish(u.kbId());
+
+        String alias = "veridex-" + u.kbId() + "-active";
+        releaseManager.offline(u.kbId(), published.release().releaseId());
+        assertThat(gateway.findChunksByDocumentVersion(alias, u.version().getId())).isEmpty();
+
+        releaseManager.makeCurrent(u.kbId(), published.release().releaseId());
+
+        assertThat(gateway.findChunksByDocumentVersion(alias, u.version().getId())).isNotEmpty();
+    }
+
     private Uploaded uploadAndPut(String filename, String content) throws Exception {
         Uploaded u = uploadVersion(filename);
         storage.put(u.version().getObjectKey(),
