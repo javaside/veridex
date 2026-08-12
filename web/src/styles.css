@@ -192,6 +192,25 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .preview-drawer h2 { max-width: 45ch; margin: 0; font-size: 16px; }
 .preview-drawer pre { margin: 0; padding: 24px; overflow: auto; white-space: pre-wrap; color: #30403d; background: #f2f5f4; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; line-height: 1.7; }
 
+/* Dialog */
+.dialog-layer { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; }
+.dialog-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; border-radius: 0; background: rgba(20, 32, 38, .34); cursor: default; animation: fade-in .18s ease-out; }
+.confirm-dialog { position: relative; width: min(420px, 92vw); padding: 22px; display: grid; gap: 10px; background: var(--surface-panel); border: 1px solid var(--border); border-radius: var(--radius-panel); box-shadow: 0 20px 60px rgba(25, 43, 39, .18); animation: dialog-in .18s ease-out; }
+.confirm-dialog h3 { margin: 0; font-size: 16px; }
+.confirm-dialog p { margin: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.55; }
+.dialog-actions { margin-top: 8px; display: flex; justify-content: flex-end; gap: 8px; }
+.danger-button { padding: 9px 14px; border: 0; border-radius: var(--radius-control); background: var(--danger); color: #fff; font-weight: 650; cursor: pointer; }
+.danger-button:hover { filter: brightness(.94); }
+@keyframes dialog-in { from { opacity: .6; transform: scale(.97); } to { opacity: 1; transform: scale(1); } }
+
+/* Toast */
+.toast { position: fixed; top: 20px; right: 20px; z-index: 40; max-width: 360px; padding: 12px 14px; display: flex; align-items: center; gap: 9px; border-radius: var(--radius-control); box-shadow: 0 10px 30px rgba(25, 43, 39, .16); font-size: 13px; animation: toast-in .2s ease-out; }
+.toast-success { background: var(--success-surface); color: var(--success); border: 1px solid color-mix(in srgb, var(--success) 28%, transparent); }
+.toast-error { background: var(--danger-surface); color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 28%, transparent); }
+.toast button { width: 24px; height: 24px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
+.toast button:hover { background: rgba(0, 0, 0, .06); }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+
 @keyframes page-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes drawer-in { from { opacity: .65; transform: translateX(28px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
