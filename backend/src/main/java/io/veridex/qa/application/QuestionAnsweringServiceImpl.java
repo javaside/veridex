@@ -93,7 +93,9 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
 
         GenerationResult result = generation.generate(normalized, searchResult.evidence(), history);
         recorder.markGenerating(runId, new GenerationRecord(result.model(), result.inputTokens(),
-                result.outputTokens(), result.durationMs(), null, result.contextHash()));
+                result.outputTokens(), result.durationMs(),
+                searchResult.degradations().isEmpty() ? null : String.join("; ", searchResult.degradations()),
+                result.contextHash()));
 
         if (result.refusalReason() != null) {
             events.add(new QaEvent.AnswerRefused(result.refusalReason().name(),

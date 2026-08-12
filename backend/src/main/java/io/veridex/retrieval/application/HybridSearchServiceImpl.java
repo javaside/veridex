@@ -53,8 +53,9 @@ public class HybridSearchServiceImpl implements HybridSearchService {
                 .filter(requestedKnowledgeBaseIds::contains)
                 .toList();
         List<SearchHit> all = new ArrayList<>();
+        List<String> degradations = new ArrayList<>();
         for (UUID kbId : scope) {
-            all.addAll(searchKnowledgeBase(kbId, question));
+            all.addAll(searchKnowledgeBase(kbId, question, degradations));
         }
         List<RankFusion.RankedHit> fused = RankFusion.fuse(
                 all.stream().filter(h -> h.channel() == SearchHit.Channel.BM25).toList(),
@@ -80,10 +81,10 @@ public class HybridSearchServiceImpl implements HybridSearchService {
                     "BM25", f.bm25Score(), f.vectorScore(), f.fusionScore(), i + 1, entered,
                     entered ? null : "below-context-budget"));
         }
-        return new HybridSearchResult(evidence, views);
+        return new HybridSearchResult(evidence, views, degradations);
     }
 
-    private List<SearchHit> searchKnowledgeBase(UUID kbId, String question) {
+    private List<SearchHit> searchKnowledgeBase(UUID kbId, String question, List<String> degradations) {
         return indexReleases.findActiveRelease(kbId)
                 .map(release -> {
                     List<UUID> snapshotIds = indexReleases.listSnapshotDocumentVersionIds(release.releaseId());
@@ -94,12 +95,32 @@ public class HybridSearchServiceImpl implements HybridSearchService {
                     if (online.isEmpty()) {
                         return List.<SearchHit>of();
                     }
-                    List<SearchHit> bm25 = reader.bm25(release.aliasName(), kbId, question, TOP_K_PER_CHANNEL)
-                            .stream().filter(h -> online.contains(h.documentVersionId())).toList();
-                    List<SearchHit> vector = reader.vector(release.aliasName(), kbId, question, TOP_K_PER_CHANNEL)
-                            .stream().filter(h -> online.contains(h.documentVersionId())).toList();
-                    List<SearchHit> merged = new ArrayList<>(bm25);
-                    merged.addAll(vector);
+                    // 单路失败降级为另一路（设计文档 §15.1）：一路失败用另一路并记录降级；
+                    // 两路均失败报系统错误（由上层 run.failed 兜底，不伪装无答案）。
+                    List<SearchHit> bm25 = null;
+                    List<SearchHit> vector = null;
+                    try {
+                        bm25 = reader.bm25(release.aliasName(), kbId, question, TOP_K_PER_CHANNEL)
+                                .stream().filter(h -> online.contains(h.documentVersionId())).toList();
+                    } catch (RuntimeException e) {
+                        degradations.add("bm25-retrieval-failed: " + e.getMessage());
+                    }
+                    try {
+                        vector = reader.vector(release.aliasName(), kbId, question, TOP_K_PER_CHANNEL)
+                                .stream().filter(h -> online.contains(h.documentVersionId())).toList();
+                    } catch (RuntimeException e) {
+                        degradations.add("vector-retrieval-failed: " + e.getMessage());
+                    }
+                    if (bm25 == null && vector == null) {
+                        throw new IllegalStateException("dual retrieval failed for knowledge base " + kbId);
+                    }
+                    List<SearchHit> merged = new ArrayList<>();
+                    if (bm25 != null) {
+                        merged.addAll(bm25);
+                    }
+                    if (vector != null) {
+                        merged.addAll(vector);
+                    }
                     return merged;
                 })
                 .orElse(List.of());

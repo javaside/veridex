@@ -64,7 +64,7 @@ class QuestionAnsweringServiceTest {
         var evidence = List.of(new EvidencePiece(1, KB, ver, 0, "请假制度", "1",
                 "员工请假需提前两个工作日提交申请，经直属主管审批后生效；连续请假超过五个工作日的，还需报人力资源部备案。"));
         var searchResult = new HybridSearchResult(evidence, List.of(new RankedHitView(
-                KB, ver, 0, "BM25", 2.0, null, 2.0, 1, true, null)));
+                KB, ver, 0, "BM25", 2.0, null, 2.0, 1, true, null)), List.of());
         when(knowledgeScope.resolve(USER, List.of(KB))).thenReturn(List.of(KB));
         when(conversations.findOwned(USER, CONV)).thenReturn(Optional.of(new ConversationView(CONV, "t", java.time.Instant.now())));
         when(recorder.start(any(), eq(CONV), eq(List.of(KB)), any(), any())).thenReturn(UUID.randomUUID());
@@ -105,7 +105,7 @@ class QuestionAnsweringServiceTest {
         when(conversations.create(USER, "请假")).thenReturn(conversation);
         when(recorder.start(any(), eq(conversation.id()), eq(List.of(KB)), any(), any())).thenReturn(UUID.randomUUID());
         when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假")).thenReturn(
-                new HybridSearchResult(List.of(), List.of()));
+                new HybridSearchResult(List.of(), List.of(), List.of()));
         when(generation.generate(eq("请假"), eq(List.of()), any())).thenReturn(
                 new GenerationResult(null, List.of(), RefusalReason.NO_RELEVANT_EVIDENCE,
                         "deterministic", 0, 0, 0, null));
