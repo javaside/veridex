@@ -55,7 +55,9 @@ services:
     environment:
       discovery.type: single-node
       DISABLE_SECURITY_PLUGIN: "true"
-      OPENSEARCH_JAVA_OPTS: -Xms1g -Xmx1g
+      # 降低 JVM 堆：本机 Docker VM 内存紧张，默认 1g 堆 + 全量索引 mmap 会触发容器 OOM kill。
+      # 减少堆可显著降低 OOM 概率；同时建议按需清理历史索引（见 Phase 3 排障记录）。
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
     ports: ["9200:9200"]
     volumes: ["opensearch-data:/usr/share/opensearch/data"]
     healthcheck:
