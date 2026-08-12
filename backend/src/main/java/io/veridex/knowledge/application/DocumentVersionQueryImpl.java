@@ -6,6 +6,7 @@ import io.veridex.knowledge.domain.DocumentVersionRepository;
 import io.veridex.knowledge.domain.DocumentVersionStatus;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,5 +29,12 @@ public class DocumentVersionQueryImpl implements DocumentVersionQuery {
                 .filter(v -> v.getStatus() != DocumentVersionStatus.OFFLINE)
                 .map(DocumentVersion::getId)
                 .toList();
+    }
+
+    @Override
+    public Map<UUID, UUID> findDocumentIdByVersionIds(Collection<UUID> versionIds) {
+        java.util.LinkedHashMap<UUID, UUID> out = new java.util.LinkedHashMap<>();
+        documentVersions.findAllById(versionIds).forEach(v -> out.put(v.getId(), v.getDocumentId()));
+        return out;
     }
 }

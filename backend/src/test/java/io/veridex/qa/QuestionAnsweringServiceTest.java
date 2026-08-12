@@ -71,7 +71,7 @@ class QuestionAnsweringServiceTest {
         when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假")).thenReturn(searchResult);
         when(generation.generate(eq("请假"), eq(evidence), any())).thenReturn(
                 new GenerationResult("根据《请假制度》[1]，员工请假需提前两个工作日提交申请",
-                        List.of(new CitationView(1, ver, 0, "请假制度", "[1]", "VALID")),
+                        List.of(new CitationView(1, UUID.randomUUID(), ver, 0, "请假制度", "[1]", "VALID")),
                         null, "deterministic", 10, 20, 5, "abc"));
 
         var events = service.ask(USER, new AskRequest("请假", List.of(KB), CONV));

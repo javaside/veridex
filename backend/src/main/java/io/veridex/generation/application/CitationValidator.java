@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -20,7 +21,8 @@ public class CitationValidator {
 
     private static final Pattern CITATION = Pattern.compile("\\[(\\d+)\\]");
 
-    public List<CitationView> validate(String answer, List<EvidencePiece> evidence) {
+    public List<CitationView> validate(String answer, List<EvidencePiece> evidence,
+                                       Map<UUID, UUID> documentIdByVersionId) {
         Set<Integer> validIndexes = evidence.stream().map(EvidencePiece::citationIndex).collect(Collectors.toSet());
         Map<Integer, EvidencePiece> byIndex = evidence.stream()
                 .collect(Collectors.toMap(EvidencePiece::citationIndex, e -> e));
@@ -31,6 +33,7 @@ public class CitationValidator {
             boolean valid = validIndexes.contains(index);
             EvidencePiece e = byIndex.get(index);
             out.add(new CitationView(index,
+                    e != null ? documentIdByVersionId.get(e.documentVersionId()) : null,
                     e != null ? e.documentVersionId() : null,
                     e != null ? e.chunkIndex() : 0,
                     e != null ? e.title() : null,

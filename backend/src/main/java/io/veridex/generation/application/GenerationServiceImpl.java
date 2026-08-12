@@ -5,10 +5,13 @@ import io.veridex.generation.api.CitationView;
 import io.veridex.generation.api.GenerationResult;
 import io.veridex.generation.api.GenerationService;
 import io.veridex.generation.infrastructure.DeterministicChatModel;
+import io.veridex.knowledge.api.DocumentVersionQuery;
 import io.veridex.retrieval.api.EvidencePiece;
 import io.veridex.shared.RefusalReason;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -25,12 +28,14 @@ public class GenerationServiceImpl implements GenerationService {
     private final DeterministicChatModel model;
     private final RefusalPolicy refusalPolicy;
     private final CitationValidator citationValidator;
+    private final DocumentVersionQuery documentVersions;
 
     public GenerationServiceImpl(DeterministicChatModel model, RefusalPolicy refusalPolicy,
-                                 CitationValidator citationValidator) {
+                                 CitationValidator citationValidator, DocumentVersionQuery documentVersions) {
         this.model = model;
         this.refusalPolicy = refusalPolicy;
         this.citationValidator = citationValidator;
+        this.documentVersions = documentVersions;
     }
 
     @Override
@@ -57,11 +62,17 @@ public class GenerationServiceImpl implements GenerationService {
         int outputTokens = answer.length() / 4;
         int inputTokens = (system.length() + question.length()) / 4;
 
-        List<CitationView> citations = citationValidator.validate(answer, evidence);
+        List<CitationView> citations = citationValidator.validate(answer, evidence,
+                documentIdByVersionId(evidence));
         String contextHash = Integer.toHexString(evidence.hashCode());
 
         return new GenerationResult(answer, citations, null, "deterministic",
                 inputTokens, outputTokens, durationMs, contextHash);
+    }
+
+    private Map<UUID, UUID> documentIdByVersionId(List<EvidencePiece> evidence) {
+        List<UUID> versionIds = evidence.stream().map(EvidencePiece::documentVersionId).distinct().toList();
+        return documentVersions.findDocumentIdByVersionIds(versionIds);
     }
 
     private String buildSystemPrompt(List<EvidencePiece> evidence) {

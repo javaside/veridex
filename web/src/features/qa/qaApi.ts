@@ -1,5 +1,6 @@
 export type Citation = {
   citationIndex: number
+  documentId: string | null
   documentVersionId: string
   chunkIndex: number
   sourceLocation: string

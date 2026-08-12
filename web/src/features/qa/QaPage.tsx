@@ -2,6 +2,7 @@ import { ChatCircleDots, PaperPlaneRight } from '@phosphor-icons/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { PageHeader } from '../../app/PageHeader'
 import { knowledgeApi, type KnowledgeBase } from '../knowledge/knowledgeApi'
+import { PreviewDrawer } from '../knowledge/components/PreviewDrawer'
 import { ChatMessage } from './components/ChatMessage'
 import { KnowledgeBasePicker } from './components/KnowledgeBasePicker'
 import { qaApi, type Citation, type ConversationView, type MessageRecord } from './qaApi'
@@ -22,6 +23,7 @@ export function QaPage() {
   const [question, setQuestion] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [preview, setPreview] = useState<{ title: string; content: string } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const streamAssistantRef = useRef<number | null>(null)
 
@@ -117,8 +119,14 @@ export function QaPage() {
   }
 
   const openCitationPreview = async (citation: Citation) => {
-    // 引用点击预览由 Task 13 接 CitationView.documentId 后启用（chunks API 需要 documentId）
-    void citation
+    if (!citation.documentId) return
+    try {
+      const chunks = await knowledgeApi.chunks(citation.documentId, citation.documentVersionId)
+      const chunk = chunks.find((c) => c.index === citation.chunkIndex)
+      setPreview({ title: citation.sourceLocation ?? '引用原文', content: chunk?.text ?? '未找到该引用的原文' })
+    } catch {
+      setPreview({ title: citation.sourceLocation ?? '引用原文', content: '引用原文加载失败' })
+    }
   }
 
   if (loading) {
@@ -198,6 +206,7 @@ export function QaPage() {
           </form>
         </div>
       </div>
+      {preview && <PreviewDrawer title={preview.title} content={preview.content} open onClose={() => setPreview(null)} />}
     </section>
   )
 }

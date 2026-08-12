@@ -14,6 +14,7 @@ import io.veridex.generation.application.CitationValidator;
 import io.veridex.generation.application.GenerationServiceImpl;
 import io.veridex.generation.application.RefusalPolicy;
 import io.veridex.generation.infrastructure.DeterministicChatModel;
+import io.veridex.knowledge.api.DocumentVersionQuery;
 import io.veridex.retrieval.api.EvidencePiece;
 import io.veridex.shared.RefusalReason;
 import java.util.List;
@@ -34,6 +35,7 @@ class GenerationServiceImplTest {
     @Mock DeterministicChatModel model;
     @Mock RefusalPolicy refusalPolicy;
     @Mock CitationValidator citationValidator;
+    @Mock DocumentVersionQuery documentVersions;
     @InjectMocks GenerationServiceImpl service;
 
     @Test
@@ -47,19 +49,21 @@ class GenerationServiceImplTest {
 
     @Test
     void generatesAndValidatesCitations() {
-        var evidence = List.of(new EvidencePiece(1, UUID.randomUUID(), UUID.randomUUID(), 0, "t", "1",
+        UUID versionId = UUID.randomUUID();
+        var evidence = List.of(new EvidencePiece(1, UUID.randomUUID(), versionId, 0, "t", "1",
                 "员工请假需提前两个工作日提交申请。"));
         when(refusalPolicy.evaluate(evidence)).thenReturn(null);
         when(model.call(any(Prompt.class))).thenReturn(new ChatResponse(List.of(
                 new Generation(new AssistantMessage("根据《t》[1]，员工请假需提前两个工作日提交申请")))));
-        when(citationValidator.validate(any(), eq(evidence))).thenReturn(List.of(
-                new CitationView(1, evidence.get(0).documentVersionId(), 0, "t", "[1]", "VALID")));
+        when(citationValidator.validate(any(), eq(evidence), any())).thenReturn(List.of(
+                new CitationView(1, UUID.randomUUID(), versionId, 0, "t", "[1]", "VALID")));
 
         var result = service.generate("请假", evidence, List.of());
 
         assertThat(result.answer()).contains("[1]");
         assertThat(result.citations()).hasSize(1);
         assertThat(result.citations().get(0).validationStatus()).isEqualTo("VALID");
+        assertThat(result.citations().get(0).documentId()).isNotNull();
         assertThat(result.model()).isEqualTo("deterministic");
     }
 
@@ -70,7 +74,7 @@ class GenerationServiceImplTest {
         when(refusalPolicy.evaluate(evidence)).thenReturn(null);
         when(model.call(any(Prompt.class))).thenReturn(new ChatResponse(List.of(
                 new Generation(new AssistantMessage("根据《t》[1]，年假最长不超过十五个工作日")))));
-        when(citationValidator.validate(any(), eq(evidence))).thenReturn(List.of());
+        when(citationValidator.validate(any(), eq(evidence), any())).thenReturn(List.of());
 
         var history = List.of(
                 new MessageRecord(UUID.randomUUID(), "USER", "年假多少天", null),
