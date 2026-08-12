@@ -28,9 +28,7 @@
                         │  ② Tika 解析 → 纯文本          │
                         │  ③ 结构优先分块 → chunk 列表    │
                         │  ④ 解析结果写回 MinIO(预览用)   │
-                        │  ⑤ embedding → 向量           │
-                        │  ⑥ 建索引 → bulk 写入          │
-                        │  ⑦ 原子切 alias → READY + 审计 │
+                        │  ⑤ markReady → READY（不发布）  │
                         └──────────────┬───────────────┘
                                        ▼
                                OpenSearch（向量+全文索引）
@@ -140,7 +138,7 @@ for (i in bytes) vector[i % 128] += (byte - 128) / 128f;  // 然后 L2 归一化
 
 **OpenSearch 的 `embedding` 字段（knn_vector，128 维 float 数组）**。
 
-写入路径：worker 对每个 chunk 调 `EmbeddingModel.embed(text)` 得到 `float[128]` → bulk 写入当前版本索引的 `embedding` 字段。
+写入路径：手动发布时，`KnowledgeBasePublishService` 对每个 chunk 调 `EmbeddingModel.embed(text)` 得到 `float[128]` → bulk 写入新快照索引的 `embedding` 字段。
 
 ```text
 chunk.text ──> DeterministicEmbeddingModel ──> float[128] ──> OpenSearch index.embedding
@@ -154,31 +152,34 @@ chunk.text ──> DeterministicEmbeddingModel ──> float[128] ──> OpenSe
 
 ## 4. 页面上的「索引发布」是什么？
 
-对应 `index_release` 表 + `IndexReleaseService` 工作流，语义是：**「把某一版文档的内容，固化为一个可切换的检索快照」**。
+对应 `index_release` 表 + `KnowledgeBasePublishService` 工作流，语义是：**「把当前知识库的全部就绪文档，固化为一个可切换的检索快照」**。
 
 ### 概念
 - **Index（索引）**：`veridex-{kbId}-1`、`veridex-{kbId}-2`…每个知识库的发布版本一个，不可变，装该版本全部 chunk
 - **Alias（别名）**：`veridex-{kbId}-active`，指向当前对外可用的索引。查询只打 alias，不关心具体 index
+- **Snapshot（快照）**：一次发布 = 一个不可变索引，包含发布时该知识库全部 READY 文档版本的 chunk；快照文档清单记录在 `index_release_document` 表
 
-### 生命周期（发布由 worker 自动完成；页面提供回滚、离线和删除操作）
+### 生命周期（发布由知识管理员手动触发；页面提供回滚、离线和删除操作）
 
 | 操作 | 行为 |
 |---|---|
-| **发布 publish**（worker 自动） | 建 index（不存在则建）→ 写入全部 chunk → 把 alias 原子切换到新 index → 状态 PUBLISHED |
-| **回滚 rollback** | 仅 PUBLISHED 可回滚：alias 切回上一个 PUBLISHED 的 index（无则移除 alias）→ ROLLED_BACK |
-| **离线 offline** | 移除 alias（该版本立即从检索中消失，但 index 保留）→ OFFLINE |
-| **删除 delete** | 删除 index（幂等）→ 记录删除 |
+| **发布 publish**（手动） | 列出全部 READY 文档版本 → 建 index → 写入全部 chunk → alias 原子切换 → PUBLISHED + 标记为当前检索（is_active） |
+| **回滚 rollback** | 仅当前 PUBLISHED 可回滚：alias 切回上一个 PUBLISHED 快照（无则移除 alias）→ ROLLED_BACK |
+| **离线 offline** | 移除 alias（当前快照立即从检索中消失，但 index 保留）→ OFFLINE |
+| **删除 delete** | 删除 index（幂等）→ 记录删除；当前检索快照需先回滚/离线才能删除 |
 
 ### 为什么要这一层？
-- **不可变性**：版本一旦发布，其内容不可变 → 检索结果可复现、可审计
-- **原子切换**：alias 一次性指向新 index，新旧切换无窗口期，**失败的版本不会影响已发布的旧版本**（新 index 未建成功，alias 仍指向旧的）
-- **离线即排除**：紧急下架某文档，offline 后查询立刻查不到——这正是出口门禁验证过的场景
+- **多文档同时可检索**：一次发布覆盖知识库全部就绪文档，而非单文档；PROCESSING/FAILED 文档不进入快照（页面提示「本次发布未包含 X 个文档」）
+- **不可变性**：快照一旦发布，其内容不可变 → 检索结果可复现、可审计
+- **原子切换**：alias 一次性指向新快照，新旧切换无窗口期，**失败的发布不会影响已发布的旧快照**
+- **离线即排除**：紧急下架某快照，offline 后查询立刻查不到——这正是出口门禁验证过的场景
+- **明确的当前版本**：`is_active` 标记唯一标示「当前检索」快照，页面高亮显示；其余历史快照显示「历史版本/已回滚/已离线」
 
-页面「索引发布」列表展示的 `v1/v2…` + 状态（DRAFT/PUBLISHED/ROLLED_BACK/OFFLINE）+ index 名，就是这个工作流的外在表现；「回滚/离线/删除」按钮直接调用上述操作。
+页面「索引发布」列表展示的 `v1/v2…` + 状态 + 「当前检索」角标 + 文档/chunk 统计 + index 名，就是这个工作流的外在表现；「发布/回滚/离线/删除」按钮直接调用上述操作。
 
 ---
 
-## 5. 一次完整上传的端到端时序
+## 5. 一次完整上传 + 发布的端到端时序
 
 ```text
 用户上传 intro.md
@@ -196,12 +197,18 @@ Worker: 状态→PROCESSING
   ② Tika 解析 → 纯文本
   ③ 结构分块 → 若干 Chunk
   ④ parsed.json / chunks.json 写回 MinIO（预览数据源）
-  ⑤ 建 release 草稿 → OpenSearch 建索引
-  ⑥ 逐 chunk 生成向量 → bulk 写入 index（_id 幂等）
-  ⑦ publish（alias 原子切换）→ 状态 READY + 审计 → ack
+  ⑤ markReady（状态 READY + 审计 + ack）→ 不自动发布
+  │
+  ▼ [知识管理员手动]
+知识管理页点击「发布」→ POST /api/knowledge-bases/{kbId}/releases/publish
+  ① 列出该知识库全部 READY 文档版本（每文档取最新版本）
+  ② 建 release 草稿 → OpenSearch 建索引 veridex-{kbId}-{N+1}
+  ③ 逐文档读 chunks.json → 逐 chunk 生成向量 → bulk 写入 index（_id 幂等）
+  ④ setStats(documentCount, chunkCount) → publish（alias 原子切换）→ is_active=true
+  ⑤ 记录快照文档清单（index_release_document）+ 审计
   │
   ▼
-前端看到：版本 v1 状态「就绪」，可预览解析文本；「索引发布」出现 v1 PUBLISHED
+前端看到：版本 vN+1 状态「已发布」+「当前检索」角标；旧快照变为「历史版本」
 ```
 
 ---
@@ -213,10 +220,10 @@ Worker: 状态→PROCESSING
 | 原始文件 | MinIO | 上传 API | 解析、重处理、下载 |
 | 解析全文 | MinIO（parsed.json） | worker | 前端预览 |
 | 分块列表 | MinIO（chunks.json） | worker | 前端预览、索引重建 |
-| 向量 | OpenSearch（embedding 字段） | worker | Phase 3 语义检索 |
-| 全文（BM25） | OpenSearch（text 字段） | worker | Phase 3 关键词检索 |
+| 向量 | OpenSearch（embedding 字段） | 手动发布（KnowledgeBasePublishService） | Phase 3 语义检索 |
+| 全文（BM25） | OpenSearch（text 字段） | 手动发布（KnowledgeBasePublishService） | Phase 3 关键词检索 |
 | 状态/元数据/版本/授权 | PostgreSQL | 各服务 | 业务事实源 |
-| 索引发布记录 | PostgreSQL（index_release） | IndexReleaseService | 发布/回滚/离线控制 |
+| 索引发布记录 | PostgreSQL（index_release） | KnowledgeBasePublishService | 发布/回滚/离线控制 |
 | 待投递事件 | PostgreSQL（outbox_event） | 上传 API | 可靠消息投递 |
 | 审计日志 | PostgreSQL（audit_event） | 上传/worker | 合规追踪 |
 
