@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.veridex.indexing.api.ChunkRecord;
 import io.veridex.indexing.api.IndexReleaseManager;
+import io.veridex.indexing.application.KnowledgeBasePublishService;
 import io.veridex.indexing.application.SearchIndexGateway;
 import io.veridex.indexing.domain.IndexReleaseRepository;
 import io.veridex.knowledge.api.ObjectStorage;
@@ -40,6 +41,7 @@ class IngestionExitGateTest extends PostgresIntegrationTest {
     @Autowired SearchIndexGateway gateway;
     @Autowired IndexReleaseManager releaseManager;
     @Autowired IndexReleaseRepository releaseRepository;
+    @Autowired KnowledgeBasePublishService publishService;
 
     private static final UUID ACTOR = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
@@ -55,38 +57,44 @@ class IngestionExitGateTest extends PostgresIntegrationTest {
         rabbit.convertAndSend("veridex.ingestion", "document.ingest", body.getBytes(StandardCharsets.UTF_8));
 
         awaitReady(u.version().getId());
-        // worker 幂等：第二次投递不重复建 release/索引，chunk 数不变
+        // worker 幂等：第二次投递不重复建 release，chunk 数不变
         assertThat(documents.findVersion(u.version().getId()).getChunkCount()).isEqualTo(1);
+        assertThat(releaseRepository.findByKnowledgeBaseIdOrderByVersionNoDesc(u.kbId())).isEmpty();
     }
 
     @Test
-    void failedNewVersionLeavesOldReleaseQueryable() throws Exception {
+    void failedNewVersionIsExcludedFromNextManualPublish() throws Exception {
         Uploaded v1 = uploadAndPut("a.md", "# 第一版\n\n稳定内容");
         publishMessage(v1);
         awaitReady(v1.version().getId());
+        publishService.publish(v1.kbId());
 
-        // v2 处理失败：MinIO 中不存在该对象 → worker storage.get 抛异常 → markFailed + DLQ
-        Uploaded v2 = uploadVersion("b.md");
+        // 同一知识库上传 b.md：MinIO 中不存在该对象 → worker storage.get 抛异常 → markFailed + DLQ
+        Uploaded v2 = uploadVersion("b.md", v1.kbId());
         publishMessage(v2);
         awaitStatus(v2.version().getId(), DocumentVersionStatus.FAILED);
 
-        // 旧 alias 仍指向 v1 的 index，可检索
+        // 再次手动发布：失败版本被排除（excludedCount=1），新快照不含 v2
+        var result = publishService.publish(v1.kbId());
+        assertThat(result.excludedCount()).isEqualTo(1);
+
         String alias = "veridex-" + v1.kbId() + "-active";
         assertThat(gateway.findChunksByDocumentVersion(alias, v1.version().getId())).isNotEmpty();
+        assertThat(gateway.findChunksByDocumentVersion(alias, v2.version().getId())).isEmpty();
     }
 
     @Test
-    void offlineDocumentIsExcludedFromSearch() throws Exception {
+    void offlineReleaseIsExcludedFromSearch() throws Exception {
         Uploaded u = uploadAndPut("off.md", "# 离线\n\n敏感内容");
         publishMessage(u);
         awaitReady(u.version().getId());
+        var published = publishService.publish(u.kbId());
 
         String alias = "veridex-" + u.kbId() + "-active";
         assertThat(gateway.findChunksByDocumentVersion(alias, u.version().getId())).isNotEmpty();
 
-        // 找到该版本对应的 release 并 offline（移除 alias）
-        var releaseId = releaseRepository.findByDocumentVersionId(u.version().getId()).orElseThrow().getId();
-        releaseManager.offline(u.kbId(), releaseId);
+        // offline 当前 active release（移除 alias）
+        releaseManager.offline(u.kbId(), published.release().releaseId());
 
         assertThat(gateway.findChunksByDocumentVersion(alias, u.version().getId())).isEmpty();
     }
@@ -101,6 +109,10 @@ class IngestionExitGateTest extends PostgresIntegrationTest {
 
     private Uploaded uploadVersion(String filename) {
         UUID kb = knowledgeBases.createKnowledgeBase(ACTOR, "门禁-" + UUID.randomUUID(), null).getId();
+        return uploadVersion(filename, kb);
+    }
+
+    private Uploaded uploadVersion(String filename, UUID kb) {
         DocumentVersion version = documents.upload(ACTOR, kb, filename, "text/markdown",
                 filename.length(), "a".repeat(64));
         return new Uploaded(kb, version);

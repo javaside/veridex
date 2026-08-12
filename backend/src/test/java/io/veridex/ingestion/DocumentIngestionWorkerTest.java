@@ -4,16 +4,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.rabbitmq.client.Channel;
 import io.veridex.audit.api.AuditRecorder;
-import io.veridex.indexing.api.ChunkIndexer;
-import io.veridex.indexing.api.DraftRelease;
-import io.veridex.indexing.api.IndexReleaseManager;
 import io.veridex.ingestion.application.DocumentParser;
 import io.veridex.ingestion.application.StructureChunker;
 import io.veridex.ingestion.domain.Chunk;
@@ -26,10 +23,17 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.mockito.InOrder;
+import org.mockito.ArgumentMatchers;
 import tools.jackson.databind.json.JsonMapper;
 
 class DocumentIngestionWorkerTest {
+
+    private DocumentIngestionWorker worker(DocumentVersionProcessing documents, ObjectStorage storage,
+                                           DocumentParser parser, StructureChunker chunker,
+                                           AuditRecorder audit) {
+        return new DocumentIngestionWorker(documents, storage, parser, chunker, audit,
+                JsonMapper.builder().build());
+    }
 
     @Test
     void chunkIndexFailureDiscardsDraftWithoutPublishing() throws Exception {
@@ -37,65 +41,50 @@ class DocumentIngestionWorkerTest {
         ObjectStorage storage = mock(ObjectStorage.class);
         DocumentParser parser = mock(DocumentParser.class);
         StructureChunker chunker = mock(StructureChunker.class);
-        IndexReleaseManager releases = mock(IndexReleaseManager.class);
-        ChunkIndexer indexer = mock(ChunkIndexer.class);
         AuditRecorder audit = mock(AuditRecorder.class);
         Channel channel = mock(Channel.class);
-        JsonMapper jsonMapper = JsonMapper.builder().build();
-        DocumentIngestionWorker worker = new DocumentIngestionWorker(
-                documents, storage, parser, chunker, releases, indexer, audit, jsonMapper);
+        DocumentIngestionWorker worker = worker(documents, storage, parser, chunker, audit);
 
         UUID versionId = UUID.randomUUID();
-        UUID knowledgeBaseId = UUID.randomUUID();
-        UUID releaseId = UUID.randomUUID();
         String objectKey = "kb/document/v2/guide.md";
         when(documents.findVersionStatus(versionId)).thenReturn("UPLOADED");
         when(storage.get(objectKey)).thenReturn(new ByteArrayInputStream("content".getBytes(StandardCharsets.UTF_8)));
         when(parser.parse(any(), eq("guide.md"), eq("text/markdown")))
                 .thenReturn(new ParsedDocument("content", "guide.md", "text/markdown"));
         when(chunker.chunk(any())).thenReturn(List.of(new Chunk(0, "content", "guide.md", "1")));
-        when(releases.createDraft(eq(knowledgeBaseId), eq(versionId), anyString()))
-                .thenReturn(new DraftRelease(releaseId, "veridex-2", "active"));
-        doThrow(new IllegalStateException("bulk failed")).when(indexer)
-                .index(eq(knowledgeBaseId), eq(versionId), any(), eq("veridex-2"), eq(releaseId));
+        // 写 chunks.json 时 MinIO 异常 → worker 失败
+        doThrow(new IllegalStateException("put failed")).when(storage)
+                .put(anyString(), any(), anyString(), org.mockito.ArgumentMatchers.anyLong());
 
         String payload = "{\"documentVersionId\":\"" + versionId
-                + "\",\"knowledgeBaseId\":\"" + knowledgeBaseId
+                + "\",\"knowledgeBaseId\":\"" + UUID.randomUUID()
                 + "\",\"objectKey\":\"" + objectKey
                 + "\",\"filename\":\"guide.md\",\"contentType\":\"text/markdown\"}";
         worker.onIngest(payload.getBytes(StandardCharsets.UTF_8), channel, 2L);
 
-        verify(releases).discardDraft(releaseId);
-        verify(documents).markFailed(versionId, "bulk failed");
+        verify(documents).markFailed(versionId, "put failed");
         verify(channel).basicReject(2L, false);
-        org.mockito.Mockito.verify(releases, org.mockito.Mockito.never()).publish(releaseId);
+        verify(documents, never()).markReady(any(), org.mockito.ArgumentMatchers.anyInt());
     }
 
     @Test
-    void indexesChunksBeforePublishingReleaseAlias() throws Exception {
+    void writesChunkManifestAndMarksReadyWithoutPublishing() throws Exception {
         DocumentVersionProcessing documents = mock(DocumentVersionProcessing.class);
         ObjectStorage storage = mock(ObjectStorage.class);
         DocumentParser parser = mock(DocumentParser.class);
         StructureChunker chunker = mock(StructureChunker.class);
-        IndexReleaseManager releases = mock(IndexReleaseManager.class);
-        ChunkIndexer indexer = mock(ChunkIndexer.class);
         AuditRecorder audit = mock(AuditRecorder.class);
         Channel channel = mock(Channel.class);
-        JsonMapper jsonMapper = JsonMapper.builder().build();
-        DocumentIngestionWorker worker = new DocumentIngestionWorker(
-                documents, storage, parser, chunker, releases, indexer, audit, jsonMapper);
+        DocumentIngestionWorker worker = worker(documents, storage, parser, chunker, audit);
 
         UUID versionId = UUID.randomUUID();
         UUID knowledgeBaseId = UUID.randomUUID();
-        UUID releaseId = UUID.randomUUID();
         String objectKey = "kb/document/v1/guide.md";
         when(documents.findVersionStatus(versionId)).thenReturn("UPLOADED");
         when(storage.get(objectKey)).thenReturn(new ByteArrayInputStream("content".getBytes(StandardCharsets.UTF_8)));
         when(parser.parse(any(), eq("guide.md"), eq("text/markdown")))
                 .thenReturn(new ParsedDocument("content", "guide.md", "text/markdown"));
         when(chunker.chunk(any())).thenReturn(List.of(new Chunk(0, "content", "guide.md", "1")));
-        when(releases.createDraft(eq(knowledgeBaseId), eq(versionId), anyString()))
-                .thenReturn(new DraftRelease(releaseId, "veridex-1", "active"));
 
         String payload = "{\"documentVersionId\":\"" + versionId
                 + "\",\"knowledgeBaseId\":\"" + knowledgeBaseId
@@ -103,11 +92,32 @@ class DocumentIngestionWorkerTest {
                 + "\",\"filename\":\"guide.md\",\"contentType\":\"text/markdown\"}";
         worker.onIngest(payload.getBytes(StandardCharsets.UTF_8), channel, 1L);
 
-        InOrder order = inOrder(releases, indexer, documents, channel);
-        order.verify(releases).prepare(releaseId);
-        order.verify(indexer).index(eq(knowledgeBaseId), eq(versionId), any(), eq("veridex-1"), eq(releaseId));
-        order.verify(releases).publish(releaseId);
-        order.verify(documents).markReady(versionId, 1);
-        order.verify(channel).basicAck(1L, false);
+        verify(storage).put(eq(objectKey + ".parsed.json"), any(), eq("application/json"), ArgumentMatchers.anyLong());
+        verify(storage).put(eq(objectKey + ".chunks.json"), any(), eq("application/json"), ArgumentMatchers.anyLong());
+        verify(documents).setParsedObjectKey(versionId, objectKey + ".parsed.json");
+        verify(documents).markReady(versionId, 1);
+        verify(channel).basicAck(1L, false);
+    }
+
+    @Test
+    void readyVersionIsAcknowledgedIdempotently() throws Exception {
+        DocumentVersionProcessing documents = mock(DocumentVersionProcessing.class);
+        ObjectStorage storage = mock(ObjectStorage.class);
+        DocumentParser parser = mock(DocumentParser.class);
+        StructureChunker chunker = mock(StructureChunker.class);
+        AuditRecorder audit = mock(AuditRecorder.class);
+        Channel channel = mock(Channel.class);
+        DocumentIngestionWorker worker = worker(documents, storage, parser, chunker, audit);
+
+        UUID versionId = UUID.randomUUID();
+        when(documents.findVersionStatus(versionId)).thenReturn("READY");
+
+        String payload = "{\"documentVersionId\":\"" + versionId
+                + "\",\"knowledgeBaseId\":\"" + UUID.randomUUID()
+                + "\",\"objectKey\":\"kb/doc/v1/x.md\",\"filename\":\"x.md\",\"contentType\":\"text/markdown\"}";
+        worker.onIngest(payload.getBytes(StandardCharsets.UTF_8), channel, 3L);
+
+        verify(channel).basicAck(3L, false);
+        verify(documents, never()).markReady(any(), org.mockito.ArgumentMatchers.anyInt());
     }
 }

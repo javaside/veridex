@@ -1,7 +1,6 @@
 package io.veridex.indexing.domain;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
@@ -12,7 +11,7 @@ public interface IndexReleaseRepository extends CrudRepository<IndexRelease, UUI
     @Query("select coalesce(max(r.versionNo), 0) from IndexRelease r where r.knowledgeBaseId = :kb")
     int findMaxVersionNo(@Param("kb") UUID knowledgeBaseId);
 
-    Optional<IndexRelease> findByDocumentVersionId(UUID documentVersionId);
+    List<IndexRelease> findByKnowledgeBaseIdAndIsActiveTrue(UUID knowledgeBaseId);
 
     List<IndexRelease> findByKnowledgeBaseIdAndStatusOrderByVersionNoDesc(
             UUID knowledgeBaseId, IndexReleaseStatus status);

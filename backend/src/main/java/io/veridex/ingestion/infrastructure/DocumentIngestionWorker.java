@@ -2,10 +2,6 @@ package io.veridex.ingestion.infrastructure;
 
 import com.rabbitmq.client.Channel;
 import io.veridex.audit.api.AuditRecorder;
-import io.veridex.indexing.api.ChunkIndexer;
-import io.veridex.indexing.api.ChunkRecord;
-import io.veridex.indexing.api.DraftRelease;
-import io.veridex.indexing.api.IndexReleaseManager;
 import io.veridex.ingestion.application.DocumentParser;
 import io.veridex.ingestion.application.StructureChunker;
 import io.veridex.ingestion.domain.Chunk;
@@ -24,8 +20,9 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 文档入库 worker：parse → chunk → embed+index → 发布 IndexRelease。
+ * 文档入库 worker：parse → chunk → 写解析产物与 chunk 清单 → markReady。
  * 手动 ack；失败 basicReject(requeue=false) 进 DLQ；已 READY 幂等确认。
+ * 索引发布由知识管理员手动触发（KnowledgeBasePublishService）。
  */
 @Component
 public class DocumentIngestionWorker {
@@ -36,21 +33,16 @@ public class DocumentIngestionWorker {
     private final ObjectStorage storage;
     private final DocumentParser parser;
     private final StructureChunker chunker;
-    private final IndexReleaseManager releaseService;
-    private final ChunkIndexer chunkIndexer;
     private final AuditRecorder audit;
     private final JsonMapper jsonMapper;
 
     public DocumentIngestionWorker(DocumentVersionProcessing documents, ObjectStorage storage,
                                    DocumentParser parser, StructureChunker chunker,
-                                   IndexReleaseManager releaseService, ChunkIndexer chunkIndexer,
                                    AuditRecorder audit, JsonMapper jsonMapper) {
         this.documents = documents;
         this.storage = storage;
         this.parser = parser;
         this.chunker = chunker;
-        this.releaseService = releaseService;
-        this.chunkIndexer = chunkIndexer;
         this.audit = audit;
         this.jsonMapper = jsonMapper;
     }
@@ -59,8 +51,6 @@ public class DocumentIngestionWorker {
     public void onIngest(byte[] payload, Channel channel,
                          @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag) {
         UUID versionId = null;
-        DraftRelease draft = null;
-        boolean published = false;
         try {
             Map<String, Object> message = jsonMapper.readValue(payload, Map.class);
             versionId = UUID.fromString(String.valueOf(message.get("documentVersionId")));
@@ -85,8 +75,9 @@ public class DocumentIngestionWorker {
                 parsed = parser.parse(in, filename, contentType);
             }
             List<Chunk> chunks = chunker.chunk(parsed);
-            List<ChunkRecord> records = chunks.stream()
-                    .map(c -> new ChunkRecord(c.index(), c.text(), c.title(), c.structurePath()))
+            List<Map<String, Object>> records = chunks.stream()
+                    .map(c -> Map.<String, Object>of(
+                            "index", c.index(), "text", c.text(), "title", c.title(), "structurePath", c.structurePath()))
                     .toList();
 
             byte[] parsedBytes = jsonMapper.writeValueAsBytes(parsed.text());
@@ -97,13 +88,6 @@ public class DocumentIngestionWorker {
                     new java.io.ByteArrayInputStream(chunksBytes), "application/json", chunksBytes.length);
             documents.setParsedObjectKey(versionId, objectKey + ".parsed.json");
 
-            draft = releaseService.createDraft(kbId, versionId, releaseAlias(kbId));
-            // 先准备索引并写完 chunk，最后才原子切换 alias；写入失败时旧发布仍可查询。
-            releaseService.prepare(draft.releaseId());
-            chunkIndexer.index(kbId, versionId, records, draft.indexName(), draft.releaseId());
-            releaseService.publish(draft.releaseId());
-            published = true;
-
             documents.markReady(versionId, chunks.size());
             audit.record(null, "ingestion.completed", "document_version", versionId, null,
                     Map.of("chunkCount", chunks.size(), "knowledgeBaseId", kbId.toString()));
@@ -112,13 +96,6 @@ public class DocumentIngestionWorker {
             log.info("ingestion completed for version {}", versionId);
         } catch (Exception e) {
             log.error("ingestion failed for message", e);
-            if (draft != null && !published) {
-                try {
-                    releaseService.discardDraft(draft.releaseId());
-                } catch (Exception cleanup) {
-                    log.error("failed to discard draft release {}", draft.releaseId(), cleanup);
-                }
-            }
             if (versionId != null) {
                 try {
                     documents.markFailed(versionId, e.getMessage());
@@ -132,9 +109,5 @@ public class DocumentIngestionWorker {
                 log.error("failed to reject message", reject);
             }
         }
-    }
-
-    private static String releaseAlias(UUID kbId) {
-        return "veridex-" + kbId + "-active";
     }
 }

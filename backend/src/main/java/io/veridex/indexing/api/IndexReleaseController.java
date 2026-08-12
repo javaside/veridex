@@ -1,6 +1,7 @@
 package io.veridex.indexing.api;
 
 import io.veridex.iam.api.CurrentActor;
+import io.veridex.indexing.application.KnowledgeBasePublishService;
 import io.veridex.knowledge.api.KnowledgeBaseAuthorization;
 import java.util.List;
 import java.util.UUID;
@@ -16,10 +17,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class IndexReleaseController {
 
     private final IndexReleaseManager releases;
+    private final KnowledgeBasePublishService publishService;
     private final KnowledgeBaseAuthorization authorization;
 
-    public IndexReleaseController(IndexReleaseManager releases, KnowledgeBaseAuthorization authorization) {
+    public IndexReleaseController(IndexReleaseManager releases,
+                                  KnowledgeBasePublishService publishService,
+                                  KnowledgeBaseAuthorization authorization) {
         this.releases = releases;
+        this.publishService = publishService;
         this.authorization = authorization;
     }
 
@@ -29,6 +34,12 @@ public class IndexReleaseController {
             throw new SecurityException("no VIEW grant on knowledge base " + kbId);
         }
         return releases.listReleases(kbId);
+    }
+
+    @PostMapping("/publish")
+    public ResponseEntity<PublishResult> publish(@PathVariable UUID kbId) {
+        requireManage(kbId);
+        return ResponseEntity.ok(publishService.publish(kbId));
     }
 
     @PostMapping("/{releaseId}/rollback")

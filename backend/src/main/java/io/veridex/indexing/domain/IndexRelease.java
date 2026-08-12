@@ -19,9 +19,6 @@ public class IndexRelease {
     @Column(name = "knowledge_base_id", nullable = false)
     private UUID knowledgeBaseId;
 
-    @Column(name = "document_version_id", nullable = false)
-    private UUID documentVersionId;
-
     @Column(name = "version_no", nullable = false)
     private int versionNo;
 
@@ -35,6 +32,15 @@ public class IndexRelease {
     @Column(nullable = false, length = 50)
     private IndexReleaseStatus status = IndexReleaseStatus.DRAFT;
 
+    @Column(name = "document_count", nullable = false)
+    private int documentCount;
+
+    @Column(name = "chunk_count", nullable = false)
+    private int chunkCount;
+
+    @Column(name = "is_active", nullable = false)
+    private boolean isActive = false;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 
@@ -44,10 +50,8 @@ public class IndexRelease {
     protected IndexRelease() {
     }
 
-    public IndexRelease(UUID knowledgeBaseId, UUID documentVersionId, int versionNo,
-                        String indexName, String aliasName) {
+    public IndexRelease(UUID knowledgeBaseId, int versionNo, String indexName, String aliasName) {
         this.knowledgeBaseId = knowledgeBaseId;
-        this.documentVersionId = documentVersionId;
         this.versionNo = versionNo;
         this.indexName = indexName;
         this.aliasName = aliasName;
@@ -55,11 +59,14 @@ public class IndexRelease {
 
     public UUID getId() { return id; }
     public UUID getKnowledgeBaseId() { return knowledgeBaseId; }
-    public UUID getDocumentVersionId() { return documentVersionId; }
     public int getVersionNo() { return versionNo; }
     public String getIndexName() { return indexName; }
     public String getAliasName() { return aliasName; }
     public IndexReleaseStatus getStatus() { return status; }
+    public int getDocumentCount() { return documentCount; }
+    public int getChunkCount() { return chunkCount; }
+    public boolean isActive() { return isActive; }
+    public Instant getCreatedAt() { return createdAt; }
     public Instant getPublishedAt() { return publishedAt; }
 
     public void publish() {
@@ -69,4 +76,11 @@ public class IndexRelease {
 
     public void rollback() { this.status = IndexReleaseStatus.ROLLED_BACK; }
     public void offline() { this.status = IndexReleaseStatus.OFFLINE; }
+
+    public void markActive() { this.isActive = true; }
+    public void markInactive() { this.isActive = false; }
+    public void setStats(int documentCount, int chunkCount) {
+        this.documentCount = documentCount;
+        this.chunkCount = chunkCount;
+    }
 }

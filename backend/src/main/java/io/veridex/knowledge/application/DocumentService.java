@@ -9,6 +9,7 @@ import io.veridex.knowledge.domain.DocumentVersionRepository;
 import io.veridex.knowledge.domain.DocumentVersionStatus;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -90,6 +91,23 @@ public class DocumentService implements DocumentVersionProcessing {
     @Override
     public String findVersionStatus(UUID versionId) {
         return require(versionId).getStatus().name();
+    }
+
+    @Override
+    public List<ReadyVersion> listReadyVersions(UUID knowledgeBaseId) {
+        return documents.findByKnowledgeBaseIdOrderByCreatedAtDesc(knowledgeBaseId).stream()
+                .map(doc -> versions.findFirstByDocumentIdOrderByVersionNoDesc(doc.getId()))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .filter(v -> v.getStatus() == DocumentVersionStatus.READY)
+                .map(v -> new ReadyVersion(v.getId(), v.getObjectKey(), v.getChunkCount()))
+                .toList();
+    }
+
+    @Override
+    public int countNotReady(UUID knowledgeBaseId) {
+        long ready = listReadyVersions(knowledgeBaseId).size();
+        return (int) (documents.findByKnowledgeBaseIdOrderByCreatedAtDesc(knowledgeBaseId).size() - ready);
     }
 
     private DocumentVersion require(UUID versionId) {

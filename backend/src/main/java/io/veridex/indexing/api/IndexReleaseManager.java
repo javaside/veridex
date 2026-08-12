@@ -9,7 +9,7 @@ import java.util.UUID;
  */
 public interface IndexReleaseManager {
 
-    DraftRelease createDraft(UUID knowledgeBaseId, UUID documentVersionId, String aliasName);
+    DraftRelease createDraft(UUID knowledgeBaseId, String aliasName);
 
     void prepare(UUID releaseId);
 
@@ -24,4 +24,8 @@ public interface IndexReleaseManager {
     void delete(UUID knowledgeBaseId, UUID releaseId);
 
     List<ReleaseView> listReleases(UUID knowledgeBaseId);
+
+    void setStats(UUID releaseId, int documentCount, int chunkCount);
+
+    void markSnapshotDocuments(UUID releaseId, List<UUID> documentVersionIds);
 }

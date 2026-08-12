@@ -38,7 +38,7 @@ class DatabaseMigrationTest extends PostgresIntegrationTest {
                     versions.add(rows.getString("version"));
                     assertThat(rows.getBoolean("success")).isTrue();
                 }
-                assertThat(versions).contains("1", "2", "3");
+                assertThat(versions).contains("1", "2", "3", "4", "5");
             }
         }
     }
@@ -58,6 +58,24 @@ class DatabaseMigrationTest extends PostgresIntegrationTest {
                     "admin", "00000000-0000-0000-0000-000000000001:PLATFORM_ADMIN",
                     "kadmin", "00000000-0000-0000-0000-000000000002:KNOWLEDGE_ADMIN",
                     "employee", "00000000-0000-0000-0000-000000000003:EMPLOYEE"));
+        }
+    }
+
+    @Test
+    void fullSnapshotReleaseMigrationAddsColumnsAndBackfillsActiveFlag() throws Exception {
+        try (Connection connection = dataSource.getConnection()) {
+            var releaseColumns = columns(connection);
+            assertColumn(releaseColumns, "index_release.document_count", "integer", null, false, "0");
+            assertColumn(releaseColumns, "index_release.chunk_count", "integer", null, false, "0");
+            assertColumn(releaseColumns, "index_release.is_active", "boolean", null, false, "false");
+            assertThat(releaseColumns).as("dropped document_version_id").doesNotContainKey("index_release.document_version_id");
+
+            try (var statement = connection.prepareStatement("""
+                    SELECT table_name FROM information_schema.tables
+                    WHERE table_schema = 'public' AND table_name = 'index_release_document'
+                    """); var rows = statement.executeQuery()) {
+                assertThat(rows.next()).as("index_release_document table").isTrue();
+            }
         }
     }
 
@@ -138,7 +156,7 @@ class DatabaseMigrationTest extends PostgresIntegrationTest {
                        is_nullable, column_default
                 FROM information_schema.columns
                 WHERE table_schema = 'public'
-                  AND table_name IN ('installation', 'outbox_event', 'audit_event')
+                  AND table_name IN ('installation', 'outbox_event', 'audit_event', 'index_release')
                 """);
                 var rows = statement.executeQuery()) {
             while (rows.next()) {
