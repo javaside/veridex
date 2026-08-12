@@ -1,14 +1,15 @@
 import { ArrowsClockwise, CloudSlash, Trash } from '@phosphor-icons/react'
 import { useState } from 'react'
+import { ConfirmDialog } from '../../../components/ConfirmDialog'
 import { knowledgeApi, type Release } from '../knowledgeApi'
 import { StatusBadge } from './StatusBadge'
 
-export function ReleaseList({ kbId, releases, loading, error, onChanged, onRetry }: { kbId: string; releases: Release[]; loading: boolean; error: string | null; onChanged: () => void; onRetry: () => void }) {
+export function ReleaseList({ kbId, releases, loading, error, onChanged, onRetry, highlightReleaseId }: { kbId: string; releases: Release[]; loading: boolean; error: string | null; onChanged: () => void; onRetry: () => void; highlightReleaseId?: string | null }) {
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [rowError, setRowError] = useState<Record<string, string>>({})
+  const [confirmingDelete, setConfirmingDelete] = useState<Release | null>(null)
 
   const act = async (release: Release, action: 'make-current' | 'offline' | 'delete') => {
-    if (action === 'delete' && !window.confirm('删除该索引发布？此操作无法撤销。')) return
     setPendingId(release.releaseId)
     setRowError((current) => ({ ...current, [release.releaseId]: '' }))
     try {
@@ -19,6 +20,11 @@ export function ReleaseList({ kbId, releases, loading, error, onChanged, onRetry
     } finally {
       setPendingId(null)
     }
+  }
+
+  const confirmDelete = (release: Release) => {
+    setConfirmingDelete(null)
+    void act(release, 'delete')
   }
 
   const statusLabel = (release: Release) => {
@@ -38,8 +44,18 @@ export function ReleaseList({ kbId, releases, loading, error, onChanged, onRetry
       {!loading && !error && releases.length > 0 && !hasActive && <div className="state-block compact"><h4>当前无检索版本</h4><p>点击「发布」将当前知识库重新上线为检索快照。</p></div>}
       {!loading && !error && releases.length > 0 && <div className="release-list">{releases.map((release) => {
         const pending = pendingId === release.releaseId
-        return <article className="release-row" key={release.releaseId}><div className="release-version"><strong>v{release.versionNo}</strong><StatusBadge status={release.status} /></div><code>{release.indexName}</code><div className="release-summary"><small>{statusLabel(release)}</small><small>{release.documentCount} 份文档 / {release.chunkCount} chunks</small></div><div className="row-actions">{release.isActive ? <button className="text-button" disabled={pending} onClick={() => void act(release, 'offline')}><CloudSlash size={16} />下架</button> : <button className="text-button" disabled={pending} onClick={() => void act(release, 'make-current')}><ArrowsClockwise size={16} />设为当前</button>}<button className="text-button danger" aria-label={`删除发布 v${release.versionNo}`} disabled={pending || release.isActive} title={release.isActive ? '当前检索版本，需先下架' : undefined} onClick={() => void act(release, 'delete')}><Trash size={16} />删除</button></div>{rowError[release.releaseId] && <p className="row-error" role="alert">{rowError[release.releaseId]}</p>}</article>
+        const rowClass = ['release-row', release.isActive ? 'active' : '', release.releaseId === highlightReleaseId ? 'flash' : ''].filter(Boolean).join(' ')
+        return <article className={rowClass} key={release.releaseId}><div className="release-version"><strong>v{release.versionNo}</strong><StatusBadge status={release.status} /></div><code>{release.indexName}</code><div className="release-summary"><small>{statusLabel(release)}</small><small>{release.documentCount} 份文档 / {release.chunkCount} chunks</small></div><div className="row-actions">{release.isActive ? <button className="text-button" disabled={pending} onClick={() => void act(release, 'offline')}><CloudSlash size={16} />下架</button> : <button className="text-button" disabled={pending} onClick={() => void act(release, 'make-current')}><ArrowsClockwise size={16} />设为当前</button>}<button className="text-button danger" aria-label={`删除发布 v${release.versionNo}`} disabled={pending || release.isActive} title={release.isActive ? '当前检索版本，需先下架' : undefined} onClick={() => setConfirmingDelete(release)}><Trash size={16} />删除</button></div>{rowError[release.releaseId] && <p className="row-error" role="alert">{rowError[release.releaseId]}</p>}</article>
       })}</div>}
+      <ConfirmDialog
+        open={confirmingDelete !== null}
+        title="删除索引发布"
+        description="删除后该版本索引将永久移除，此操作无法撤销。"
+        confirmLabel="删除"
+        danger
+        onConfirm={() => confirmingDelete && confirmDelete(confirmingDelete)}
+        onCancel={() => setConfirmingDelete(null)}
+      />
     </section>
   )
 }

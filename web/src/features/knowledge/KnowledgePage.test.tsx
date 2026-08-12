@@ -14,6 +14,43 @@ test('shows the empty knowledge workspace after loading', async () => {
   expect(screen.getByRole('heading', { name: '选择一个知识库' })).toBeInTheDocument()
 })
 
+test('shows confirm dialog before deleting a release', async () => {
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    if (url === '/api/knowledge-bases') return json([{ id: 'kb-1', name: '员工知识', description: null, slug: 'employee' }])
+    if (url.endsWith('/documents')) return json([])
+    if (url.endsWith('/releases')) return json([{ releaseId: 'release-1', versionNo: 1, status: 'PUBLISHED', indexName: 'i1', aliasName: 'a', isActive: false, documentCount: 1, chunkCount: 3 }])
+    return json([])
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  render(<KnowledgePage />)
+
+  fireEvent.click(await screen.findByRole('button', { name: '删除发布 v1' }))
+  expect(screen.getByRole('dialog', { name: '删除索引发布' })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: '取消' }))
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/delete'))).toBe(false)
+})
+
+test('marks the active release row with a highlight class', async () => {
+  vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+    const url = String(input)
+    const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    if (url === '/api/knowledge-bases') return json([{ id: 'kb-1', name: '员工知识', description: null, slug: 'employee' }])
+    if (url.endsWith('/documents')) return json([])
+    if (url.endsWith('/releases')) return json([{ releaseId: 'r2', versionNo: 2, status: 'PUBLISHED', indexName: 'i2', aliasName: 'a', isActive: true, documentCount: 2, chunkCount: 10 }, { releaseId: 'r1', versionNo: 1, status: 'PUBLISHED', indexName: 'i1', aliasName: 'a', isActive: false, documentCount: 1, chunkCount: 3 }])
+    return json([])
+  }))
+
+  render(<KnowledgePage />)
+
+  const rows = await screen.findAllByRole('article')
+  const activeRow = rows.find((row) => row.textContent?.includes('v2'))
+  expect(activeRow).toHaveClass('active')
+})
+
 test('expands versions and opens a closable preview drawer', async () => {
   vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
     const url = String(input)
@@ -34,25 +71,6 @@ test('expands versions and opens a closable preview drawer', async () => {
   expect(await screen.findByRole('dialog', { name: '员工手册 v1 解析预览' })).toBeInTheDocument()
   fireEvent.keyDown(document, { key: 'Escape' })
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-})
-
-test('does not send a release deletion request when confirmation is cancelled', async () => {
-  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
-  const fetchMock = vi.fn((input: RequestInfo | URL) => {
-    const url = String(input)
-    const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } }))
-    if (url === '/api/knowledge-bases') return json([{ id: 'kb-1', name: '员工知识', description: null, slug: 'employee' }])
-    if (url.endsWith('/documents')) return json([])
-    if (url.endsWith('/releases')) return json([{ releaseId: 'release-1', versionNo: 1, status: 'PUBLISHED', indexName: 'veridex-kb-1-1', aliasName: 'veridex-kb-1', isActive: false, documentCount: 1, chunkCount: 3 }])
-    return json([])
-  })
-  vi.stubGlobal('fetch', fetchMock)
-
-  render(<KnowledgePage />)
-
-  fireEvent.click(await screen.findByRole('button', { name: '删除发布 v1' }))
-  expect(confirm).toHaveBeenCalledWith('删除该索引发布？此操作无法撤销。')
-  expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/delete'))).toBe(false)
 })
 
 test('sends a make-current request for a historical release', async () => {

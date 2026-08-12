@@ -7,7 +7,7 @@ import { StatusBadge } from './StatusBadge'
 
 const formatBytes = (bytes: number) => bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
 
-export function VersionList({ kbId, refreshKey }: { kbId: string; refreshKey: number }) {
+export function VersionList({ kbId, refreshKey, highlightReleaseId }: { kbId: string; refreshKey: number; highlightReleaseId?: string | null }) {
   const [documents, setDocuments] = useState<DocumentSummary[]>([])
   const [versions, setVersions] = useState<Record<string, DocumentVersion[]>>({})
   const [releases, setReleases] = useState<Release[]>([])
@@ -52,7 +52,7 @@ export function VersionList({ kbId, refreshKey }: { kbId: string; refreshKey: nu
         {!loading && !documentError && documents.length === 0 && <div className="state-block compact"><FileText size={28} /><h4>尚无文档</h4><p>从上方选择文件，提交后可在这里跟踪处理进度。</p></div>}
         {!loading && !documentError && documents.length > 0 && <div className="document-list">{documents.map((doc) => <article className="document-item" key={doc.id}><button className="document-toggle" onClick={() => void toggleDoc(doc)} aria-expanded={expandedDoc === doc.id}>{expandedDoc === doc.id ? <CaretDown size={18} /> : <CaretRight size={18} />}<span className="document-icon"><FileText size={19} /></span><span className="document-name"><strong>{doc.filename}</strong><small>{doc.contentType} / {formatBytes(doc.sizeBytes)}</small></span></button>{expandedDoc === doc.id && <div className="document-versions">{versionErrors[doc.id] && <p className="row-error" role="alert">{versionErrors[doc.id]}</p>}{!versions[doc.id] && !versionErrors[doc.id] && <p className="loading-copy" role="status">正在加载版本</p>}{(versions[doc.id] ?? []).map((version) => <div className="version-row" key={version.id}><strong>v{version.versionNo}</strong><StatusBadge status={version.status} /><span>{version.chunkCount} chunks</span>{version.status === 'READY' && <button className="text-button" aria-label={`预览 v${version.versionNo}`} onClick={(event) => void showPreview(doc, version, event.currentTarget)}><MagnifyingGlass size={16} />预览</button>}{version.errorMessage && <p className="row-error">{version.errorMessage}</p>}</div>)}</div>}</article>)}</div>}
       </section>
-      <ReleaseList kbId={kbId} releases={releases} loading={releaseLoading} error={releaseError} onChanged={() => void loadReleases()} onRetry={() => void loadReleases()} />
+      <ReleaseList kbId={kbId} releases={releases} loading={releaseLoading} error={releaseError} onChanged={() => void loadReleases()} onRetry={() => void loadReleases()} highlightReleaseId={highlightReleaseId} />
       <PreviewDrawer title={preview?.title ?? ''} content={preview?.content ?? ''} open={Boolean(preview)} onClose={() => setPreview(null)} returnFocusRef={previewButtonRef} />
     </div>
   )
