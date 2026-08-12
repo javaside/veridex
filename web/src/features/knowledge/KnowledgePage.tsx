@@ -1,5 +1,6 @@
 import { FolderOpen, RocketLaunch } from '@phosphor-icons/react'
 import { useCallback, useEffect, useState } from 'react'
+import { Toast } from '../../components/Toast'
 import { PageHeader } from '../../app/PageHeader'
 import { knowledgeApi, type KnowledgeBase } from './knowledgeApi'
 import { KnowledgeBaseList } from './components/KnowledgeBaseList'
@@ -14,8 +15,8 @@ export function KnowledgePage() {
   const [creating, setCreating] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [publishing, setPublishing] = useState(false)
-  const [publishError, setPublishError] = useState<string | null>(null)
-  const [publishNotice, setPublishNotice] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [highlightReleaseId, setHighlightReleaseId] = useState<string | null>(null)
 
   const loadBases = useCallback(async () => {
     setLoading(true)
@@ -62,14 +63,14 @@ export function KnowledgePage() {
   const publishNow = async () => {
     if (!selected) return
     setPublishing(true)
-    setPublishError(null)
-    setPublishNotice(null)
+    setToast(null)
     try {
       const result = await knowledgeApi.publish(selected.id)
-      setPublishNotice(result.excludedCount > 0 ? `本次发布未包含 ${result.excludedCount} 个文档` : '已发布当前知识库')
+      setToast({ type: 'success', message: result.excludedCount > 0 ? `本次发布未包含 ${result.excludedCount} 个文档` : '已发布当前知识库' })
+      setHighlightReleaseId(result.release.releaseId)
       setRefreshKey((key) => key + 1)
     } catch (caught) {
-      setPublishError(caught instanceof Error ? caught.message : '发布失败')
+      setToast({ type: 'error', message: caught instanceof Error ? caught.message : '发布失败' })
     } finally {
       setPublishing(false)
     }
@@ -84,16 +85,15 @@ export function KnowledgePage() {
           {selected ? (
             <>
               <header className="knowledge-workspace-header"><div><p className="section-kicker">当前知识库</p><h2>{selected.name}</h2><p>{selected.description || '管理该知识库中的文档、版本和索引发布。'}</p></div><div className="workspace-header-actions"><button className="primary-button" type="button" onClick={() => void publishNow()} disabled={publishing}><RocketLaunch size={18} aria-hidden="true" />{publishing ? '正在发布' : '发布'}</button></div></header>
-              {publishError && <p className="inline-message error" role="alert">{publishError}</p>}
-              {publishNotice && <p className="inline-message success" role="status">{publishNotice}</p>}
-              <UploadForm kbId={selected.id} onUploaded={() => setRefreshKey((key) => key + 1)} />
-              <VersionList kbId={selected.id} refreshKey={refreshKey} />
+              <UploadForm kbId={selected.id} onUploaded={() => setRefreshKey((key) => key + 1)} onNotify={(type, message) => setToast({ type, message })} />
+              <VersionList kbId={selected.id} refreshKey={refreshKey} highlightReleaseId={highlightReleaseId} />
             </>
           ) : (
             <div className="panel state-block workspace-empty"><FolderOpen size={34} aria-hidden="true" /><h2>选择一个知识库</h2><p>从左侧选择知识库，或创建第一个知识库开始上传文档。</p></div>
           )}
         </div>
       </div>
+      {toast && <Toast type={toast.type} message={toast.message} onDismiss={() => setToast(null)} />}
     </section>
   )
 }
