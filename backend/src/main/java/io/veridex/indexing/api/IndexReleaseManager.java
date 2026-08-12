@@ -17,7 +17,7 @@ public interface IndexReleaseManager {
 
     void discardDraft(UUID releaseId);
 
-    void rollback(UUID knowledgeBaseId, UUID releaseId);
+    void makeCurrent(UUID knowledgeBaseId, UUID releaseId);
 
     void offline(UUID knowledgeBaseId, UUID releaseId);
 

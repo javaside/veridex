@@ -97,21 +97,49 @@ class IndexReleaseServiceTest {
     }
 
     @Test
-    void rollbackSwitchesActiveFlagToPreviousPublished() {
+    void makeCurrentSwitchesActiveFlagAndAliasToTarget() {
         IndexRelease current = new IndexRelease(KB, 3, "veridex-3", "prod-active");
         current.publish();
         current.markActive();
-        IndexRelease previous = new IndexRelease(KB, 2, "veridex-2", "prod-active");
-        previous.publish();
-        when(releases.findById(current.getId())).thenReturn(Optional.of(current));
-        when(releases.findOtherPublished(KB, current.getId())).thenReturn(List.of(previous));
+        IndexRelease target = new IndexRelease(KB, 1, "veridex-1", "prod-active");
+        target.publish();
+        when(releases.findById(target.getId())).thenReturn(Optional.of(target));
+        when(releases.findByKnowledgeBaseIdAndIsActiveTrue(KB)).thenReturn(List.of(current));
         when(releases.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.rollback(KB, current.getId());
+        service.makeCurrent(KB, target.getId());
 
-        assertThat(current.getStatus()).isEqualTo(IndexReleaseStatus.ROLLED_BACK);
+        verify(gateway).aliasTo("prod-active", "veridex-1");
         assertThat(current.isActive()).isFalse();
-        assertThat(previous.isActive()).isTrue();
+        assertThat(target.isActive()).isTrue();
+        assertThat(target.getStatus()).isEqualTo(IndexReleaseStatus.PUBLISHED);
+    }
+
+    @Test
+    void makeCurrentReactivatesOfflineRelease() {
+        IndexRelease target = new IndexRelease(KB, 2, "veridex-2", "prod-active");
+        target.publish();
+        target.offline();
+        when(releases.findById(target.getId())).thenReturn(Optional.of(target));
+        when(releases.findByKnowledgeBaseIdAndIsActiveTrue(KB)).thenReturn(List.of());
+        when(releases.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.makeCurrent(KB, target.getId());
+
+        assertThat(target.getStatus()).isEqualTo(IndexReleaseStatus.PUBLISHED);
+        assertThat(target.isActive()).isTrue();
+        verify(gateway).aliasTo("prod-active", "veridex-2");
+    }
+
+    @Test
+    void makeCurrentRejectsAlreadyActiveRelease() {
+        IndexRelease active = new IndexRelease(KB, 2, "veridex-2", "prod-active");
+        active.publish();
+        active.markActive();
+        when(releases.findById(active.getId())).thenReturn(Optional.of(active));
+
+        assertThatThrownBy(() -> service.makeCurrent(KB, active.getId()))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test

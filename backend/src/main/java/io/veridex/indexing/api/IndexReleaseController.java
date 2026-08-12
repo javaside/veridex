@@ -42,10 +42,10 @@ public class IndexReleaseController {
         return ResponseEntity.ok(publishService.publish(kbId));
     }
 
-    @PostMapping("/{releaseId}/rollback")
-    public ResponseEntity<Void> rollback(@PathVariable UUID kbId, @PathVariable UUID releaseId) {
+    @PostMapping("/{releaseId}/make-current")
+    public ResponseEntity<Void> makeCurrent(@PathVariable UUID kbId, @PathVariable UUID releaseId) {
         requireManage(kbId);
-        releases.rollback(kbId, releaseId);
+        releases.makeCurrent(kbId, releaseId);
         return ResponseEntity.noContent().build();
     }
 

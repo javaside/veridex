@@ -74,8 +74,8 @@ public class IndexRelease {
         this.publishedAt = Instant.now();
     }
 
-    public void rollback() { this.status = IndexReleaseStatus.ROLLED_BACK; }
     public void offline() { this.status = IndexReleaseStatus.OFFLINE; }
+    public void reactivate() { this.status = IndexReleaseStatus.PUBLISHED; }
 
     public void markActive() { this.isActive = true; }
     public void markInactive() { this.isActive = false; }

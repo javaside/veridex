@@ -11,7 +11,6 @@ import io.veridex.indexing.domain.IndexReleaseRepository;
 import io.veridex.indexing.domain.IndexReleaseStatus;
 import io.veridex.shared.infrastructure.config.OpenSearchProperties;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -75,22 +74,21 @@ public class IndexReleaseService implements IndexReleaseManager {
     }
 
     @Override
-    public void rollback(UUID knowledgeBaseId, UUID releaseId) {
+    public void makeCurrent(UUID knowledgeBaseId, UUID releaseId) {
         IndexRelease release = requireOwned(knowledgeBaseId, releaseId);
-        if (release.getStatus() != IndexReleaseStatus.PUBLISHED) {
-            throw new IllegalStateException("only PUBLISHED release can be rolled back");
+        if (release.isActive()) {
+            throw new IllegalStateException("release is already the current one");
         }
-        Optional<IndexRelease> previous = releases.findOtherPublished(release.getKnowledgeBaseId(), release.getId())
-                .stream().findFirst();
-        release.markInactive();
-        if (previous.isPresent()) {
-            gateway.aliasTo(release.getAliasName(), previous.get().getIndexName());
-            previous.get().markActive();
-            releases.save(previous.get());
-        } else {
-            gateway.removeAlias(release.getAliasName());
+        gateway.aliasTo(release.getAliasName(), release.getIndexName());
+        releases.findByKnowledgeBaseIdAndIsActiveTrue(knowledgeBaseId)
+                .forEach(previous -> {
+                    previous.markInactive();
+                    releases.save(previous);
+                });
+        if (release.getStatus() == IndexReleaseStatus.OFFLINE) {
+            release.reactivate();
         }
-        release.rollback();
+        release.markActive();
         releases.save(release);
     }
 
@@ -110,7 +108,7 @@ public class IndexReleaseService implements IndexReleaseManager {
     public void delete(UUID knowledgeBaseId, UUID releaseId) {
         IndexRelease release = requireOwned(knowledgeBaseId, releaseId);
         if (release.isActive()) {
-            throw new IllegalStateException("active release must be taken offline or rolled back before deletion");
+            throw new IllegalStateException("active release must be taken offline before deletion");
         }
         gateway.deleteIndex(release.getIndexName());
         releases.delete(release);
