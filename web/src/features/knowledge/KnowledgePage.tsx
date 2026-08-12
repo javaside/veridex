@@ -1,4 +1,4 @@
-import { FolderOpen } from '@phosphor-icons/react'
+import { FolderOpen, RocketLaunch } from '@phosphor-icons/react'
 import { useCallback, useEffect, useState } from 'react'
 import { PageHeader } from '../../app/PageHeader'
 import { knowledgeApi, type KnowledgeBase } from './knowledgeApi'
@@ -13,6 +13,9 @@ export function KnowledgePage() {
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [publishing, setPublishing] = useState(false)
+  const [publishError, setPublishError] = useState<string | null>(null)
+  const [publishNotice, setPublishNotice] = useState<string | null>(null)
 
   const loadBases = useCallback(async () => {
     setLoading(true)
@@ -56,6 +59,22 @@ export function KnowledgePage() {
     }
   }
 
+  const publishNow = async () => {
+    if (!selected) return
+    setPublishing(true)
+    setPublishError(null)
+    setPublishNotice(null)
+    try {
+      const result = await knowledgeApi.publish(selected.id)
+      setPublishNotice(result.excludedCount > 0 ? `本次发布未包含 ${result.excludedCount} 个文档` : '已发布当前知识库')
+      setRefreshKey((key) => key + 1)
+    } catch (caught) {
+      setPublishError(caught instanceof Error ? caught.message : '发布失败')
+    } finally {
+      setPublishing(false)
+    }
+  }
+
   return (
     <section className="workspace-page knowledge-page">
       <PageHeader title="知识管理" description="管理知识库、文档版本和当前检索发布。" meta={`${bases.length} 个知识库`} />
@@ -64,7 +83,9 @@ export function KnowledgePage() {
         <div className="knowledge-workspace">
           {selected ? (
             <>
-              <header className="knowledge-workspace-header"><div><p className="section-kicker">当前知识库</p><h2>{selected.name}</h2><p>{selected.description || '管理该知识库中的文档、版本和索引发布。'}</p></div><span className="availability-label">可用</span></header>
+              <header className="knowledge-workspace-header"><div><p className="section-kicker">当前知识库</p><h2>{selected.name}</h2><p>{selected.description || '管理该知识库中的文档、版本和索引发布。'}</p></div><div className="workspace-header-actions"><button className="primary-button" type="button" onClick={() => void publishNow()} disabled={publishing}><RocketLaunch size={18} aria-hidden="true" />{publishing ? '正在发布' : '发布'}</button></div></header>
+              {publishError && <p className="inline-message error" role="alert">{publishError}</p>}
+              {publishNotice && <p className="inline-message success" role="status">{publishNotice}</p>}
               <UploadForm kbId={selected.id} onUploaded={() => setRefreshKey((key) => key + 1)} />
               <VersionList kbId={selected.id} refreshKey={refreshKey} />
             </>

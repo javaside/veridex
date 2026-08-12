@@ -9,7 +9,17 @@ export type DocumentVersion = {
   objectKey: string
 }
 export type ChunkPreview = { index: number; text: string; title: string; structurePath: string }
-export type Release = { releaseId: string; versionNo: number; status: string; indexName: string; aliasName: string }
+export type Release = {
+  releaseId: string
+  versionNo: number
+  status: string
+  indexName: string
+  aliasName: string
+  isActive: boolean
+  documentCount: number
+  chunkCount: number
+}
+export type PublishResult = { release: Release; excludedCount: number }
 
 const json = async <T>(response: Response): Promise<T> => {
   if (!response.ok) {
@@ -51,6 +61,11 @@ export const knowledgeApi = {
     fetch(`/api/documents/${documentId}/versions/${versionId}/chunks`, { credentials: 'include' }).then((response) => json<ChunkPreview[]>(response)),
   releases: (kbId: string): Promise<Release[]> =>
     fetch(`/api/knowledge-bases/${kbId}/releases`, { credentials: 'include' }).then((response) => json<Release[]>(response)),
+  publish: (kbId: string): Promise<PublishResult> =>
+    fetch(`/api/knowledge-bases/${kbId}/releases/publish`, {
+      method: 'POST',
+      credentials: 'include',
+    }).then((response) => json<PublishResult>(response)),
   releaseAction: (kbId: string, releaseId: string, action: 'rollback' | 'offline' | 'delete'): Promise<null> =>
     fetch(`/api/knowledge-bases/${kbId}/releases/${releaseId}/${action}`, {
       method: 'POST',
