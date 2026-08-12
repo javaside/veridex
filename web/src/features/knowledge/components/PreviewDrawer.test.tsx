@@ -38,3 +38,22 @@ test('keeps keyboard focus inside the preview and returns it after closing', () 
   )
   expect(screen.getByRole('button', { name: '打开预览' })).toHaveFocus()
 })
+
+test('shows a loading state instead of content while loading is pending', () => {
+  const onClose = vi.fn()
+  render(<PreviewDrawer title="文档预览" content="" loading open onClose={onClose} />)
+
+  expect(screen.getByRole('dialog', { name: '文档预览' })).toBeInTheDocument()
+  expect(screen.getByRole('status', { name: /正在加载解析内容/ })).toBeInTheDocument()
+  expect(screen.queryByText('解析内容')).not.toBeInTheDocument()
+})
+
+test('renders content once loading completes', () => {
+  const onClose = vi.fn()
+  const { rerender } = render(<PreviewDrawer title="文档预览" content="" loading open onClose={onClose} />)
+
+  rerender(<PreviewDrawer title="文档预览" content="解析内容" loading={false} open onClose={onClose} />)
+
+  expect(screen.getByText('解析内容')).toBeInTheDocument()
+  expect(screen.queryByRole('status', { name: /正在加载解析内容/ })).not.toBeInTheDocument()
+})

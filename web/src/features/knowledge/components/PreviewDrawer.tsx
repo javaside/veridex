@@ -1,7 +1,14 @@
 import { X } from '@phosphor-icons/react'
 import { useEffect, useRef } from 'react'
 
-export function PreviewDrawer({ title, content, open, onClose, returnFocusRef }: { title: string; content: string; open: boolean; onClose: () => void; returnFocusRef?: React.RefObject<HTMLButtonElement | null> }) {
+export function PreviewDrawer({ title, content, loading = false, open, onClose, returnFocusRef }: {
+  title: string
+  content: string
+  loading?: boolean
+  open: boolean
+  onClose: () => void
+  returnFocusRef?: React.RefObject<HTMLButtonElement | null>
+}) {
   const closeRef = useRef<HTMLButtonElement>(null)
   const contentRef = useRef<HTMLPreElement>(null)
 
@@ -26,7 +33,14 @@ export function PreviewDrawer({ title, content, open, onClose, returnFocusRef }:
       <button className="drawer-backdrop" type="button" tabIndex={-1} onClick={onClose} aria-label="关闭预览" />
       <aside className="preview-drawer" role="dialog" aria-modal="true" aria-label={title}>
         <header><div><p className="section-kicker">解析结果</p><h2>{title}</h2></div><button ref={closeRef} className="icon-button" type="button" onClick={onClose} aria-label="关闭预览"><X size={20} /></button></header>
-        <pre ref={contentRef} tabIndex={0}>{content}</pre>
+        {loading ? (
+          <div className="preview-loading" role="status" aria-label="正在加载解析内容">
+            <span className="preview-spinner" aria-hidden="true" />
+            <p>正在加载解析内容…</p>
+          </div>
+        ) : (
+          <pre ref={contentRef} tabIndex={0}>{content}</pre>
+        )}
       </aside>
     </div>
   )

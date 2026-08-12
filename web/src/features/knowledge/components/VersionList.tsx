@@ -17,7 +17,7 @@ export function VersionList({ kbId, refreshKey, highlightReleaseId }: { kbId: st
   const [releaseError, setReleaseError] = useState<string | null>(null)
   const [versionErrors, setVersionErrors] = useState<Record<string, string>>({})
   const [expandedDoc, setExpandedDoc] = useState<string | null>(null)
-  const [preview, setPreview] = useState<{ title: string; content: string } | null>(null)
+  const [preview, setPreview] = useState<{ title: string; content: string; loading: boolean } | null>(null)
   const previewButtonRef = useRef<HTMLButtonElement>(null)
 
   const loadDocuments = useCallback(async () => { setLoading(true); setDocumentError(null); try { setDocuments(await knowledgeApi.documents(kbId)) } catch (caught) { setDocumentError(caught instanceof Error ? caught.message : '文档加载失败') } finally { setLoading(false) } }, [kbId])
@@ -40,7 +40,16 @@ export function VersionList({ kbId, refreshKey, highlightReleaseId }: { kbId: st
 
   const showPreview = async (doc: DocumentSummary, version: DocumentVersion, button: HTMLButtonElement) => {
     previewButtonRef.current = button
-    try { setPreview({ title: `${doc.filename} v${version.versionNo} 解析预览`, content: await knowledgeApi.parsed(doc.id, version.id) }) } catch (caught) { setVersionErrors((current) => ({ ...current, [doc.id]: caught instanceof Error ? caught.message : '预览加载失败' })) }
+    // 立即打开抽屉并显示加载态，内容到达后再填充——避免点击后长时间无反馈
+    const title = `${doc.filename} v${version.versionNo} 解析预览`
+    setPreview({ title, content: '', loading: true })
+    try {
+      const content = await knowledgeApi.parsed(doc.id, version.id)
+      setPreview({ title, content, loading: false })
+    } catch (caught) {
+      setPreview(null)
+      setVersionErrors((current) => ({ ...current, [doc.id]: caught instanceof Error ? caught.message : '预览加载失败' }))
+    }
   }
 
   return (
@@ -53,7 +62,7 @@ export function VersionList({ kbId, refreshKey, highlightReleaseId }: { kbId: st
         {!loading && !documentError && documents.length > 0 && <div className="document-list">{documents.map((doc) => <article className="document-item" key={doc.id}><button className="document-toggle" onClick={() => void toggleDoc(doc)} aria-expanded={expandedDoc === doc.id}>{expandedDoc === doc.id ? <CaretDown size={18} /> : <CaretRight size={18} />}<span className="document-icon"><FileText size={19} /></span><span className="document-name"><strong>{doc.filename}</strong><small>{doc.contentType} / {formatBytes(doc.sizeBytes)}</small></span></button>{expandedDoc === doc.id && <div className="document-versions">{versionErrors[doc.id] && <p className="row-error" role="alert">{versionErrors[doc.id]}</p>}{!versions[doc.id] && !versionErrors[doc.id] && <p className="loading-copy" role="status">正在加载版本</p>}{(versions[doc.id] ?? []).map((version) => <div className="version-row" key={version.id}><strong>v{version.versionNo}</strong><StatusBadge status={version.status} /><span>{version.chunkCount} chunks</span>{version.status === 'READY' && <button className="text-button" aria-label={`预览 v${version.versionNo}`} onClick={(event) => void showPreview(doc, version, event.currentTarget)}><MagnifyingGlass size={16} />预览</button>}{version.errorMessage && <p className="row-error">{version.errorMessage}</p>}</div>)}</div>}</article>)}</div>}
       </section>
       <ReleaseList kbId={kbId} releases={releases} loading={releaseLoading} error={releaseError} onChanged={() => void loadReleases()} onRetry={() => void loadReleases()} highlightReleaseId={highlightReleaseId} />
-      <PreviewDrawer title={preview?.title ?? ''} content={preview?.content ?? ''} open={Boolean(preview)} onClose={() => setPreview(null)} returnFocusRef={previewButtonRef} />
+      <PreviewDrawer title={preview?.title ?? ''} content={preview?.content ?? ''} loading={preview?.loading} open={Boolean(preview)} onClose={() => setPreview(null)} returnFocusRef={previewButtonRef} />
     </div>
   )
 }

@@ -255,6 +255,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .qa-composer input:disabled { opacity: .55; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
+/* ---- 预览抽屉加载态 ---- */
+.preview-loading { min-height: 320px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: var(--text-secondary); font-size: 13px; }
+.preview-spinner { width: 26px; height: 26px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--accent); animation: preview-spin .7s linear infinite; }
+@keyframes preview-spin { to { transform: rotate(360deg); } }
+
 @keyframes page-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes drawer-in { from { opacity: .65; transform: translateX(28px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
