@@ -66,7 +66,7 @@ export const knowledgeApi = {
       method: 'POST',
       credentials: 'include',
     }).then((response) => json<PublishResult>(response)),
-  releaseAction: (kbId: string, releaseId: string, action: 'rollback' | 'offline' | 'delete'): Promise<null> =>
+  releaseAction: (kbId: string, releaseId: string, action: 'make-current' | 'offline' | 'delete'): Promise<null> =>
     fetch(`/api/knowledge-bases/${kbId}/releases/${releaseId}/${action}`, {
       method: 'POST',
       credentials: 'include',
