@@ -150,7 +150,8 @@ answer.completed    /  answer.refused (+ 拒答原因)  /  run.failed
 | `conversation` | 会话/消息持久化、历史注入 | `ConversationService`、`ConversationRepository`、`MessageRepository` |
 | `trace` | QueryRun / RetrievalHit / GenerationRun / Citation 持久化 | `QueryRunRepository`、`RetrievalHitRepository`、`GenerationRunRepository`、`CitationRepository` |
 | `qa`（新 API 层，挂 conversation 下或独立） | 问答 API + SSE | `QaController`（POST 问答、GET 会话历史） |
-| `iam` | 知识范围计算（授权交集）、权限校验 | `KnowledgeScopeService`（复用 grant 模型，retrieval/qa 引用） |
+| `iam` | 当前用户上下文（actor/role） | `CurrentActor`、`SecurityContextRole`（已有） |
+| `knowledge` | 知识范围计算（授权 VIEW 交集） | `KnowledgeScope`（新增，复用 `KnowledgeBaseService.listViewable` + grant 模型；因 iam 不能依赖 knowledge grant，本能力归属 knowledge） |
 | `indexing` | 暴露当前 alias 查询能力（只读） | 复用现有 `IndexReleaseService` |
 
 模块依赖遵循现有 Spring Modulith 边界，新增跨模块调用需 ArchitectureTest 放行并注释理由。
