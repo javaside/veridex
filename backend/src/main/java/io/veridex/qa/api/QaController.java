@@ -1,0 +1,87 @@
+package io.veridex.qa.api;
+
+import io.veridex.conversation.api.ConversationService;
+import io.veridex.conversation.api.ConversationView;
+import io.veridex.conversation.api.MessageRecord;
+import io.veridex.iam.api.CurrentActor;
+import io.veridex.qa.application.QuestionAnsweringService;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+/**
+ * 员工问答 API：SSE 流式问答、会话列表、会话消息与反馈占位。
+ */
+@RestController
+@RequestMapping("/api/qa")
+public class QaController {
+
+    private final QuestionAnsweringService service;
+    private final ConversationService conversations;
+
+    public QaController(QuestionAnsweringService service, ConversationService conversations) {
+        this.service = service;
+        this.conversations = conversations;
+    }
+
+    @PostMapping(value = "/ask", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter ask(@RequestBody AskRequest request) {
+        UUID userId = CurrentActor.id();
+        SseEmitter emitter = new SseEmitter(60_000L);
+        CompletableFuture.runAsync(() -> {
+            try {
+                for (QaEvent event : service.ask(userId, request)) {
+                    emitter.send(SseEmitter.event().name(eventName(event)).data(event));
+                }
+                emitter.complete();
+            } catch (Exception e) {
+                emitter.completeWithError(e);
+            }
+        });
+        emitter.onTimeout(emitter::complete);
+        return emitter;
+    }
+
+    @GetMapping("/conversations")
+    public List<ConversationView> conversations() {
+        return conversations.listForUser(CurrentActor.id());
+    }
+
+    @GetMapping("/conversations/{id}/messages")
+    public List<MessageRecord> messages(@PathVariable UUID id) {
+        UUID userId = CurrentActor.id();
+        if (conversations.findOwned(userId, id).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "会话不存在或无权访问");
+        }
+        return conversations.recentMessages(id, 1000);
+    }
+
+    @PostMapping("/feedback")
+    public ResponseEntity<Void> feedback() {
+        // Phase 4 完整坏例闭环落库；本轮前端按钮占位，返回 204
+        return ResponseEntity.noContent().build();
+    }
+
+    private static String eventName(QaEvent event) {
+        return switch (event) {
+            case QaEvent.RunStarted r -> "run.started";
+            case QaEvent.RetrievalCompleted r -> "retrieval.completed";
+            case QaEvent.AnswerDelta r -> "answer.delta";
+            case QaEvent.CitationAvailable r -> "citation.available";
+            case QaEvent.AnswerCompleted r -> "answer.completed";
+            case QaEvent.AnswerRefused r -> "answer.refused";
+            case QaEvent.RunFailed r -> "run.failed";
+        };
+    }
+}

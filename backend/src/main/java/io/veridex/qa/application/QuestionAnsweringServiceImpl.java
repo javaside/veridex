@@ -106,11 +106,11 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
                 .map(c -> new CitationRecord(c.citationIndex(), c.documentVersionId(), c.chunkIndex(),
                         c.sourceLocation(), c.citationText(), c.validationStatus()))
                 .toList());
-        events.add(new QaEvent.CitationAvailable(result.citations()));
         for (int i = 0; i < result.answer().length(); i += STREAM_CHUNK) {
             events.add(new QaEvent.AnswerDelta(
                     result.answer().substring(i, Math.min(result.answer().length(), i + STREAM_CHUNK))));
         }
+        events.add(new QaEvent.CitationAvailable(result.citations()));
         conversations.addMessage(conversationId, "ASSISTANT", result.answer(), runId);
         events.add(new QaEvent.AnswerCompleted());
         recorder.complete(runId);

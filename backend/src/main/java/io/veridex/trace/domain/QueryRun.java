@@ -9,6 +9,8 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * 一次问答的完整执行记录（在线问答链路 Trace）。只存问题与元数据，不存 prompt/检索正文。
@@ -37,6 +39,7 @@ public class QueryRun {
     @Column(name = "normalized_question", columnDefinition = "text")
     private String normalizedQuestion;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "knowledge_scope", nullable = false, columnDefinition = "jsonb")
     private String knowledgeScopeJson = "[]";
 
@@ -65,7 +68,10 @@ public class QueryRun {
         this.conversationId = conversationId;
         this.question = question;
         this.normalizedQuestion = normalizedQuestion;
-        this.knowledgeScopeJson = knowledgeScope.stream().map(UUID::toString).toList().toString();
+        this.knowledgeScopeJson = knowledgeScope.stream()
+                .map(id -> "\"" + id + "\"")
+                .toList()
+                .toString();
     }
 
     public void mark(Status next) {
