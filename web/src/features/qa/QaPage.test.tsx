@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { knowledgeApi } from '../knowledge/knowledgeApi'
 import { QaPage } from './QaPage'
@@ -47,6 +48,35 @@ describe('QaPage', () => {
     expect(await screen.findByText(/根据《请假制度》/)).toBeInTheDocument()
     expect(screen.getByText('[1]')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /\[1\] 请假制度/ })).toBeInTheDocument()
+  })
+
+  test('does not crash under StrictMode when deltas arrive (regression for white screen)', async () => {
+    // React 19 StrictMode（dev）会双调用 setState updater；QaPage 必须在
+    // 流式 delta 期间不崩溃（曾因 updater 内写 ref 读到 undefined.content 白屏）。
+    mockedAsk.mockImplementation(async (_question, _kbIds, _conversationId, onEvent) => {
+      onEvent({ name: 'run.started', data: { runId: 'r1', conversationId: 'c1' } })
+      onEvent({ name: 'answer.delta', data: { text: '根据' } })
+      onEvent({ name: 'answer.delta', data: { text: '《请假制度》' } })
+      onEvent({ name: 'answer.delta', data: { text: '[1]回答' } })
+      onEvent({ name: 'citation.available', data: { citations: [{ citationIndex: 1, documentId: 'doc-1', documentVersionId: 'v1', chunkIndex: 0, sourceLocation: '请假制度', citationText: '[1]', validationStatus: 'VALID' }] } })
+      onEvent({ name: 'answer.completed', data: {} })
+    })
+
+    render(
+      <StrictMode>
+        <QaPage />
+      </StrictMode>,
+    )
+
+    await screen.findByRole('heading', { name: '向制度知识库提问' })
+    fireEvent.change(screen.getByLabelText('问题'), { target: { value: '请假' } })
+    fireEvent.click(screen.getByRole('button', { name: '发送' }))
+
+    // ChatMessage 把 [1] 渲染成独立元素，跨元素文本无法整体匹配，拆开断言
+    expect(await screen.findByText(/根据《请假制度》/)).toBeInTheDocument()
+    expect(screen.getByText('回答')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /\[1\] 请假制度/ })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '员工问答', level: 1 })).toBeInTheDocument()
   })
 
   test('clicking a citation opens the source preview', async () => {

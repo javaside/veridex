@@ -25,7 +25,43 @@ export function QaPage() {
   const [loading, setLoading] = useState(true)
   const [preview, setPreview] = useState<{ title: string; content: string } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const streamAssistantRef = useRef<number | null>(null)
+  // 流式回答缓冲：ref 供事件回调累积（不触发渲染、无并发问题），state 镜像用于渲染。
+  // 不能用「updater 内写 ref 定位消息」：React 19 StrictMode 双调用 updater 会读到
+  // 旧 base 上不存在的索引 → undefined.content 白屏。
+  const streamTextRef = useRef('')
+  const streamCitationsRef = useRef<Citation[]>([])
+  const [streamText, setStreamText] = useState('')
+  const [streamCitations, setStreamCitations] = useState<Citation[]>([])
+
+  const resetStream = useCallback(() => {
+    streamTextRef.current = ''
+    streamCitationsRef.current = []
+    setStreamText('')
+    setStreamCitations([])
+  }, [])
+
+  const appendStreamText = useCallback((text: string) => {
+    streamTextRef.current += text
+    setStreamText(streamTextRef.current)
+  }, [])
+
+  const setStreamCitationList = useCallback((citations: Citation[]) => {
+    streamCitationsRef.current = citations
+    setStreamCitations(citations)
+  }, [])
+
+  /** 把当前流式缓冲固化为一条 assistant 消息（回答结束 / 拒答 / 失败时调用）。 */
+  const finalizeStream = useCallback(() => {
+    const text = streamTextRef.current
+    const citations = streamCitationsRef.current
+    if (text || citations.length > 0) {
+      setMessages((current) => [
+        ...current,
+        { id: `assistant-${Date.now()}`, role: 'ASSISTANT', content: text, citations },
+      ])
+    }
+    resetStream()
+  }, [resetStream])
 
   useEffect(() => {
     let active = true
@@ -51,6 +87,7 @@ export function QaPage() {
 
   const loadConversation = useCallback(async (conversationId: string) => {
     setActiveConversationId(conversationId)
+    resetStream()
     try {
       const records: MessageRecord[] = await qaApi.messages(conversationId)
       setMessages(records.map((record) => ({ id: record.id, role: record.role as LocalMessage['role'], content: record.content })))
@@ -59,28 +96,12 @@ export function QaPage() {
     }
   }, [])
 
-  const appendAssistantDelta = useCallback((text: string, citations?: Citation[]) => {
-    setMessages((current) => {
-      const next = [...current]
-      if (streamAssistantRef.current != null) {
-        const index = streamAssistantRef.current
-        const existing = next[index]
-        next[index] = { ...existing, content: existing.content + text, citations: citations ?? existing.citations }
-      } else {
-        const message: LocalMessage = { id: `assistant-${Date.now()}`, role: 'ASSISTANT', content: text, citations }
-        next.push(message)
-        streamAssistantRef.current = next.length - 1
-      }
-      return next
-    })
-  }, [])
-
   const ask = async () => {
     const trimmed = question.trim()
     if (!trimmed || streaming || selectedKbIds.length === 0) return
     setQuestion('')
     setStreaming(true)
-    streamAssistantRef.current = null
+    resetStream()
     setMessages((current) => [
       ...current,
       { id: `user-${Date.now()}`, role: 'USER', content: trimmed },
@@ -93,18 +114,21 @@ export function QaPage() {
             setActiveConversationId(event.data.conversationId)
             break
           case 'answer.delta':
-            appendAssistantDelta(event.data.text)
+            appendStreamText(event.data.text)
             break
           case 'citation.available':
-            appendAssistantDelta('', event.data.citations)
+            setStreamCitationList(event.data.citations)
             break
           case 'answer.refused':
+            finalizeStream()
             setMessages((current) => [...current, { id: `system-${Date.now()}`, role: 'SYSTEM', content: event.data.message }])
             break
           case 'run.failed':
+            finalizeStream()
             setMessages((current) => [...current, { id: `error-${Date.now()}`, role: 'ERROR', content: event.data.message }])
             break
           case 'answer.completed':
+            finalizeStream()
             break
           default:
             break
@@ -112,7 +136,7 @@ export function QaPage() {
       })
     } finally {
       setStreaming(false)
-      streamAssistantRef.current = null
+      finalizeStream()
       const latest = await qaApi.conversations()
       setConversations(latest)
     }
@@ -189,6 +213,14 @@ export function QaPage() {
                 onCitationClick={(citation) => void openCitationPreview(citation)}
               />
             ))}
+            {streaming && streamText !== '' && (
+              <ChatMessage
+                role="ASSISTANT"
+                content={streamText}
+                citations={streamCitations}
+                onCitationClick={(citation) => void openCitationPreview(citation)}
+              />
+            )}
           </div>
           <form className="qa-composer" onSubmit={(event) => { event.preventDefault(); void ask() }}>
             <label htmlFor="qa-question" className="sr-only">问题</label>
