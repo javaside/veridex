@@ -38,7 +38,7 @@ class DatabaseMigrationTest extends PostgresIntegrationTest {
                     versions.add(rows.getString("version"));
                     assertThat(rows.getBoolean("success")).isTrue();
                 }
-                assertThat(versions).contains("1", "2", "3", "4", "5");
+                assertThat(versions).contains("1", "2", "3", "4", "5", "6");
             }
         }
     }
