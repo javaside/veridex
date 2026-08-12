@@ -8,7 +8,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 
 /**
@@ -32,12 +31,10 @@ public class QueryRun {
     @Column(name = "conversation_id")
     private UUID conversationId;
 
-    @Lob
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "text")
     private String question;
 
-    @Column(name = "normalized_question")
-    @Lob
+    @Column(name = "normalized_question", columnDefinition = "text")
     private String normalizedQuestion;
 
     @Column(name = "knowledge_scope", nullable = false, columnDefinition = "jsonb")
@@ -50,7 +47,7 @@ public class QueryRun {
     @Column(name = "refusal_reason", length = 60)
     private String refusalReason;
 
-    @Lob
+    @Column(columnDefinition = "text")
     private String error;
 
     @Column(name = "created_at", nullable = false)

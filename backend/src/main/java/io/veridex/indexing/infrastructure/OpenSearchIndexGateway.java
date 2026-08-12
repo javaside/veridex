@@ -37,7 +37,11 @@ public class OpenSearchIndexGateway implements SearchIndexGateway {
                 return; // 幂等：已存在则跳过
             }
             IndexSettings settings = new IndexSettings.Builder()
-                    .numberOfShards(1).numberOfReplicas(0).build();
+                    .numberOfShards(1).numberOfReplicas(0)
+                    // kNN 查询必需：启用后 knn_vector 字段才会构建 ANN 索引，否则查询报
+                    // "Field ... is not built for ANN search"（OpenSearch 3.x 默认关闭）
+                    .knn(true)
+                    .build();
             TypeMapping mapping = new TypeMapping.Builder()
                     .properties(Map.of(
                             "text", Property.of(p -> p.text(t -> t)),
