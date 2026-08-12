@@ -1,6 +1,7 @@
 import { ChatCircleText, Database, Gauge, ShieldCheck } from '@phosphor-icons/react'
 import type { ComponentType, ReactNode } from 'react'
 import { KnowledgePage } from '../features/knowledge/KnowledgePage'
+import { QaPage } from '../features/qa/QaPage'
 import { ComingSoonPage } from './ComingSoonPage'
 
 export type WorkspaceRoute = {
@@ -14,7 +15,7 @@ export type WorkspaceRoute = {
 export const workspaceRoutes: WorkspaceRoute[] = [
   {
     path: '/workbench', label: '员工问答', englishLabel: 'Workbench', icon: ChatCircleText,
-    content: <ComingSoonPage title="员工问答" phase="Phase 3" description="基于授权知识范围生成可验证答案。" capabilities={['混合检索与重排', '流式回答', '引用校验']} />,
+    content: <QaPage />,
   },
   {
     path: '/knowledge', label: '知识管理', englishLabel: 'Knowledge', icon: Database,

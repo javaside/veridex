@@ -38,7 +38,7 @@ class DatabaseMigrationTest extends PostgresIntegrationTest {
                     versions.add(rows.getString("version"));
                     assertThat(rows.getBoolean("success")).isTrue();
                 }
-                assertThat(versions).contains("1", "2", "3", "4", "5", "6");
+                assertThat(versions).contains("1", "2", "3", "4", "5", "6", "7");
             }
         }
     }
@@ -76,6 +76,41 @@ class DatabaseMigrationTest extends PostgresIntegrationTest {
                     """); var rows = statement.executeQuery()) {
                 assertThat(rows.next()).as("index_release_document table").isTrue();
             }
+        }
+    }
+
+    @Test
+    void phase3QaMigrationCreatesTablesAndColumns() throws Exception {
+        try (Connection connection = dataSource.getConnection()) {
+            assertThat(tableNames(connection)).contains(
+                    "conversation", "message", "query_run", "retrieval_hit", "generation_run", "citation");
+
+            var qaColumns = new HashMap<String, ColumnContract>();
+            try (var statement = connection.prepareStatement("""
+                    SELECT table_name, column_name, data_type, character_maximum_length,
+                           is_nullable, column_default
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name IN ('conversation', 'message', 'query_run', 'retrieval_hit', 'generation_run', 'citation')
+                    """); var rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    qaColumns.put(rows.getString("table_name") + "." + rows.getString("column_name"),
+                            new ColumnContract(rows.getString("data_type"),
+                                    rows.getObject("character_maximum_length", Integer.class),
+                                    "YES".equals(rows.getString("is_nullable")),
+                                    rows.getString("column_default")));
+                }
+            }
+            assertColumn(qaColumns, "conversation.user_id", "uuid", null, false, null);
+            assertColumn(qaColumns, "conversation.title", "character varying", 200, false, null);
+            assertColumn(qaColumns, "message.role", "character varying", 20, false, null);
+            assertColumn(qaColumns, "query_run.status", "character varying", 30, false, null);
+            assertColumn(qaColumns, "query_run.knowledge_scope", "jsonb", null, false, "'[]'::jsonb");
+            assertColumn(qaColumns, "query_run.refusal_reason", "character varying", 60, true, null);
+            assertColumn(qaColumns, "retrieval_hit.channel", "character varying", 10, false, null);
+            assertColumn(qaColumns, "retrieval_hit.fusion_score", "double precision", null, true, null);
+            assertColumn(qaColumns, "generation_run.duration_ms", "bigint", null, false, "0");
+            assertColumn(qaColumns, "citation.validation_status", "character varying", 30, false, null);
         }
     }
 

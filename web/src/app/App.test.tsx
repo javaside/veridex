@@ -27,7 +27,7 @@ beforeEach(() => {
 })
 
 describe('App routes', () => {
-  test.each(workspaces.filter(([p]) => p !== '/knowledge'))(
+  test.each(workspaces.filter(([p]) => p !== '/knowledge' && p !== '/workbench'))(
     'renders the exact heading for %s',
     async (path, title) => {
       render(
@@ -37,7 +37,7 @@ describe('App routes', () => {
       )
 
       expect(await screen.findByRole('heading', { name: title, level: 1 })).toBeInTheDocument()
-      expect(screen.getAllByText(path === '/workbench' ? 'Phase 3' : path === '/evaluation' ? 'Phase 4' : 'Phase 5')).not.toHaveLength(0)
+      expect(screen.getAllByText(path === '/evaluation' ? 'Phase 4' : 'Phase 5')).not.toHaveLength(0)
       expect(screen.getByRole('link', { name: '前往知识管理' })).toHaveAttribute('href', '/knowledge')
     },
   )
@@ -50,6 +50,17 @@ describe('App routes', () => {
     )
 
     expect(await screen.findByRole('heading', { name: '知识库', level: 2 })).toBeInTheDocument()
+  })
+
+  test('renders the QA workspace page for /workbench', async () => {
+    render(
+      <MemoryRouter initialEntries={['/workbench']}>
+        <App />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('heading', { name: '员工问答', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '向制度知识库提问' })).toBeInTheDocument()
   })
 
   test('renders navigation links with their workspace hrefs', async () => {

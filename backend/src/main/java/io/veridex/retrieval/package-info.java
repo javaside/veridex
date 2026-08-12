@@ -1,5 +1,5 @@
 @org.springframework.modulith.ApplicationModule(
         displayName = "Retrieval",
-        allowedDependencies = {"shared", "iam", "knowledge", "indexing"}
+        allowedDependencies = {"shared", "knowledge::api", "indexing::api"}
 )
 package io.veridex.retrieval;
