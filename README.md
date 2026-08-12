@@ -1,6 +1,6 @@
 # Veridex
 
-Veridex 是面向企业私有化部署的 RAG（Retrieval-Augmented Generation，检索增强生成）平台。目前项目已经完成 **Phase 2：知识入库垂直切片**，可以创建知识库、上传文档、异步解析和分块，并将结果发布到 OpenSearch。
+Veridex 是面向企业私有化部署的 RAG（Retrieval-Augmented Generation，检索增强生成）平台。目前项目已经完成 **Phase 3：带权限的 RAG 查询**，支持创建知识库、上传文档、异步解析和分块、发布到 OpenSearch，以及授权员工流式问答并校验引用。
 
 > 当前仓库以本地开发和集成验证为目标，尚未提供应用容器镜像或生产部署编排。
 
@@ -8,7 +8,7 @@ Veridex 是面向企业私有化部署的 RAG（Retrieval-Augmented Generation�
 
 - **Phase 1：可执行基础** — 已完成
 - **Phase 2：知识入库垂直切片** — 已完成
-- **Phase 3：带权限的 RAG 查询** — 尚未实现
+- **Phase 3：带权限的 RAG 查询** — 已完成
 - **Phase 4：质量评测与运营闭环** — 尚未实现
 - **Phase 5：企业试点准备** — 尚未实现
 
@@ -23,16 +23,19 @@ Veridex 是面向企业私有化部署的 RAG（Retrieval-Augmented Generation�
 - PostgreSQL Transactional Outbox + RabbitMQ 异步入库
 - Apache Tika 文档解析及结构优先分块
 - OpenSearch 全文和向量字段写入
-- 不可变 IndexRelease，以及发布、回滚、离线和删除流程
+- 不可变 IndexRelease，以及发布、设为当前、离线和删除流程
 - 解析文本、Chunk 和文档版本预览
 - 重复消息幂等、失败版本隔离及离线立即排除
+- 授权知识范围（多知识库交集）上的混合检索（BM25 + 向量 + RRF 融合）
+- 有限多轮会话、SSE 流式回答、`[n]` 引用校验与原文预览
+- 依据不足时明确拒答（含 `ACCESS_RESTRICTED` 统一文案）
 
 ## 当前限制
 
-- 当前 `DeterministicEmbeddingModel` 是 128 维确定性哈希向量，**不具备语义相似度能力**，只用于打通和验证管道。
-- 员工问答页面仍是占位内容；BM25 + 向量混合召回、模型生成、流式回答和引用校验将在 Phase 3 实现。
+- 当前 `DeterministicEmbeddingModel` 是 128 维确定性哈希向量，**不具备语义相似度能力**；回答由 `DeterministicChatModel` 模板化生成，两者仅用于打通和验证管道，真实模型通过 provider 接口切换。
 - PDF / DOCX 的结构识别较基础；没有 Markdown 标题时主要按文本长度分块。
 - 失败消息进入 DLQ；自动重试、退避以及 Outbox 定时恢复仍待增强。
+- 点赞/点踩反馈仅前端占位 + 接口占位，坏例转评测集闭环属 Phase 4。
 - `deploy/compose/compose.yml` 只启动开发基础设施，不启动 Spring Boot 后端或 React 前端。
 
 ## 技术栈
