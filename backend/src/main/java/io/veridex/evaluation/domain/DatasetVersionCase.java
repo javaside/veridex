@@ -34,7 +34,7 @@ public class DatasetVersionCase {
     private String expectedAnswer;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(nullable = false, columnDefinition = "jsonb")
+    @Column(name = "evidence", nullable = false, columnDefinition = "jsonb")
     private String evidenceJson = "[]";
 
     protected DatasetVersionCase() {
