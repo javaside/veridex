@@ -32,7 +32,7 @@ Veridex 是面向企业私有化部署的 RAG（Retrieval-Augmented Generation�
 
 ## 当前限制
 
-- 当前 `DeterministicEmbeddingModel` 是 128 维确定性哈希向量，**不具备语义相似度能力**；回答由 `DeterministicChatModel` 模板化生成，两者仅用于打通和验证管道，真实模型通过 provider 接口切换。
+- 默认 `DeterministicEmbeddingModel` 为 128 维确定性哈希（无语义）；可通过 `VERIDEX_EMBEDDING_PROVIDER=ollama` 切换 Ollama `qwen3-embedding`（真实语义，1024 维）。
 - PDF / DOCX 的结构识别较基础；没有 Markdown 标题时主要按文本长度分块。
 - 失败消息进入 DLQ；自动重试、退避以及 Outbox 定时恢复仍待增强。
 - 点赞/点踩反馈仅前端占位 + 接口占位，坏例转评测集闭环属 Phase 4。
@@ -227,6 +227,8 @@ Spring Boot 配置位于 `backend/src/main/resources/application.yml`。常用�
 | `VERIDEX_OPENSEARCH_INDEX_PREFIX` | `veridex` |
 | `VERIDEX_EMBEDDING_PROVIDER` | `deterministic` |
 | `VERIDEX_EMBEDDING_DIMENSIONS` | `128` |
+| `VERIDEX_OLLAMA_BASE_URL` | `http://localhost:11434` |
+| `VERIDEX_OLLAMA_EMBEDDING_MODEL` | `qwen3-embedding` |
 
 示例：使用不同的 PostgreSQL 地址启动后端：
 
@@ -345,6 +347,22 @@ docker compose -f deploy/compose/compose.yml up -d
 ```
 
 需要保留数据时，应新增更高版本的迁移，而不是修改现有迁移。
+
+## 使用真实向量模型（Ollama）
+
+```bash
+ollama pull qwen3-embedding
+```
+
+以 `VERIDEX_EMBEDDING_PROVIDER=ollama VERIDEX_EMBEDDING_DIMENSIONS=1024` 启动：
+
+```bash
+VERIDEX_EMBEDDING_PROVIDER=ollama \
+VERIDEX_EMBEDDING_DIMENSIONS=1024 \
+./mvnw -pl backend spring-boot:run
+```
+
+换模型后须发新 release 重建索引（旧 128 维索引不可在新维度下查询）。
 
 ## 进一步阅读
 
