@@ -38,7 +38,7 @@ class DatabaseMigrationTest extends PostgresIntegrationTest {
                     versions.add(rows.getString("version"));
                     assertThat(rows.getBoolean("success")).isTrue();
                 }
-                assertThat(versions).contains("1", "2", "3", "4", "5", "6", "7");
+                assertThat(versions).contains("1", "2", "3", "4", "5", "6", "7", "8");
             }
         }
     }
@@ -111,6 +111,37 @@ class DatabaseMigrationTest extends PostgresIntegrationTest {
             assertColumn(qaColumns, "retrieval_hit.fusion_score", "double precision", null, true, null);
             assertColumn(qaColumns, "generation_run.duration_ms", "bigint", null, false, "0");
             assertColumn(qaColumns, "citation.validation_status", "character varying", 30, false, null);
+        }
+    }
+
+    @Test
+    void evaluationMigrationCreatesFourTables() throws Exception {
+        try (Connection connection = dataSource.getConnection()) {
+            assertThat(tableNames(connection)).contains(
+                    "evaluation_dataset", "evaluation_case", "dataset_version", "dataset_version_case");
+
+            var evaluationColumns = new HashMap<String, ColumnContract>();
+            try (var statement = connection.prepareStatement("""
+                    SELECT table_name, column_name, data_type, character_maximum_length,
+                           is_nullable, column_default
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name IN ('evaluation_dataset', 'evaluation_case', 'dataset_version', 'dataset_version_case')
+                    """); var rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    evaluationColumns.put(rows.getString("table_name") + "." + rows.getString("column_name"),
+                            new ColumnContract(rows.getString("data_type"),
+                                    rows.getObject("character_maximum_length", Integer.class),
+                                    "YES".equals(rows.getString("is_nullable")),
+                                    rows.getString("column_default")));
+                }
+            }
+            assertColumn(evaluationColumns, "evaluation_dataset.name", "character varying", 200, false, null);
+            assertColumn(evaluationColumns, "evaluation_case.question", "text", null, false, null);
+            assertColumn(evaluationColumns, "evaluation_case.expected_behavior", "character varying", 20, false, null);
+            assertColumn(evaluationColumns, "evaluation_case.evidence", "jsonb", null, false, "'[]'::jsonb");
+            assertColumn(evaluationColumns, "dataset_version.version_no", "integer", null, false, null);
+            assertColumn(evaluationColumns, "dataset_version_case.position", "integer", null, false, null);
         }
     }
 
