@@ -47,10 +47,12 @@ veridex:
     opensearch:
       uris: ${VERIDEX_OPENSEARCH_URIS:http://localhost:9200}
       index-prefix: ${VERIDEX_OPENSEARCH_INDEX_PREFIX:veridex}
-      dimensions: ${VERIDEX_EMBEDDING_DIMENSIONS:128}
   embedding:
     provider: ${VERIDEX_EMBEDDING_PROVIDER:deterministic}
     dimensions: ${VERIDEX_EMBEDDING_DIMENSIONS:128}
+    ollama:
+      base-url: ${VERIDEX_OLLAMA_BASE_URL:http://localhost:11434}
+      model: ${VERIDEX_OLLAMA_EMBEDDING_MODEL:qwen3-embedding}
 
 management:
   endpoints:

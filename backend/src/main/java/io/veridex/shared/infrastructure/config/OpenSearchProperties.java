@@ -6,6 +6,5 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "veridex.search.opensearch")
 public record OpenSearchProperties(
         List<String> uris,
-        String indexPrefix,
-        int dimensions) {
+        String indexPrefix) {
 }

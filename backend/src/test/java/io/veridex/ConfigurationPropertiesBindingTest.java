@@ -30,12 +30,13 @@ class ConfigurationPropertiesBindingTest {
     void openSearchPropertiesBindWithDefaults() {
         assertThat(openSearch.uris()).containsExactly("http://localhost:9200");
         assertThat(openSearch.indexPrefix()).isEqualTo("veridex");
-        assertThat(openSearch.dimensions()).isEqualTo(128);
     }
 
     @Test
     void embeddingPropertiesBindWithDefaults() {
         assertThat(embedding.provider()).isEqualTo("deterministic");
         assertThat(embedding.dimensions()).isEqualTo(128);
+        assertThat(embedding.ollama().baseUrl()).isEqualTo("http://localhost:11434");
+        assertThat(embedding.ollama().model()).isEqualTo("qwen3-embedding");
     }
 }

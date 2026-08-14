@@ -9,6 +9,7 @@ import io.veridex.indexing.domain.IndexReleaseDocument;
 import io.veridex.indexing.domain.IndexReleaseDocumentRepository;
 import io.veridex.indexing.domain.IndexReleaseRepository;
 import io.veridex.indexing.domain.IndexReleaseStatus;
+import io.veridex.shared.infrastructure.config.EmbeddingProperties;
 import io.veridex.shared.infrastructure.config.OpenSearchProperties;
 import java.util.List;
 import java.util.UUID;
@@ -23,15 +24,18 @@ public class IndexReleaseService implements IndexReleaseManager {
     private final IndexReleaseDocumentRepository snapshotDocuments;
     private final SearchIndexGateway gateway;
     private final OpenSearchProperties properties;
+    private final EmbeddingProperties embeddingProperties;
 
     public IndexReleaseService(IndexReleaseRepository releases,
                                IndexReleaseDocumentRepository snapshotDocuments,
                                SearchIndexGateway gateway,
-                               OpenSearchProperties properties) {
+                               OpenSearchProperties properties,
+                               EmbeddingProperties embeddingProperties) {
         this.releases = releases;
         this.snapshotDocuments = snapshotDocuments;
         this.gateway = gateway;
         this.properties = properties;
+        this.embeddingProperties = embeddingProperties;
     }
 
     @Override
@@ -46,7 +50,7 @@ public class IndexReleaseService implements IndexReleaseManager {
     @Override
     public void prepare(UUID releaseId) {
         IndexRelease release = require(releaseId);
-        gateway.createIndex(release.getIndexName(), properties.dimensions());
+        gateway.createIndex(release.getIndexName(), embeddingProperties.dimensions());
     }
 
     @Override

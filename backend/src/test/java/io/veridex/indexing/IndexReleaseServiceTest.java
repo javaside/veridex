@@ -12,6 +12,7 @@ import io.veridex.indexing.domain.IndexReleaseDocumentRepository;
 import io.veridex.indexing.domain.IndexReleaseRepository;
 import io.veridex.indexing.domain.IndexReleaseStatus;
 import io.veridex.indexing.infrastructure.IndexReleaseService;
+import io.veridex.shared.infrastructure.config.EmbeddingProperties;
 import io.veridex.shared.infrastructure.config.OpenSearchProperties;
 import java.util.List;
 import java.util.Optional;
@@ -29,6 +30,7 @@ class IndexReleaseServiceTest {
     @Mock IndexReleaseDocumentRepository snapshotDocuments;
     @Mock io.veridex.indexing.application.SearchIndexGateway gateway;
     @Mock OpenSearchProperties properties;
+    @Mock EmbeddingProperties embeddingProperties;
     @InjectMocks IndexReleaseService service;
 
     private static final UUID KB = UUID.randomUUID();
@@ -36,7 +38,7 @@ class IndexReleaseServiceTest {
     @Test
     void prepareCreatesIndexAndPublishAliasesItAndMarksPublished() {
         when(properties.indexPrefix()).thenReturn("veridex");
-        when(properties.dimensions()).thenReturn(128);
+        when(embeddingProperties.dimensions()).thenReturn(128);
         when(releases.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(releases.findMaxVersionNo(KB)).thenReturn(0);
         DraftRelease draft = service.createDraft(KB, "prod-active");
