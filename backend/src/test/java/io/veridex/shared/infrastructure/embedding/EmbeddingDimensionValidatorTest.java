@@ -37,4 +37,18 @@ class EmbeddingDimensionValidatorTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("1024");
     }
+
+    @Test
+    void failsWhenEmbeddingReturnsNullProbe() {
+        var embeddings = mock(EmbeddingModel.class);
+        when(embeddings.embed(anyString())).thenReturn(null);
+        var props = new EmbeddingProperties("ollama", 1024,
+                new EmbeddingProperties.Ollama("http://localhost:11434", "qwen3-embedding"));
+
+        var validator = new EmbeddingDimensionValidator(embeddings, props);
+
+        assertThatThrownBy(() -> validator.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("null");
+    }
 }

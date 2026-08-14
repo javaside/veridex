@@ -105,7 +105,12 @@ public class OpenSearchIndexGateway implements SearchIndexGateway {
 
     private List<float[]> embedBatch(List<String> texts) {
         var response = embeddings.call(new EmbeddingRequest(texts, EmbeddingOptions.builder().build()));
-        return response.getResults().stream().map(Embedding::getOutput).toList();
+        var results = response.getResults();
+        if (results.size() != texts.size()) {
+            throw new IllegalStateException("embedding returned " + results.size()
+                    + " vectors for " + texts.size() + " chunks");
+        }
+        return results.stream().map(Embedding::getOutput).toList();
     }
 
     @Override

@@ -32,7 +32,7 @@ Veridex 是面向企业私有化部署的 RAG（Retrieval-Augmented Generation�
 
 ## 当前限制
 
-- 默认 `DeterministicEmbeddingModel` 为 128 维确定性哈希（无语义）；可通过 `VERIDEX_EMBEDDING_PROVIDER=ollama` 切换 Ollama `qwen3-embedding`（真实语义，1024 维）。
+- 默认 `DeterministicEmbeddingModel` 为 128 维确定性哈希（无语义）；可通过 `VERIDEX_EMBEDDING_PROVIDER=ollama` 切换 Ollama `qwen3-embedding`（真实语义，1024 维；同时需设置 `VERIDEX_EMBEDDING_DIMENSIONS=1024`）。
 - PDF / DOCX 的结构识别较基础；没有 Markdown 标题时主要按文本长度分块。
 - 失败消息进入 DLQ；自动重试、退避以及 Outbox 定时恢复仍待增强。
 - 点赞/点踩反馈仅前端占位 + 接口占位，坏例转评测集闭环属 Phase 4。

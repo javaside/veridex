@@ -33,4 +33,12 @@ class EmbeddingProviderSelectionTest {
             assertThat(context.getBean(EmbeddingModel.class)).isInstanceOf(OllamaEmbeddingModel.class);
         });
     }
+
+    @Test
+    void missingProviderPropertyDefaultsToDeterministicModel() {
+        runner.run(context -> {
+            assertThat(context).hasSingleBean(EmbeddingModel.class);
+            assertThat(context.getBean(EmbeddingModel.class)).isInstanceOf(DeterministicEmbeddingModel.class);
+        });
+    }
 }

@@ -20,6 +20,9 @@ public class EmbeddingDimensionValidator implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         float[] probe = embeddings.embed("veridex:dimension-probe");
+        if (probe == null) {
+            throw new IllegalStateException("Embedding model returned null for the dimension probe");
+        }
         if (probe.length != properties.dimensions()) {
             throw new IllegalStateException(
                     "Embedding model returned " + probe.length + " dimensions but veridex.embedding.dimensions="
