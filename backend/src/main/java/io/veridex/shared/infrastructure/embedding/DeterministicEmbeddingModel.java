@@ -8,6 +8,7 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.ai.embedding.EmbeddingResponseMetadata;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
@@ -15,6 +16,8 @@ import org.springframework.stereotype.Component;
  * 无需外部模型 API。生产环境按 veridex.embedding.provider 切换真实模型。
  */
 @Component
+@ConditionalOnProperty(name = "veridex.embedding.provider",
+        havingValue = "deterministic", matchIfMissing = true)
 public class DeterministicEmbeddingModel implements EmbeddingModel {
 
     private static final int DIMENSIONS = 128;
