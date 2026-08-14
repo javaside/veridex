@@ -1,5 +1,5 @@
 @org.springframework.modulith.ApplicationModule(
         displayName = "Evaluation",
-        allowedDependencies = {"shared", "knowledge", "retrieval", "generation", "trace"}
+        allowedDependencies = {"shared", "iam::api"}
 )
 package io.veridex.evaluation;
