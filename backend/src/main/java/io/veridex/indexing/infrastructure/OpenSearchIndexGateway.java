@@ -14,7 +14,10 @@ import org.opensearch.client.opensearch._types.mapping.TypeMapping;
 import org.opensearch.client.opensearch.core.SearchRequest;
 import org.opensearch.client.opensearch.indices.ExistsRequest;
 import org.opensearch.client.opensearch.indices.IndexSettings;
+import org.springframework.ai.embedding.Embedding;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.embedding.EmbeddingOptions;
+import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -65,10 +68,12 @@ public class OpenSearchIndexGateway implements SearchIndexGateway {
         for (int start = 0; start < chunks.size(); start += BULK_BATCH) {
             List<ChunkRecord> batch = chunks.subList(start, Math.min(start + BULK_BATCH, chunks.size()));
             var request = new org.opensearch.client.opensearch.core.BulkRequest.Builder();
-            for (ChunkRecord chunk : batch) {
+            List<float[]> vectors = embedBatch(batch.stream().map(ChunkRecord::text).toList());
+            for (int i = 0; i < batch.size(); i++) {
+                ChunkRecord chunk = batch.get(i);
+                float[] vector = vectors.get(i);
                 // _id 固定为 documentVersionId:chunkIndex → 重复投递幂等（覆盖写）
                 String docId = documentVersionId + ":" + chunk.index();
-                float[] vector = embeddings.embed(chunk.text());
                 request.operations(op -> op.index(idx -> idx
                         .index(indexName).id(docId)
                         .document(Map.of(
@@ -96,6 +101,11 @@ public class OpenSearchIndexGateway implements SearchIndexGateway {
         } catch (IOException e) {
             throw new RuntimeException("refresh failed for " + indexName, e);
         }
+    }
+
+    private List<float[]> embedBatch(List<String> texts) {
+        var response = embeddings.call(new EmbeddingRequest(texts, EmbeddingOptions.builder().build()));
+        return response.getResults().stream().map(Embedding::getOutput).toList();
     }
 
     @Override
