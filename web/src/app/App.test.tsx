@@ -27,20 +27,28 @@ beforeEach(() => {
 })
 
 describe('App routes', () => {
-  test.each(workspaces.filter(([p]) => p !== '/knowledge' && p !== '/workbench'))(
-    'renders the exact heading for %s',
-    async (path, title) => {
-      render(
-        <MemoryRouter initialEntries={[path]}>
-          <App />
-        </MemoryRouter>,
-      )
+  test('renders the evaluation workspace page for /evaluation', async () => {
+    render(
+      <MemoryRouter initialEntries={['/evaluation']}>
+        <App />
+      </MemoryRouter>,
+    )
 
-      expect(await screen.findByRole('heading', { name: title, level: 1 })).toBeInTheDocument()
-      expect(screen.getAllByText(path === '/evaluation' ? 'Phase 4' : 'Phase 5')).not.toHaveLength(0)
-      expect(screen.getByRole('link', { name: '前往知识管理' })).toHaveAttribute('href', '/knowledge')
-    },
-  )
+    expect(await screen.findByRole('heading', { name: '质量评测', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '数据集', level: 2 })).toBeInTheDocument()
+  })
+
+  test('renders the administration coming soon page for /admin', async () => {
+    render(
+      <MemoryRouter initialEntries={['/admin']}>
+        <App />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('heading', { name: '平台管理', level: 1 })).toBeInTheDocument()
+    expect(screen.getAllByText('Phase 5')).not.toHaveLength(0)
+    expect(screen.getByRole('link', { name: '前往知识管理' })).toHaveAttribute('href', '/knowledge')
+  })
 
   test('renders the knowledge workspace page for /knowledge', async () => {
     render(
