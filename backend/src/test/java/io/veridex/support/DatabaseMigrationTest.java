@@ -24,7 +24,7 @@ class DatabaseMigrationTest extends PostgresIntegrationTest {
     void flywayAppliesPlatformBaselineMigration() throws Exception {
         try (Connection connection = dataSource.getConnection()) {
             assertThat(tableNames(connection))
-                    .contains("installation", "outbox_event", "audit_event", "flyway_schema_history");
+                    .contains("installation", "outbox_event", "audit_event", "flyway_schema_history", "api_key");
 
             try (var statement = connection.prepareStatement("""
                     SELECT version, success
@@ -38,7 +38,7 @@ class DatabaseMigrationTest extends PostgresIntegrationTest {
                     versions.add(rows.getString("version"));
                     assertThat(rows.getBoolean("success")).isTrue();
                 }
-                assertThat(versions).contains("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11");
+                assertThat(versions).contains("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12");
             }
         }
     }
