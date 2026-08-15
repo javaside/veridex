@@ -4,7 +4,25 @@ import type { EvidenceRef } from '../evaluationApi'
 
 type KnowledgeBase = { id: string; name: string }
 
-export function EvidencePicker({ onSelect }: { onSelect: (evidence: EvidenceRef[]) => void }) {
+/**
+ * 反向定位：给定一个 documentVersionId，找出它所属的「知识库 → 文档 → 版本」。
+ * 证据只存了 documentVersionId，没有冗余 KB/文档信息，因此需要遍历定位。
+ */
+async function resolveVersion(kbList: KnowledgeBase[], versionId: string) {
+  for (const kb of kbList) {
+    const docs = await knowledgeApi.documents(kb.id)
+    for (const doc of docs) {
+      const vers = await knowledgeApi.versions(doc.id)
+      const found = vers.find((v) => v.id === versionId)
+      if (found) {
+        return { baseId: kb.id, documentId: doc.id, versionId: found.id }
+      }
+    }
+  }
+  return null
+}
+
+export function EvidencePicker({ initial, onSelect }: { initial?: EvidenceRef[]; onSelect: (evidence: EvidenceRef[]) => void }) {
   const [bases, setBases] = useState<KnowledgeBase[]>([])
   const [baseId, setBaseId] = useState<string>('')
   const [documents, setDocuments] = useState<DocumentSummary[]>([])
@@ -16,8 +34,41 @@ export function EvidencePicker({ onSelect }: { onSelect: (evidence: EvidenceRef[
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    knowledgeApi.list().then(setBases).catch((e) => setError(e instanceof Error ? e.message : '加载知识库失败'))
-  }, [])
+    let active = true
+    const load = async () => {
+      try {
+        const kbList = await knowledgeApi.list()
+        if (!active) return
+        setBases(kbList)
+
+        // 回显已保存的证据：定位到对应知识库/文档/版本并勾选分块
+        const ref = (initial ?? []).find((r) => r.chunkIndexes.length > 0)
+        if (ref) {
+          const resolved = await resolveVersion(kbList, ref.documentVersionId)
+          if (!active) return
+          if (resolved) {
+            const [docs, vers, chunkList] = await Promise.all([
+              knowledgeApi.documents(resolved.baseId),
+              knowledgeApi.versions(resolved.documentId),
+              knowledgeApi.chunks(resolved.documentId, resolved.versionId),
+            ])
+            if (!active) return
+            setBaseId(resolved.baseId)
+            setDocuments(docs)
+            setDocumentId(resolved.documentId)
+            setVersions(vers)
+            setVersionId(resolved.versionId)
+            setChunks(chunkList)
+            setChecked(ref.chunkIndexes.filter((i) => chunkList.some((c) => c.index === i)))
+          }
+        }
+      } catch (e) {
+        if (active) setError(e instanceof Error ? e.message : '加载知识库失败')
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [initial])
 
   const loadDocuments = useCallback((id: string) => {
     setBaseId(id)

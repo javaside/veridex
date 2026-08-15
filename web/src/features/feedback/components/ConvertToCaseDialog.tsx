@@ -22,8 +22,10 @@ export function ConvertToCaseDialog({ feedback, onDone, onCancel, onNotify }: {
     return () => { active = false }
   }, [])
 
+  const cannotSubmit = !datasetId || (behavior === 'ANSWER' && feedback.evidence.length === 0)
+
   const submit = async () => {
-    if (!datasetId) return
+    if (cannotSubmit) return
     setSubmitting(true)
     setError(null)
     try {
@@ -60,12 +62,12 @@ export function ConvertToCaseDialog({ feedback, onDone, onCancel, onNotify }: {
           <button type="button" className={behavior === 'REFUSE' ? 'active' : ''} onClick={() => setBehavior('REFUSE')}>REFUSE（拒答）</button>
         </div>
         {behavior === 'ANSWER' && feedback.evidence.length === 0 && (
-          <p className="dialog-warning">该反馈没有有效引用证据，ANSWER 用例证据为空将无法发布。</p>
+          <p className="dialog-warning">该反馈没有有效引用证据，ANSWER 用例需要至少一个证据分块，请先改为 REFUSE 或补充证据。</p>
         )}
         {error && <p className="row-error" role="alert">{error}</p>}
         <div className="dialog-actions">
           <button className="secondary-button" type="button" onClick={onCancel}>取消</button>
-          <button className="primary-button" type="button" onClick={() => void submit()} disabled={submitting || !datasetId}>{submitting ? '转坏例中' : '确认转坏例'}</button>
+          <button className="primary-button" type="button" onClick={() => void submit()} disabled={submitting || cannotSubmit}>{submitting ? '转坏例中' : '确认转坏例'}</button>
         </div>
       </div>
     </div>

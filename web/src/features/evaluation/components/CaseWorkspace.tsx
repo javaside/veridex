@@ -11,6 +11,8 @@ type EditorState = {
 
 const emptyEditor = (): EditorState => ({ question: '', expectedBehavior: 'ANSWER', expectedAnswer: '', evidence: [] })
 
+const totalChunks = (evidence: CaseInput['evidence']) => evidence.reduce((n, r) => n + r.chunkIndexes.length, 0)
+
 const toEditor = (c: CaseView): EditorState => ({
   question: c.question,
   expectedBehavior: c.expectedBehavior,
@@ -75,7 +77,7 @@ function CaseEditor({ initial, datasetId, onSaved, onNotify }: {
         {input.expectedBehavior === 'ANSWER' && (
           <>
             <label>期望答案<textarea value={input.expectedAnswer} onChange={(e) => setInput((i) => ({ ...i, expectedAnswer: e.target.value }))} rows={3} /></label>
-            <div className="evidence-section"><strong>Ground-truth 证据</strong><EvidencePicker onSelect={(evidence) => setInput((i) => ({ ...i, evidence }))} /><div className="evidence-summary">{input.evidence.length > 0 ? `已选 ${input.evidence[0].chunkIndexes.length} 个分块` : '尚未选择证据'}</div></div>
+            <div className="evidence-section"><strong>Ground-truth 证据</strong><EvidencePicker initial={input.evidence} onSelect={(evidence) => setInput((i) => ({ ...i, evidence }))} /><div className="evidence-summary">{totalChunks(input.evidence) > 0 ? `已选 ${totalChunks(input.evidence)} 个分块` : '尚未选择证据'}</div></div>
           </>
         )}
         <div className="case-editor-actions">

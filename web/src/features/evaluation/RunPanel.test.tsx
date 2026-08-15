@@ -57,3 +57,32 @@ test('compares two runs and shows gate verdict', async () => {
 
   expect(await screen.findByText(/门禁判定：PASS/)).toBeInTheDocument()
 })
+
+test('expands run detail inline below the clicked run', async () => {
+  const metrics = { avgRecallAt1: 0.5, avgRecallAt3: 0.5, avgRecallAt5: 0.5, avgMrr: 0.5, avgNdcgAt10: 0.5, citationHitRate: 0.5, refusalMatchRate: 0.5, avgLatencyMs: 100, caseCount: 1, completedCount: 1 }
+  const run = (id: string) => ({ id, datasetId: 'ds-1', datasetVersionId: 'dv-1', profileId: 'p-1', profileVersionNo: 1, status: 'COMPLETED', metrics, createdAt: '2026-08-15T00:00:00Z', completedAt: null })
+  const detail = {
+    ...run('r-base'),
+    error: null,
+    cases: [{ position: 1, question: '问题', expectedBehavior: 'ANSWER', actualBehavior: 'ANSWER', answer: null, groundTruthEvidence: [], citations: [], retrievedChunks: [], metrics: { recallAt1: 1, recallAt3: 1, recallAt5: 1, mrr: 1, ndcgAt10: 1, citationHit: 1, refusalMatch: true, latencyMs: 50 } }],
+  }
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    void init
+    const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    if (url === '/api/configuration/profiles') return json([])
+    if (url === '/api/knowledge-bases') return json([])
+    if (url === '/api/evaluation/runs?datasetId=ds-1') return json([run('r-base'), run('r-cand')])
+    if (url === '/api/evaluation/runs/r-base') return json(detail)
+    return json([])
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  render(<RunPanel datasetId="ds-1" versions={[]} onNotify={() => {}} />)
+
+  const items = await screen.findAllByRole('button', { name: /COMPLETED/ })
+  fireEvent.click(items[0])
+
+  expect(await screen.findByRole('heading', { name: /运行详情/ })).toBeInTheDocument()
+  expect(items[0].closest('.run-entry')?.querySelector('.run-detail')).not.toBeNull()
+})

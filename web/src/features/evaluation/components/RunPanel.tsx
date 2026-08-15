@@ -19,7 +19,9 @@ export function RunPanel({ datasetId, versions, onNotify }: {
   const [profileVersionNo, setProfileVersionNo] = useState<number>(0)
   const [kbIds, setKbIds] = useState<string[]>([])
   const [runs, setRuns] = useState<RunView[]>([])
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [detail, setDetail] = useState<RunDetail | null>(null)
+  const [loadingDetail, setLoadingDetail] = useState(false)
   const [starting, setStarting] = useState(false)
   const [baselineId, setBaselineId] = useState<string>('')
   const [candidateId, setCandidateId] = useState<string>('')
@@ -74,11 +76,21 @@ export function RunPanel({ datasetId, versions, onNotify }: {
     }
   }
 
-  const openDetail = async (id: string) => {
+  const toggleDetail = async (id: string) => {
+    if (expandedId === id) {
+      setExpandedId(null)
+      return
+    }
+    setExpandedId(id)
+    setDetail(null)
+    setLoadingDetail(true)
     try {
       setDetail(await evaluationApi.run(id))
     } catch (e) {
+      setExpandedId(null)
       onNotify('error', e instanceof Error ? e.message : '运行详情加载失败')
+    } finally {
+      setLoadingDetail(false)
     }
   }
 
@@ -131,40 +143,47 @@ export function RunPanel({ datasetId, versions, onNotify }: {
       <div className="run-list">
         {runs.length === 0 && <div className="case-list-empty">尚无评测运行</div>}
         {runs.map((run) => (
-          <button key={run.id} type="button" className="run-item" onClick={() => void openDetail(run.id)}>
-            <span><strong>{run.status}</strong></span>
-            <span className="run-metrics">
-              {run.metrics ? `R@1 ${fmtPct(run.metrics.avgRecallAt1)} · MRR ${run.metrics.avgMrr.toFixed(3)} · Ref ${fmtPct(run.metrics.refusalMatchRate)}` : '—'}
-            </span>
-          </button>
+          <div key={run.id} className="run-entry">
+            <button type="button" className="run-item" aria-expanded={expandedId === run.id} onClick={() => void toggleDetail(run.id)}>
+              <span><strong>{run.status}</strong></span>
+              <span className="run-metrics">
+                {run.metrics ? `R@1 ${fmtPct(run.metrics.avgRecallAt1)} · MRR ${run.metrics.avgMrr.toFixed(3)} · Ref ${fmtPct(run.metrics.refusalMatchRate)}` : '—'}
+              </span>
+            </button>
+            {expandedId === run.id && (
+              <div className="run-detail">
+                <div className="run-detail-header"><h3>运行详情（{detail?.status ?? run.status}）</h3><button className="text-button" type="button" onClick={() => setExpandedId(null)}>关闭</button></div>
+                {loadingDetail ? (
+                  <div className="case-list-empty">加载中…</div>
+                ) : detail ? (
+                  <>
+                    {detail.metrics && (
+                      <div className="run-metrics-grid">
+                        <span>Recall@1 {fmtPct(detail.metrics.avgRecallAt1)}</span>
+                        <span>Recall@3 {fmtPct(detail.metrics.avgRecallAt3)}</span>
+                        <span>Recall@5 {fmtPct(detail.metrics.avgRecallAt5)}</span>
+                        <span>MRR {detail.metrics.avgMrr.toFixed(3)}</span>
+                        <span>NDCG@10 {detail.metrics.avgNdcgAt10.toFixed(3)}</span>
+                        <span>引用命中 {fmtPct(detail.metrics.citationHitRate)}</span>
+                        <span>拒答匹配 {fmtPct(detail.metrics.refusalMatchRate)}</span>
+                        <span>平均延迟 {detail.metrics.avgLatencyMs.toFixed(0)}ms</span>
+                      </div>
+                    )}
+                    <ul className="run-case-list">
+                      {detail.cases.map((c) => (
+                        <li key={c.position}>
+                          <span>#{c.position} {c.question}</span>
+                          <small>{c.expectedBehavior} → {c.actualBehavior} · R@1 {fmtPct(c.metrics.recallAt1)} · Ref {c.metrics.refusalMatch ? '✓' : '✗'}</small>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                ) : null}
+              </div>
+            )}
+          </div>
         ))}
       </div>
-
-      {detail && (
-        <div className="run-detail">
-          <div className="panel-header"><h3>运行详情（{detail.status}）</h3><button className="text-button" type="button" onClick={() => setDetail(null)}>关闭</button></div>
-          {detail.metrics && (
-            <div className="run-metrics-grid">
-              <span>Recall@1 {fmtPct(detail.metrics.avgRecallAt1)}</span>
-              <span>Recall@3 {fmtPct(detail.metrics.avgRecallAt3)}</span>
-              <span>Recall@5 {fmtPct(detail.metrics.avgRecallAt5)}</span>
-              <span>MRR {detail.metrics.avgMrr.toFixed(3)}</span>
-              <span>NDCG@10 {detail.metrics.avgNdcgAt10.toFixed(3)}</span>
-              <span>引用命中 {fmtPct(detail.metrics.citationHitRate)}</span>
-              <span>拒答匹配 {fmtPct(detail.metrics.refusalMatchRate)}</span>
-              <span>平均延迟 {detail.metrics.avgLatencyMs.toFixed(0)}ms</span>
-            </div>
-          )}
-          <ul className="run-case-list">
-            {detail.cases.map((c) => (
-              <li key={c.position}>
-                <span>#{c.position} {c.question}</span>
-                <small>{c.expectedBehavior} → {c.actualBehavior} · R@1 {fmtPct(c.metrics.recallAt1)} · Ref {c.metrics.refusalMatch ? '✓' : '✗'}</small>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       <div className="comparison-section">
         <div className="panel-header"><h3>版本对比与回归门禁</h3></div>
