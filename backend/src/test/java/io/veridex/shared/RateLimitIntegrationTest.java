@@ -6,6 +6,7 @@ import io.veridex.VeridexApplication;
 import io.veridex.iam.application.ApiKeyService;
 import io.veridex.shared.infrastructure.RequestIds;
 import io.veridex.support.PostgresIntegrationTest;
+import java.io.IOException;
 import java.net.CookieManager;
 import java.net.CookiePolicy;
 import java.net.URI;
@@ -28,6 +29,25 @@ class RateLimitIntegrationTest extends PostgresIntegrationTest {
 
     @LocalServerPort int port;
     @Autowired ApiKeyService apiKeys;
+
+    @Test
+    void actuatorRequestsBypassExhaustedAnonymousBucketWithoutExemptingBusinessApis() throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+
+        int prometheusStatus = send(client, "/actuator/prometheus").statusCode();
+        assertThat(prometheusStatus).isNotEqualTo(429);
+        for (int i = 0; i < 5; i++) {
+            assertThat(send(client, "/actuator/health").statusCode()).isEqualTo(200);
+            assertThat(send(client, "/actuator/prometheus").statusCode()).isEqualTo(prometheusStatus);
+        }
+        for (int i = 0; i < 3; i++) {
+            assertThat(send(client, options("/api/iam/keys")).statusCode()).isEqualTo(200);
+        }
+
+        assertThat(send(client, options("/api/iam/keys")).statusCode()).isEqualTo(429);
+        assertThat(send(client, "/actuator/health").statusCode()).isEqualTo(200);
+        assertThat(send(client, "/actuator/prometheus").statusCode()).isEqualTo(prometheusStatus);
+    }
 
     @Test
     void sessionAndBearerApiKeyForSameUsernameShareOneBucket() throws Exception {
@@ -83,6 +103,20 @@ class RateLimitIntegrationTest extends PostgresIntegrationTest {
 
     private HttpRequest get(String path) {
         return HttpRequest.newBuilder(URI.create(baseUri() + path)).GET().build();
+    }
+
+    private HttpResponse<String> send(HttpClient client, String path) throws IOException, InterruptedException {
+        return send(client, get(path));
+    }
+
+    private HttpResponse<String> send(HttpClient client, HttpRequest request) throws IOException, InterruptedException {
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpRequest options(String path) {
+        return HttpRequest.newBuilder(URI.create(baseUri() + path))
+                .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
+                .build();
     }
 
     private HttpRequest bearerGet(String path, String token) {

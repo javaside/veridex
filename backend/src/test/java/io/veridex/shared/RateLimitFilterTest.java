@@ -48,6 +48,18 @@ class RateLimitFilterTest {
     }
 
     @Test
+    void actuatorRequestsDoNotConsumeRateLimitBucket() throws Exception {
+        RateLimitFilter filter = filterWithLimit(1);
+
+        assertThat(run(filter, "/actuator/health").getStatus()).isEqualTo(200);
+        assertThat(run(filter, "/actuator/prometheus").getStatus()).isEqualTo(200);
+        assertThat(run(filter, "/api/qa/conversations").getStatus()).isEqualTo(200);
+        assertThat(run(filter, "/actuator-like").getStatus()).isEqualTo(429);
+        assertThat(run(filter, "/api/qa/conversations").getStatus()).isEqualTo(429);
+        assertThat(run(filter, "/actuator/health").getStatus()).isEqualTo(200);
+    }
+
+    @Test
     void zeroDisablesLimit() throws Exception {
         RateLimitFilter filter = filterWithLimit(0);
         authenticateAs("employee");
@@ -152,8 +164,13 @@ class RateLimitFilterTest {
     }
 
     private MockHttpServletResponse run(RateLimitFilter filter) throws ServletException, IOException {
+        return run(filter, "/api/test");
+    }
+
+    private MockHttpServletResponse run(RateLimitFilter filter, String requestUri)
+            throws ServletException, IOException {
         MockHttpServletResponse response = new MockHttpServletResponse();
-        filter.doFilter(new MockHttpServletRequest(), response,
+        filter.doFilter(new MockHttpServletRequest("GET", requestUri), response,
                 (request, result) -> ((jakarta.servlet.http.HttpServletResponse) result).setStatus(200));
         return response;
     }
@@ -200,11 +217,15 @@ class RateLimitFilterTest {
             assertThat(oldMinuteSampled.await(5, TimeUnit.SECONDS)).isTrue();
         }
 
-        void awaitSecondRequestReadyOrClockCalled(AtomicReference<Thread> requestThread) throws InterruptedException {
+        void awaitSecondRequestReadyOrClockCalled(AtomicReference<Thread> requestThread) {
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
             while (secondClockCall.getCount() != 0) {
                 Thread thread = requestThread.get();
                 if (thread != null && thread.getState() == Thread.State.BLOCKED) {
                     return;
+                }
+                if (System.nanoTime() >= deadline) {
+                    throw new AssertionError("second request did not reach the rate-limit clock");
                 }
                 Thread.onSpinWait();
             }

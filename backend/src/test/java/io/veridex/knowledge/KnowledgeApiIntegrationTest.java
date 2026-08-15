@@ -28,7 +28,8 @@ class KnowledgeApiIntegrationTest extends PostgresIntegrationTest {
     private void loginAs(String username) {
         rest.post().uri("/api/auth/login?username=" + username + "&password=veridex")
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus().isOk()
+                .expectBody().consumeWith(response -> {});
     }
 
     @Test
@@ -80,7 +81,29 @@ class KnowledgeApiIntegrationTest extends PostgresIntegrationTest {
                 .contentType(MediaType.MULTIPART_FORM_DATA)
                 .body(multipart("x.md", "x"))
                 .exchange()
-                .expectStatus().isForbidden();
+                .expectStatus().isForbidden()
+                .expectBody().isEmpty();
+    }
+
+    @Test
+    void unsupportedDocumentTypeKeepsKnowledgeBadRequestContract() throws Exception {
+        loginAs("admin");
+        var create = rest.post().uri("/api/knowledge-bases")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("{\"name\":\"格式检查库\"}")
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody()
+                .jsonPath("$.id").isNotEmpty()
+                .returnResult();
+        String kbId = extractId(create.getResponseBody());
+
+        rest.post().uri("/api/knowledge-bases/{kbId}/documents", kbId)
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(multipart("unsupported.exe", "x"))
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody().isEmpty();
     }
 
     // 注：Boot 4 的 RestTestClient 实例跨测试方法共享 session，无法在同一实例上验证

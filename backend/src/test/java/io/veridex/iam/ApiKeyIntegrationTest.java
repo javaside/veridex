@@ -99,8 +99,10 @@ class ApiKeyIntegrationTest extends PostgresIntegrationTest {
                 .body(new io.veridex.iam.api.CreateKeyRequest("forbidden-delegation", ADMIN.toString(), List.of("qa")))
                 .exchange()
                 .expectStatus().isForbidden()
+                .expectHeader().contentTypeCompatibleWith("application/problem+json")
                 .expectBody()
-                .jsonPath("$.status").isEqualTo(403);
+                .jsonPath("$.status").isEqualTo(403)
+                .jsonPath("$.detail").isEqualTo("targetUserId must match actor unless caller is PLATFORM_ADMIN");
     }
 
     @Test
@@ -145,13 +147,17 @@ class ApiKeyIntegrationTest extends PostgresIntegrationTest {
         rest.get().uri("/api/iam/keys")
                 .exchange()
                 .expectStatus().isForbidden()
+                .expectHeader().contentTypeCompatibleWith("application/problem+json")
                 .expectBody()
-                .jsonPath("$.status").isEqualTo(403);
+                .jsonPath("$.status").isEqualTo(403)
+                .jsonPath("$.detail").isEqualTo("admin role required");
         rest.post().uri("/api/iam/keys")
                 .body(new io.veridex.iam.api.CreateKeyRequest("x", null, List.of("qa")))
                 .exchange()
                 .expectStatus().isForbidden()
+                .expectHeader().contentTypeCompatibleWith("application/problem+json")
                 .expectBody()
-                .jsonPath("$.status").isEqualTo(403);
+                .jsonPath("$.status").isEqualTo(403)
+                .jsonPath("$.detail").isEqualTo("admin role required");
     }
 }
