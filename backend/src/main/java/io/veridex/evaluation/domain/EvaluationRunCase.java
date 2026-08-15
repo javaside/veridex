@@ -38,7 +38,7 @@ public class EvaluationRunCase {
     private String answer;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(nullable = false, columnDefinition = "jsonb")
+    @Column(name = "citations", nullable = false, columnDefinition = "jsonb")
     private String citationsJson = "[]";
 
     @JdbcTypeCode(SqlTypes.JSON)
@@ -46,7 +46,7 @@ public class EvaluationRunCase {
     private String retrievedChunksJson = "[]";
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(nullable = false, columnDefinition = "jsonb")
+    @Column(name = "metrics", nullable = false, columnDefinition = "jsonb")
     private String metricsJson = "{}";
 
     protected EvaluationRunCase() {

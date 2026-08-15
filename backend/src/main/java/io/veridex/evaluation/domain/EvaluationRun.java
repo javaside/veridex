@@ -42,7 +42,7 @@ public class EvaluationRun {
     private Status status = Status.RUNNING;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(nullable = false, columnDefinition = "jsonb")
+    @Column(name = "metrics", nullable = false, columnDefinition = "jsonb")
     private String metricsJson = "{}";
 
     @Column(columnDefinition = "text")
