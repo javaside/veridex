@@ -1,5 +1,7 @@
 package io.veridex;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.veridex.iam.application.ApiKeyService;
 import io.veridex.support.PostgresIntegrationTest;
 import java.util.List;
@@ -10,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
 import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.servlet.client.RestTestClient;
+import tools.jackson.databind.json.JsonMapper;
 
 @AutoConfigureRestTestClient
 class OpenApiDocsTest extends PostgresIntegrationTest {
@@ -18,35 +21,48 @@ class OpenApiDocsTest extends PostgresIntegrationTest {
 
     @Autowired RestTestClient rest;
     @Autowired ApiKeyService apiKeys;
+    @Autowired JsonMapper jsonMapper;
 
     @BeforeEach
     void clearSession() {
-        rest.post().uri("/api/auth/logout").exchange().expectStatus().isNoContent();
+        rest.post().uri("/api/auth/logout")
+                .exchange()
+                .expectStatus().isNoContent()
+                .expectBody().isEmpty();
     }
 
     @Test
-    void adminSessionSeesOpenApiJsonWithApiPaths() {
+    void adminSessionSeesOpenApiJsonWithOnlyApiPaths() {
         login("admin");
 
-        rest.get().uri("/v3/api-docs")
+        var response = rest.get().uri("/v3/api-docs")
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.openapi").isNotEmpty()
-                .jsonPath("$.paths./api/qa/ask").exists()
-                .jsonPath("$.paths./api/iam/keys").exists();
+                .expectBody(String.class)
+                .returnResult();
+        var paths = jsonMapper.readTree(response.getResponseBody()).get("paths");
+
+        assertThat(paths.propertyNames()).allMatch(path -> path.startsWith("/api/"));
+        assertThat(paths.get("/api/qa/ask")).isNotNull();
+        assertThat(paths.get("/api/iam/keys")).isNotNull();
     }
 
     @Test
-    void anonymousIsRejected() {
-        rest.get().uri("/v3/api-docs").exchange().expectStatus().is4xxClientError();
+    void anonymousIsUnauthorized() {
+        rest.get().uri("/v3/api-docs")
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectBody().consumeWith(response -> {});
     }
 
     @Test
     void employeeSessionIsForbidden() {
         login("employee");
 
-        rest.get().uri("/v3/api-docs").exchange().expectStatus().isForbidden();
+        rest.get().uri("/v3/api-docs")
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody().consumeWith(response -> {});
     }
 
     @Test
@@ -64,6 +80,8 @@ class OpenApiDocsTest extends PostgresIntegrationTest {
     private void login(String username) {
         rest.post().uri("/api/auth/login?username=" + username + "&password=veridex")
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.username").isEqualTo(username);
     }
 }

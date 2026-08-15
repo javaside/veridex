@@ -26,7 +26,10 @@ class ApiKeyBearerIntegrationTest extends PostgresIntegrationTest {
 
     @BeforeEach
     void clearSession() {
-        rest.post().uri("/api/auth/logout").exchange().expectStatus().isNoContent();
+        rest.post().uri("/api/auth/logout")
+                .exchange()
+                .expectStatus().isNoContent()
+                .expectBody().isEmpty();
     }
 
     private String issueKey(List<String> scopes) {
@@ -41,7 +44,8 @@ class ApiKeyBearerIntegrationTest extends PostgresIntegrationTest {
         rest.get().uri("/api/qa/conversations")
                 .headers(h -> h.setBearerAuth(token))
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus().isOk()
+                .expectBody().consumeWith(response -> {});
     }
 
     @Test
@@ -111,7 +115,8 @@ class ApiKeyBearerIntegrationTest extends PostgresIntegrationTest {
         rest.get().uri("/api/iam/keys")
                 .headers(h -> h.setBearerAuth("vd_invalidinvalidinvalidinvalidinvalidinvalid33"))
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus().isOk()
+                .expectBody().consumeWith(response -> {});
 
         assertThat(apiKeys.listFor(ADMIN, "PLATFORM_ADMIN")).isNotEmpty();
     }
