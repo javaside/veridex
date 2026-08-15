@@ -1,6 +1,6 @@
 # Veridex
 
-Veridex 是面向企业私有化部署的 RAG（Retrieval-Augmented Generation，检索增强生成）平台。目前项目已经完成 **Phase 3：带权限的 RAG 查询**，支持创建知识库、上传文档、异步解析和分块、发布到 OpenSearch，以及授权员工流式问答并校验引用。
+Veridex 是面向企业私有化部署的 RAG（Retrieval-Augmented Generation，检索增强生成）平台。目前项目已经完成 **Phase 4：质量评测与运营闭环**，支持创建知识库、上传文档、异步解析和分块、发布到 OpenSearch、授权员工流式问答并校验引用，以及版本化评测集、不可变 RAG 配置版本、评测运行、版本对比门禁和反馈转坏例闭环。
 
 > 当前仓库以本地开发和集成验证为目标，尚未提供应用容器镜像或生产部署编排。
 
@@ -9,7 +9,7 @@ Veridex 是面向企业私有化部署的 RAG（Retrieval-Augmented Generation�
 - **Phase 1：可执行基础** — 已完成
 - **Phase 2：知识入库垂直切片** — 已完成
 - **Phase 3：带权限的 RAG 查询** — 已完成
-- **Phase 4：质量评测与运营闭环** — 尚未实现
+- **Phase 4：质量评测与运营闭环** — 已完成
 - **Phase 5：企业试点准备** — 尚未实现
 
 详细阶段目标见[交付路线图](docs/superpowers/plans/2026-08-09-enterprise-rag-delivery-roadmap.md)。
@@ -29,13 +29,21 @@ Veridex 是面向企业私有化部署的 RAG（Retrieval-Augmented Generation�
 - 授权知识范围（多知识库交集）上的混合检索（BM25 + 向量 + RRF 融合）
 - 有限多轮会话、SSE 流式回答、`[n]` 引用校验与原文预览
 - 依据不足时明确拒答（含 `ACCESS_RESTRICTED` 统一文案）
+- 版本化评测集（`DatasetVersion` 不可变快照 + 冻结用例，支持 ANSWER / REFUSE 期望行为）
+- 不可变 RAG 配置版本（chunking / retrieval / generation / prompt / model 五维草稿 + 发布冻结快照）
+- 同步评测运行与自动指标（Recall@K、MRR、NDCG、citation hit、refusal match、latency）
+- 两个评测运行的逐指标对比与回归门禁（相对退化 10% 阈值）
+- 点赞/点踩反馈落库与坏例转评测集闭环
 
 ## 当前限制
 
 - 默认 `DeterministicEmbeddingModel` 为 128 维确定性哈希（无语义）；可通过 `VERIDEX_EMBEDDING_PROVIDER=ollama` 切换 Ollama `qwen3-embedding`（真实语义，1024 维；同时需设置 `VERIDEX_EMBEDDING_DIMENSIONS=1024`）。
+- 默认 `DeterministicChatModel` 为确定性占位实现（不产生真实语义回答）；`chatModel` 目前仅作为配置/评测记录字段，未接入模型路由。
+- 评测为「仅自动指标」的同步运行；judge-model 自动评判与人工 PASS / MINOR_ISSUE / FAIL 评审尚未实现。
+- 回归门禁阈值为硬编码默认值（相对退化 10%），尚未配置化。
+- 配置版本（Profile）已驱动评测运行的检索/生成参数与 prompt 模板；在线问答（`/api/qa/ask`）仍使用各自服务内的硬编码默认值，尚未切换为读取 Profile。
 - PDF / DOCX 的结构识别较基础；没有 Markdown 标题时主要按文本长度分块。
 - 失败消息进入 DLQ；自动重试、退避以及 Outbox 定时恢复仍待增强。
-- 点赞/点踩反馈仅前端占位 + 接口占位，坏例转评测集闭环属 Phase 4。
 - `deploy/compose/compose.yml` 只启动开发基础设施，不启动 Spring Boot 后端或 React 前端。
 
 ## 技术栈
@@ -65,7 +73,7 @@ Veridex 是面向企业私有化部署的 RAG（Retrieval-Augmented Generation�
 └── mvnw                      Maven Wrapper
 ```
 
-知识入库的组件职责和数据流详见[知识入库处理管道](docs/knowledge-ingestion-pipeline.md)。
+知识入库的组件职责和数据流详见[知识入库处理管道](docs/knowledge-ingestion-pipeline.md)；系统模块划分与 RAG 配置参数含义见[架构与模块说明](docs/architecture.md)及[RAG 配置参数语义](docs/rag-configuration-parameters.md)。
 
 ## 环境要求
 
@@ -322,7 +330,7 @@ docker compose -f deploy/compose/compose.yml logs opensearch
 
 - 使用种子用户名和密码 `veridex`；
 - 后端已启动并连接到 Compose 中的 PostgreSQL；
-- Flyway 已成功应用 V1–V4 迁移；
+- Flyway 已成功应用 V1–V11 迁移；
 - 如果数据库来自旧的本地实验数据，可在确认不需要保留数据后执行 `down -v` 重建。
 
 ### 文档一直处于 `UPLOADED` 或变成 `FAILED`
@@ -369,4 +377,6 @@ VERIDEX_EMBEDDING_DIMENSIONS=1024 \
 - [企业 RAG 平台设计](docs/superpowers/specs/2026-08-09-enterprise-rag-platform-design.md)
 - [企业交付路线图](docs/superpowers/plans/2026-08-09-enterprise-rag-delivery-roadmap.md)
 - [知识入库处理管道](docs/knowledge-ingestion-pipeline.md)
+- [架构与模块说明](docs/architecture.md)
+- [RAG 配置参数语义](docs/rag-configuration-parameters.md)
 - [Phase 2 实施计划](docs/superpowers/plans/2026-08-11-knowledge-ingestion-vertical-slice.md)

@@ -21,3 +21,6 @@ application-local.yaml
 # Runtime data
 .data/
 logs/
+
+# Browser debugging artifacts
+.chrome-*/

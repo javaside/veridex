@@ -107,7 +107,7 @@ for (i in bytes) vector[i % 128] += (byte - 128) / 128f;  // 然后 L2 归一化
 - 输出 128 维归一化向量
 - **这不是语义模型**：它只是把字节确定性映射到向量，相同文本必得相同向量，但**不包含语义相似度**（"苹果"和"水果"不会更接近）
 - **定位**：开发与集成测试的本地默认，**无需外部 API、无成本、可复现**——用于打通管道和验证幂等/检索流程
-- **生产**：按配置 `veridex.embedding.provider`（默认 `deterministic`）切换真实模型（OpenAI / 本地 ONNX 等，Phase 3+ 实现）。OpenSearch 索引的 `dimension` 由 `veridex.embedding.dimensions`（默认 128）决定，两者必须一致
+- **生产**：按配置 `veridex.embedding.provider`（默认 `deterministic`）切换真实模型。当前已支持 `ollama`（Ollama `qwen3-embedding`，1024 维真实语义）。OpenSearch 索引的 `dimension` 由 `veridex.embedding.dimensions`（默认 128）决定，换模型后必须同步维度并重建索引
 
 ### 2.6 OpenSearch — 检索索引（向量 + 全文）
 
@@ -232,12 +232,12 @@ Worker: 状态→PROCESSING
 
 ---
 
-## 7. 当前限制与后续（Phase 3+）
+## 7. 当前限制与后续
 
-- **确定性 embedding 无语义**：当前向量仅供管道打通与流程验证；真实 RAG 检索前需按 `veridex.embedding.provider` 接入语义模型，且 OpenSearch 维度需同步调整
+- **确定性 embedding 无语义**：默认向量仅供管道打通与流程验证；真实语义检索需按 `veridex.embedding.provider=ollama` 接入语义模型，且 OpenSearch 维度需同步调整为 1024
 - **纯文本分块启发式待增强**：DOCX/PDF 无 Markdown 标题时按段落聚合，后续可加标题/编号启发式
 - **重试策略**：目前失败进 DLQ（人工处置），自动重试与退避是后续增强点
-- **查询侧**：Phase 3 将基于 alias 实现「BM25 + 向量混合检索 → 排序融合 → 带引用答案」，复用本管道产出的索引与 release 语义
+- **查询侧已实现**：Phase 3 已基于 alias 实现「BM25 + 向量混合检索 → RRF 排序融合 → 上下文组装 → 带引用答案」，复用本管道产出的索引与 release 语义；详见[架构与模块说明](architecture.md)
 
 ---
 
