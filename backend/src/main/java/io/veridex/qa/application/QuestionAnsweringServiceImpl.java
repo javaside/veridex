@@ -114,7 +114,7 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
         }
         events.add(new QaEvent.CitationAvailable(result.citations()));
         conversations.addMessage(conversationId, "ASSISTANT", result.answer(), runId);
-        events.add(new QaEvent.AnswerCompleted());
+        events.add(new QaEvent.AnswerCompleted(runId));
         recorder.complete(runId);
         return events;
     }
