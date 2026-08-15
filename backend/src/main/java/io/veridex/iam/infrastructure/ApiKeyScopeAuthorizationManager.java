@@ -24,6 +24,16 @@ public class ApiKeyScopeAuthorizationManager implements AuthorizationManager<Req
                 !(authenticationSupplier.get() instanceof ApiKeyAuthFilter.ApiKeyAuthentication));
     }
 
+    public AuthorizationResult authorizeOptions(
+            java.util.function.Supplier<? extends Authentication> authenticationSupplier,
+            RequestAuthorizationContext context) {
+        Authentication authentication = authenticationSupplier.get();
+        if (authentication instanceof ApiKeyAuthFilter.ApiKeyAuthentication) {
+            return authorize(authenticationSupplier, context);
+        }
+        return new AuthorizationDecision(true);
+    }
+
     public AuthorizationResult authorizeAdminSession(
             java.util.function.Supplier<? extends Authentication> authenticationSupplier,
             RequestAuthorizationContext context) {

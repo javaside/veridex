@@ -60,6 +60,20 @@ class ApiKeyIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void createRejectsNonCanonicalScopeNames() {
+        login("admin");
+
+        for (String invalid : List.of("QA", "KNOWLEDGE_READ", "Knowledge:Read")) {
+            rest.post().uri("/api/iam/keys")
+                    .body(new io.veridex.iam.api.CreateKeyRequest("x", null, List.of(invalid)))
+                    .exchange()
+                    .expectStatus().isBadRequest()
+                    .expectBody()
+                    .jsonPath("$.status").isEqualTo(400);
+        }
+    }
+
+    @Test
     void employeeIsForbiddenFromKeyManagement() {
         login("employee");
         rest.get().uri("/api/iam/keys")

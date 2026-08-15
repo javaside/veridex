@@ -45,24 +45,49 @@ class ApiKeyBearerIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    void bearerKeyWithoutMatchingScopeIsForbidden() {
+    void bearerKeyWithoutMatchingScopeIsForbiddenWithScopeError() {
         String token = issueKey(List.of("feedback"));
 
-        rest.get().uri("/api/qa/conversations")
-                .headers(h -> h.setBearerAuth(token))
-                .exchange()
-                .expectStatus().isForbidden();
+        expectForbidden(token, "GET", "/api/qa/conversations");
     }
 
     @Test
     void keyCannotAccessForbiddenOrUnmappedNamespaces() {
         String token = issueKey(List.of("qa", "knowledge:read"));
 
-        expectForbidden(token, "/api/iam/keys");
-        expectForbidden(token, "/v3/api-docs");
-        expectForbidden(token, "/actuator/health");
-        expectForbidden(token, "/api/auth/login");
-        expectForbidden(token, "/api/unmapped");
+        expectForbidden(token, "GET", "/api/iam/keys");
+        expectForbidden(token, "GET", "/v3/api-docs");
+        expectForbidden(token, "GET", "/actuator/health");
+        expectForbidden(token, "GET", "/api/auth/login");
+        expectForbidden(token, "GET", "/api/unmapped");
+    }
+
+    @Test
+    void bearerOptionsCannotBypassScopeRules() {
+        String qaToken = issueKey(List.of("qa"));
+        String knowledgeWriteToken = issueKey(List.of("knowledge:write"));
+
+        expectForbidden(qaToken, "OPTIONS", "/api/iam/keys");
+        expectForbidden(qaToken, "OPTIONS", "/api/unmapped");
+        expectForbidden(knowledgeWriteToken, "OPTIONS", "/api/documents");
+    }
+
+    @Test
+    void anonymousAndSessionOptionsRemainPermitted() {
+        rest.method(org.springframework.http.HttpMethod.OPTIONS).uri("/api/iam/keys")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody().isEmpty();
+
+        rest.post().uri("/api/auth/login?username=admin&password=veridex")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.username").isEqualTo("admin");
+        rest.method(org.springframework.http.HttpMethod.OPTIONS).uri("/api/iam/keys")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody().isEmpty();
     }
 
     @Test
@@ -91,13 +116,13 @@ class ApiKeyBearerIntegrationTest extends PostgresIntegrationTest {
         assertThat(apiKeys.listFor(ADMIN, "PLATFORM_ADMIN")).isNotEmpty();
     }
 
-    private void expectForbidden(String token, String path) {
-        rest.get().uri(path)
+    private void expectForbidden(String token, String method, String path) {
+        rest.method(org.springframework.http.HttpMethod.valueOf(method)).uri(path)
                 .headers(h -> h.setBearerAuth(token))
                 .exchange()
                 .expectStatus().isForbidden()
                 .expectBody()
-                .jsonPath("$.status").isEqualTo(403);
+                .json("{\"error\":\"insufficient_scope\"}", org.springframework.test.json.JsonCompareMode.STRICT);
     }
 
     private void expectInvalidApiKey(String token) {

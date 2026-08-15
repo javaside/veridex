@@ -38,9 +38,19 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/**").access(scopeAuthorizationManager::authorizeNonApiKey)
                 .requestMatchers("/api/auth/login", "/api/auth/logout")
                     .access(scopeAuthorizationManager::authorizeNonApiKey)
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers(HttpMethod.OPTIONS, "/**").access(scopeAuthorizationManager::authorizeOptions)
                 .requestMatchers("/v3/api-docs/**").access(scopeAuthorizationManager::authorizeAdminSession)
                 .anyRequest().access(scopeAuthorizationManager))
+            .exceptionHandling(exceptions -> exceptions.accessDeniedHandler((request, response, denied) -> {
+                if (org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication()
+                        instanceof ApiKeyAuthFilter.ApiKeyAuthentication) {
+                    response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                    response.getWriter().write("{\"error\":\"insufficient_scope\"}");
+                    return;
+                }
+                response.sendError(jakarta.servlet.http.HttpServletResponse.SC_FORBIDDEN);
+            }))
             .addFilterBefore(new ApiKeyAuthFilter(apiKeyService), UsernamePasswordAuthenticationFilter.class)
             .formLogin(form -> form
                 .loginProcessingUrl("/api/auth/login")

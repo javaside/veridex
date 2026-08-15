@@ -48,9 +48,8 @@ public enum ApiKeyScope {
         if (value == null) {
             throw new IllegalArgumentException("scope must not be null");
         }
-        String normalized = value.trim();
         for (ApiKeyScope scope : values()) {
-            if (scope.value.equalsIgnoreCase(normalized) || scope.name().equalsIgnoreCase(normalized)) {
+            if (scope.value.equals(value)) {
                 return scope;
             }
         }

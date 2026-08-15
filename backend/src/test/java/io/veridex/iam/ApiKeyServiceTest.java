@@ -85,11 +85,37 @@ class ApiKeyServiceTest {
     }
 
     @Test
-    void createRejectsUnknownScope() {
-        ApiKeyService service = new ApiKeyService(mock(ApiKeyRepository.class),
+    void createAcceptsOnlyExactWireScopeNames() {
+        ApiKeyRepository repo = mock(ApiKeyRepository.class);
+        when(repo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        ApiKeyService service = new ApiKeyService(repo,
                 mock(PlatformUserRepository.class), new ApiKeyTokenGenerator());
-        assertThatThrownBy(() -> service.createFor(ACTOR_ADMIN, "PLATFORM_ADMIN", ACTOR_ADMIN, "x", List.of("root")))
+
+        ApiKeyCreatedView created = service.createFor(ACTOR_ADMIN, "PLATFORM_ADMIN", ACTOR_ADMIN, "x",
+                List.of("qa", "knowledge:read", "knowledge:write", "configuration", "evaluation", "feedback"));
+
+        assertThat(created.scopes()).containsExactly(
+                "qa", "knowledge:read", "knowledge:write", "configuration", "evaluation", "feedback");
+        assertThatThrownBy(() -> service.createFor(
+                ACTOR_ADMIN, "PLATFORM_ADMIN", ACTOR_ADMIN, "x", List.of("root")))
                 .isInstanceOf(IllegalArgumentException.class);
+        for (String invalid : List.of("QA", "KNOWLEDGE_READ", "Knowledge:Read", " feedback ")) {
+            assertThatThrownBy(() -> service.createFor(
+                    ACTOR_ADMIN, "PLATFORM_ADMIN", ACTOR_ADMIN, "x", List.of(invalid)))
+                    .as("scope %s", invalid)
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Test
+    void persistedScopesParseOnlyExactWireNames() {
+        assertThat(ApiKeyScope.parse("qa,knowledge:read"))
+                .containsExactly(ApiKeyScope.QA, ApiKeyScope.KNOWLEDGE_READ);
+        for (String invalid : List.of("QA", "KNOWLEDGE_READ", "Knowledge:Read", " qa")) {
+            assertThatThrownBy(() -> ApiKeyScope.parse(invalid))
+                    .as("persisted scope %s", invalid)
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
     }
 
     @Test
