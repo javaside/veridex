@@ -15,4 +15,11 @@ public interface HybridSearchService {
      */
     HybridSearchResult search(UUID userId, List<UUID> authorizedKnowledgeBaseIds,
                               List<UUID> requestedKnowledgeBaseIds, String question);
+
+    /**
+     * 参数化检索：供评测运行按 ProfileConfig 驱动召回/融合/上下文组装参数。
+     */
+    HybridSearchResult search(UUID userId, List<UUID> authorizedKnowledgeBaseIds,
+                              List<UUID> requestedKnowledgeBaseIds, String question,
+                              RetrievalParameters parameters);
 }

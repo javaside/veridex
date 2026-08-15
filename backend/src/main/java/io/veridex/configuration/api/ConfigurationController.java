@@ -3,7 +3,6 @@ package io.veridex.configuration.api;
 import io.veridex.configuration.application.ConfigurationProfileService;
 import io.veridex.configuration.domain.ConfigurationProfile;
 import io.veridex.configuration.domain.ConfigurationProfileVersion;
-import io.veridex.configuration.domain.ProfileConfig;
 import io.veridex.iam.api.CurrentActor;
 import java.util.List;
 import java.util.UUID;

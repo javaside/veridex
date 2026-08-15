@@ -11,4 +11,10 @@ import java.util.List;
 public interface GenerationService {
 
     GenerationResult generate(String question, List<EvidencePiece> evidence, List<MessageRecord> history);
+
+    /**
+     * 参数化生成：供评测运行按 ProfileConfig 驱动拒答阈值、prompt 模板与模型标识。
+     */
+    GenerationResult generate(String question, List<EvidencePiece> evidence,
+                              List<MessageRecord> history, GenerationParameters parameters);
 }

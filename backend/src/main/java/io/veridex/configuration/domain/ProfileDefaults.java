@@ -1,5 +1,12 @@
 package io.veridex.configuration.domain;
 
+import io.veridex.configuration.api.ChunkingConfig;
+import io.veridex.configuration.api.GenerationConfig;
+import io.veridex.configuration.api.ModelConfig;
+import io.veridex.configuration.api.ProfileConfig;
+import io.veridex.configuration.api.PromptConfig;
+import io.veridex.configuration.api.RetrievalConfig;
+
 public final class ProfileDefaults {
 
     public static final String SYSTEM_TEMPLATE =

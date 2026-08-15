@@ -12,14 +12,18 @@ import org.springframework.stereotype.Component;
 @Component
 public class RefusalPolicy {
 
-    private static final int MIN_EVIDENCE_CHARS = 50;
+    private static final int DEFAULT_MIN_EVIDENCE_CHARS = 50;
 
     public RefusalReason evaluate(List<EvidencePiece> evidence) {
+        return evaluate(evidence, DEFAULT_MIN_EVIDENCE_CHARS);
+    }
+
+    public RefusalReason evaluate(List<EvidencePiece> evidence, int minEvidenceChars) {
         if (evidence.isEmpty()) {
             return RefusalReason.NO_RELEVANT_EVIDENCE;
         }
         int chars = evidence.stream().mapToInt(e -> e.text().length()).sum();
-        if (chars < MIN_EVIDENCE_CHARS) {
+        if (chars < minEvidenceChars) {
             return RefusalReason.INSUFFICIENT_EVIDENCE;
         }
         return null;
