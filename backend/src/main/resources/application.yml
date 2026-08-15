@@ -37,6 +37,8 @@ spring:
         log-query-response: false
 
 veridex:
+  api:
+    rate-limit-per-minute: ${VERIDEX_RATE_LIMIT_PER_MINUTE:600}
   storage:
     minio:
       endpoint: ${VERIDEX_MINIO_ENDPOINT:http://localhost:9000}
