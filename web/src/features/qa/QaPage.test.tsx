@@ -36,7 +36,7 @@ describe('QaPage', () => {
       onEvent({ name: 'retrieval.completed', data: { hitCount: 1 } })
       onEvent({ name: 'answer.delta', data: { text: '根据《请假制度》[1]，员工请假需提前申请' } })
       onEvent({ name: 'citation.available', data: { citations: [{ citationIndex: 1, documentId: 'doc-1', documentVersionId: 'v1', chunkIndex: 0, sourceLocation: '请假制度', citationText: '[1]', validationStatus: 'VALID' }] } })
-      onEvent({ name: 'answer.completed', data: {} })
+      onEvent({ name: 'answer.completed', data: { runId: 'r1' } })
     })
 
     render(<QaPage />)
@@ -59,7 +59,7 @@ describe('QaPage', () => {
       onEvent({ name: 'answer.delta', data: { text: '《请假制度》' } })
       onEvent({ name: 'answer.delta', data: { text: '[1]回答' } })
       onEvent({ name: 'citation.available', data: { citations: [{ citationIndex: 1, documentId: 'doc-1', documentVersionId: 'v1', chunkIndex: 0, sourceLocation: '请假制度', citationText: '[1]', validationStatus: 'VALID' }] } })
-      onEvent({ name: 'answer.completed', data: {} })
+      onEvent({ name: 'answer.completed', data: { runId: 'r1' } })
     })
 
     render(
@@ -84,7 +84,7 @@ describe('QaPage', () => {
     mockedAsk.mockImplementation(async (_question, _kbIds, _conversationId, onEvent) => {
       onEvent({ name: 'answer.delta', data: { text: '根据《请假制度》[1]回答' } })
       onEvent({ name: 'citation.available', data: { citations: [{ citationIndex: 1, documentId: 'doc-1', documentVersionId: 'v1', chunkIndex: 0, sourceLocation: '请假制度', citationText: '[1]', validationStatus: 'VALID' }] } })
-      onEvent({ name: 'answer.completed', data: {} })
+      onEvent({ name: 'answer.completed', data: { runId: 'r1' } })
     })
 
     render(<QaPage />)

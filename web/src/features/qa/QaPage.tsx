@@ -5,13 +5,36 @@ import { knowledgeApi, type KnowledgeBase } from '../knowledge/knowledgeApi'
 import { PreviewDrawer } from '../knowledge/components/PreviewDrawer'
 import { ChatMessage } from './components/ChatMessage'
 import { KnowledgeBasePicker } from './components/KnowledgeBasePicker'
-import { qaApi, type Citation, type ConversationView, type MessageRecord } from './qaApi'
+import { qaApi, type Citation, type ConversationView, type FeedbackEvidence, type FeedbackReasonCode, type MessageRecord } from './qaApi'
 
 type LocalMessage = {
   id: string
   role: 'USER' | 'ASSISTANT' | 'SYSTEM' | 'ERROR'
   content: string
   citations?: Citation[]
+  runId?: string
+  question?: string
+}
+
+const REASON_CODES: FeedbackReasonCode[] = ['WRONG_ANSWER', 'HALLUCINATION', 'MISSING_EVIDENCE', 'OUTDATED', 'WRONG_REFUSAL', 'OTHER']
+const REASON_LABELS: Record<FeedbackReasonCode, string> = {
+  WRONG_ANSWER: '回答错误',
+  HALLUCINATION: '无依据 / 幻觉',
+  MISSING_EVIDENCE: '证据不足',
+  OUTDATED: '内容过时',
+  WRONG_REFUSAL: '错误拒答',
+  OTHER: '其他',
+}
+
+function citationsToEvidence(citations: Citation[]): FeedbackEvidence[] {
+  const byDoc = new Map<string, number[]>()
+  for (const c of citations) {
+    if (c.validationStatus !== 'VALID') continue
+    const arr = byDoc.get(c.documentVersionId) ?? []
+    arr.push(c.chunkIndex)
+    byDoc.set(c.documentVersionId, arr)
+  }
+  return [...byDoc.entries()].map(([documentVersionId, chunkIndexes]) => ({ documentVersionId, chunkIndexes }))
 }
 
 export function QaPage() {
@@ -30,8 +53,11 @@ export function QaPage() {
   // 旧 base 上不存在的索引 → undefined.content 白屏。
   const streamTextRef = useRef('')
   const streamCitationsRef = useRef<Citation[]>([])
+  const lastQuestionRef = useRef('')
+  const lastRunIdRef = useRef<string | null>(null)
   const [streamText, setStreamText] = useState('')
   const [streamCitations, setStreamCitations] = useState<Citation[]>([])
+  const [feedback, setFeedback] = useState<{ message: LocalMessage; rating: 'UP' | 'DOWN' } | null>(null)
 
   const resetStream = useCallback(() => {
     streamTextRef.current = ''
@@ -57,7 +83,7 @@ export function QaPage() {
     if (text || citations.length > 0) {
       setMessages((current) => [
         ...current,
-        { id: `assistant-${Date.now()}`, role: 'ASSISTANT', content: text, citations },
+        { id: `assistant-${Date.now()}`, role: 'ASSISTANT', content: text, citations, runId: lastRunIdRef.current ?? undefined, question: lastQuestionRef.current },
       ])
     }
     resetStream()
@@ -102,6 +128,8 @@ export function QaPage() {
     setQuestion('')
     setStreaming(true)
     resetStream()
+    lastQuestionRef.current = trimmed
+    lastRunIdRef.current = null
     setMessages((current) => [
       ...current,
       { id: `user-${Date.now()}`, role: 'USER', content: trimmed },
@@ -128,6 +156,7 @@ export function QaPage() {
             setMessages((current) => [...current, { id: `error-${Date.now()}`, role: 'ERROR', content: event.data.message }])
             break
           case 'answer.completed':
+            lastRunIdRef.current = event.data.runId
             finalizeStream()
             break
           default:
@@ -150,6 +179,29 @@ export function QaPage() {
       setPreview({ title: citation.sourceLocation ?? '引用原文', content: chunk?.text ?? '未找到该引用的原文' })
     } catch {
       setPreview({ title: citation.sourceLocation ?? '引用原文', content: '引用原文加载失败' })
+    }
+  }
+
+  const submitFeedback = async (message: LocalMessage, rating: 'UP' | 'DOWN', reasonCode: FeedbackReasonCode | null) => {
+    try {
+      await qaApi.feedback({
+        queryRunId: message.runId ?? null,
+        rating,
+        reasonCode: rating === 'DOWN' ? reasonCode ?? 'OTHER' : null,
+        question: message.question ?? '',
+        answer: message.content,
+        evidence: rating === 'DOWN' ? citationsToEvidence(message.citations ?? []) : [],
+      })
+    } finally {
+      setFeedback(null)
+    }
+  }
+
+  const handleFeedback = (message: LocalMessage, rating: 'UP' | 'DOWN') => {
+    if (rating === 'UP') {
+      void submitFeedback(message, 'UP', null)
+    } else {
+      setFeedback({ message, rating: 'DOWN' })
     }
   }
 
@@ -211,6 +263,7 @@ export function QaPage() {
                 content={message.content}
                 citations={message.citations}
                 onCitationClick={(citation) => void openCitationPreview(citation)}
+                onFeedback={message.role === 'ASSISTANT' && message.runId ? (rating) => handleFeedback(message, rating) : undefined}
               />
             ))}
             {streaming && streamText !== '' && (
@@ -239,6 +292,19 @@ export function QaPage() {
         </div>
       </div>
       {preview && <PreviewDrawer title={preview.title} content={preview.content} open onClose={() => setPreview(null)} />}
+      {feedback?.rating === 'DOWN' && (
+        <div className="dialog-layer">
+          <button className="dialog-backdrop" type="button" aria-label="关闭对话框" onClick={() => setFeedback(null)} />
+          <div className="confirm-dialog" role="dialog" aria-modal="true" aria-label="选择反馈原因">
+            <h3>这条回答有什么问题？</h3>
+            <div className="feedback-reason-list">
+              {REASON_CODES.map((code) => (
+                <button key={code} type="button" onClick={() => void submitFeedback(feedback.message, 'DOWN', code)}>{REASON_LABELS[code]}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

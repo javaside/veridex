@@ -13,9 +13,15 @@ export type QaEvent =
   | { name: 'retrieval.completed'; data: { hitCount: number } }
   | { name: 'answer.delta'; data: { text: string } }
   | { name: 'citation.available'; data: { citations: Citation[] } }
-  | { name: 'answer.completed'; data: Record<string, never> }
+  | { name: 'answer.completed'; data: { runId: string } }
   | { name: 'answer.refused'; data: { reason: string; message: string } }
   | { name: 'run.failed'; data: { message: string } }
+
+export type FeedbackRating = 'UP' | 'DOWN'
+export type FeedbackReasonCode =
+  | 'WRONG_ANSWER' | 'HALLUCINATION' | 'MISSING_EVIDENCE'
+  | 'OUTDATED' | 'WRONG_REFUSAL' | 'OTHER'
+export type FeedbackEvidence = { documentVersionId: string; chunkIndexes: number[] }
 
 export type ConversationView = { id: string; title: string; createdAt: string }
 export type MessageRecord = { id: string; role: string; content: string; queryRunId: string | null }
@@ -59,4 +65,20 @@ export const qaApi = {
     fetch('/api/qa/conversations', { credentials: 'include' }).then((response) => response.json()),
   messages: (conversationId: string): Promise<MessageRecord[]> =>
     fetch(`/api/qa/conversations/${conversationId}/messages`, { credentials: 'include' }).then((response) => response.json()),
+  feedback: (payload: {
+    queryRunId: string | null
+    rating: FeedbackRating
+    reasonCode: FeedbackReasonCode | null
+    question: string
+    answer: string
+    evidence: FeedbackEvidence[]
+  }): Promise<void> =>
+    fetch('/api/feedback', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).then((response) => {
+      if (!response.ok) throw new Error(`提交反馈失败 (${response.status})`)
+    }),
 }
