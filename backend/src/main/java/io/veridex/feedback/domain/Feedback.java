@@ -39,7 +39,7 @@ public class Feedback {
     private String answer;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(nullable = false, columnDefinition = "jsonb")
+    @Column(name = "evidence", nullable = false, columnDefinition = "jsonb")
     private String evidenceJson = "[]";
 
     @Column(name = "converted_case_id")
