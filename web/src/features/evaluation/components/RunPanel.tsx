@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { configurationApi, type ProfileView, type VersionView as ProfileVersionView } from '../../configuration/configurationApi'
 import { knowledgeApi, type KnowledgeBase } from '../../knowledge/knowledgeApi'
-import { evaluationApi, type RunDetail, type RunView, type VersionView } from '../evaluationApi'
+import { evaluationApi, type ComparisonResult, type RunDetail, type RunView, type VersionView } from '../evaluationApi'
 
 const fmtPct = (n: number) => `${(n * 100).toFixed(1)}%`
+const fmtDelta = (n: number) => `${n >= 0 ? '+' : ''}${(n * 100).toFixed(1)}pp`
 
 export function RunPanel({ datasetId, versions, onNotify }: {
   datasetId: string
@@ -20,6 +21,10 @@ export function RunPanel({ datasetId, versions, onNotify }: {
   const [runs, setRuns] = useState<RunView[]>([])
   const [detail, setDetail] = useState<RunDetail | null>(null)
   const [starting, setStarting] = useState(false)
+  const [baselineId, setBaselineId] = useState<string>('')
+  const [candidateId, setCandidateId] = useState<string>('')
+  const [comparison, setComparison] = useState<ComparisonResult | null>(null)
+  const [comparing, setComparing] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -74,6 +79,20 @@ export function RunPanel({ datasetId, versions, onNotify }: {
       setDetail(await evaluationApi.run(id))
     } catch (e) {
       onNotify('error', e instanceof Error ? e.message : '运行详情加载失败')
+    }
+  }
+
+  const completedRuns = runs.filter((r) => r.status === 'COMPLETED')
+
+  const compare = async () => {
+    if (!baselineId || !candidateId || baselineId === candidateId) return
+    setComparing(true)
+    try {
+      setComparison(await evaluationApi.compareRuns(baselineId, candidateId))
+    } catch (e) {
+      onNotify('error', e instanceof Error ? e.message : '对比失败')
+    } finally {
+      setComparing(false)
     }
   }
 
@@ -146,6 +165,61 @@ export function RunPanel({ datasetId, versions, onNotify }: {
           </ul>
         </div>
       )}
+
+      <div className="comparison-section">
+        <div className="panel-header"><h3>版本对比与回归门禁</h3></div>
+        <div className="comparison-form">
+          <label>基线运行
+            <select value={baselineId} onChange={(e) => setBaselineId(e.target.value)}>
+              <option value="">选择基线运行</option>
+              {completedRuns.map((r) => <option key={r.id} value={r.id}>{r.status} · {r.createdAt}</option>)}
+            </select>
+          </label>
+          <label>候选运行
+            <select value={candidateId} onChange={(e) => setCandidateId(e.target.value)}>
+              <option value="">选择候选运行</option>
+              {completedRuns.map((r) => <option key={r.id} value={r.id}>{r.status} · {r.createdAt}</option>)}
+            </select>
+          </label>
+          <button className="primary-button" type="button" onClick={() => void compare()} disabled={comparing || !baselineId || !candidateId || baselineId === candidateId}>
+            {comparing ? '对比中' : '对比'}
+          </button>
+        </div>
+
+        {comparison && (
+          <div className="comparison-result">
+            <div className={`gate-verdict gate-${comparison.verdict.toLowerCase()}`}>
+              门禁判定：{comparison.verdict}
+            </div>
+            {comparison.metrics.length > 0 && (
+              <table className="comparison-table">
+                <thead><tr><th>指标</th><th>基线</th><th>候选</th><th>变化</th></tr></thead>
+                <tbody>
+                  {comparison.metrics.map((m) => (
+                    <tr key={m.name}>
+                      <td>{m.name}</td>
+                      <td>{m.name === 'Avg latency (ms)' ? `${m.baseline.toFixed(0)}ms` : fmtPct(m.baseline)}</td>
+                      <td>{m.name === 'Avg latency (ms)' ? `${m.candidate.toFixed(0)}ms` : fmtPct(m.candidate)}</td>
+                      <td className={m.delta < 0 ? 'delta-negative' : 'delta-positive'}>
+                        {m.name === 'Avg latency (ms)'
+                          ? `${m.delta >= 0 ? '+' : ''}${m.delta.toFixed(0)}ms`
+                          : fmtDelta(m.delta)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {comparison.failedChecks.length > 0 && (
+              <ul className="failed-checks">
+                {comparison.failedChecks.map((c) => (
+                  <li key={c.metric}>{c.metric}：{fmtPct(c.candidate)} 低于允许下限 {fmtPct(c.maxAllowed)}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

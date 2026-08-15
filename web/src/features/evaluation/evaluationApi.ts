@@ -98,6 +98,19 @@ export type RunView = {
 
 export type RunDetail = RunView & { error: string | null; cases: RunCaseView[] }
 
+export type GateVerdict = 'PASS' | 'FAIL' | 'INCOMPLETE'
+export type MetricComparison = { name: string; baseline: number; candidate: number; delta: number }
+export type GateCheck = { metric: string; baseline: number; candidate: number; maxAllowed: number }
+export type ComparisonResult = {
+  baselineRunId: string
+  candidateRunId: string
+  baseline: RunMetrics | null
+  candidate: RunMetrics | null
+  metrics: MetricComparison[]
+  verdict: GateVerdict
+  failedChecks: GateCheck[]
+}
+
 const json = async <T>(response: Response): Promise<T> => {
   if (!response.ok) {
     const message = await response.text().catch(() => '')
@@ -153,4 +166,6 @@ export const evaluationApi = {
     fetch(`/api/evaluation/runs?datasetId=${datasetId}`, { credentials: 'include' }).then((r) => json<RunView[]>(r)),
   run: (id: string): Promise<RunDetail> =>
     fetch(`/api/evaluation/runs/${id}`, { credentials: 'include' }).then((r) => json<RunDetail>(r)),
+  compareRuns: (baselineRunId: string, candidateRunId: string): Promise<ComparisonResult> =>
+    fetch('/api/evaluation/comparisons', post({ baselineRunId, candidateRunId })).then((r) => json<ComparisonResult>(r)),
 }
