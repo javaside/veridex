@@ -5,7 +5,7 @@ import { QaPage } from '../features/qa/QaPage'
 import { EvaluationPage } from '../features/evaluation/EvaluationPage'
 import { ConfigurationPage } from '../features/configuration/ConfigurationPage'
 import { FeedbackPage } from '../features/feedback/FeedbackPage'
-import { ComingSoonPage } from './ComingSoonPage'
+import { ApiKeyAdminPage } from '../features/admin/ApiKeyAdminPage'
 
 export type WorkspaceRoute = {
   path: string
@@ -38,6 +38,6 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
   {
     path: '/admin', label: '平台管理', englishLabel: 'Administration', icon: ShieldCheck,
-    content: <ComingSoonPage title="平台管理" phase="Phase 5" description="管理安全、可观测性与企业部署。" capabilities={['访问治理', '运行监控', '备份与恢复']} />,
+    content: <ApiKeyAdminPage />,
   },
 ]

@@ -1,6 +1,6 @@
 # 架构与模块说明
 
-> 本文档基于当前代码状态整理（更新至 Phase 4 完成），说明后端模块划分、前端路由、数据库迁移与 API 概览。它是面向开发者的「地图」，具体某个环节的参数语义见 [RAG 配置参数语义](rag-configuration-parameters.md)，知识入库链路见[知识入库处理管道](knowledge-ingestion-pipeline.md)。
+> 本文档基于当前代码状态整理（更新至 Phase 5-a），说明后端模块划分、前端路由、数据库迁移与 API 概览。它是面向开发者的「地图」，具体某个环节的参数语义见 [RAG 配置参数语义](rag-configuration-parameters.md)，知识入库链路见[知识入库处理管道](knowledge-ingestion-pipeline.md)。
 
 ## 1. 后端模块划分
 
@@ -36,7 +36,7 @@
 | `/evaluation` | 质量评测 | Evaluation | `EvaluationPage`（评测集、评测运行、对比门禁） |
 | `/configuration` | 配置版本 | Configuration | `ConfigurationPage`（五维 RAG 配置草稿 + 发布） |
 | `/feedback` | 反馈管理 | Feedback | `FeedbackPage`（点踩列表、转坏例） |
-| `/admin` | 平台管理 | Administration | `ComingSoonPage`（Phase 5 占位） |
+| `/admin` | 平台管理 | Administration | `ApiKeyAdminPage`（API key 创建、列表与吊销） |
 
 ## 3. 数据库迁移
 
@@ -63,8 +63,17 @@ Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V11�
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/auth/me` | 当前登录用户 |
+| GET | `/api/iam/keys` | 列出当前管理员的 API key（不返回 token 明文） |
+| POST | `/api/iam/keys` | 创建 scoped API key（token 明文仅在创建响应返回一次） |
+| DELETE | `/api/iam/keys/{keyId}` | 吊销 API key |
 
-### 4.2 知识管理（`knowledge`）
+### 4.2 OpenAPI
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/v3/api-docs` | OpenAPI JSON 文档（仅管理员 Session） |
+
+### 4.3 知识管理（`knowledge`）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -77,7 +86,7 @@ Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V11�
 | GET | `/api/documents/{documentId}/versions/{versionId}/parsed` | 解析全文预览 |
 | GET | `/api/documents/{documentId}/versions/{versionId}/chunks` | 分块预览 |
 
-### 4.3 索引发布（`indexing`）
+### 4.4 索引发布（`indexing`）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -87,7 +96,7 @@ Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V11�
 | POST | `/api/knowledge-bases/{kbId}/releases/{releaseId}/offline` | 下架 |
 | POST | `/api/knowledge-bases/{kbId}/releases/{releaseId}/delete` | 删除 |
 
-### 4.4 问答（`qa`）
+### 4.5 问答（`qa`）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -96,7 +105,7 @@ Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V11�
 | GET | `/api/qa/conversations/{id}/messages` | 会话消息 |
 | POST | `/api/qa/feedback` | 占位（返回 204，实际反馈走 `/api/feedback`） |
 
-### 4.5 配置版本（`configuration`）
+### 4.6 配置版本（`configuration`）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -108,7 +117,7 @@ Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V11�
 | GET | `/api/configuration/profiles/{id}/versions` | 版本列表 |
 | GET | `/api/configuration/profiles/{id}/versions/{versionNo}` | 版本详情 |
 
-### 4.6 评测（`evaluation`）
+### 4.7 评测（`evaluation`）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -127,7 +136,7 @@ Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V11�
 | GET | `/api/evaluation/runs/{id}` | 运行详情 |
 | POST | `/api/evaluation/comparisons` | 两个运行对比 + 门禁判定 |
 
-### 4.7 反馈（`feedback`）
+### 4.8 反馈（`feedback`）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|

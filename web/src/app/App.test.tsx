@@ -62,16 +62,16 @@ describe('App routes', () => {
     expect(await screen.findByRole('heading', { name: '反馈', level: 2 })).toBeInTheDocument()
   })
 
-  test('renders the administration coming soon page for /admin', async () => {
+  test('renders the API key management page for /admin', async () => {
     render(
       <MemoryRouter initialEntries={['/admin']}>
         <App />
       </MemoryRouter>,
     )
 
-    expect(await screen.findByRole('heading', { name: '平台管理', level: 1 })).toBeInTheDocument()
-    expect(screen.getAllByText('Phase 5')).not.toHaveLength(0)
-    expect(screen.getByRole('link', { name: '前往知识管理' })).toHaveAttribute('href', '/knowledge')
+    expect(await screen.findByRole('heading', { name: 'API key 管理', level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '访问凭据', level: 2 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '暂无 API key' })).toBeInTheDocument()
   })
 
   test('renders the knowledge workspace page for /knowledge', async () => {
