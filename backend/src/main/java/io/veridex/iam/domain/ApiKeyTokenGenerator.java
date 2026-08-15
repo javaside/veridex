@@ -5,8 +5,10 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
+import org.springframework.stereotype.Component;
 
 /** token 生成与哈希：明文只在签发时出现一次，库中只存 SHA-256 hex。 */
+@Component
 public class ApiKeyTokenGenerator {
 
     public record PlainToken(String token, String hash, String prefix) {}
