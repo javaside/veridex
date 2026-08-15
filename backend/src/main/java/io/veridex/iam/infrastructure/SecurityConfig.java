@@ -6,12 +6,15 @@ import java.util.Map;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -41,7 +44,12 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").access(scopeAuthorizationManager::authorizeOptions)
                 .requestMatchers("/v3/api-docs/**").access(scopeAuthorizationManager::authorizeAdminSession)
                 .anyRequest().access(scopeAuthorizationManager))
-            .exceptionHandling(exceptions -> exceptions.accessDeniedHandler((request, response, denied) -> {
+            .exceptionHandling(exceptions -> exceptions
+                .defaultAuthenticationEntryPointFor(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
+                        request -> request.getRequestURI().startsWith("/v3/api-docs"))
+                .defaultAuthenticationEntryPointFor(new LoginUrlAuthenticationEntryPoint("/login"),
+                        request -> request.getRequestURI().startsWith("/api/"))
+                .accessDeniedHandler((request, response, denied) -> {
                 if (org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication()
                         instanceof ApiKeyAuthFilter.ApiKeyAuthentication) {
                     response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_FORBIDDEN);

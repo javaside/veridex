@@ -56,6 +56,10 @@ veridex:
       base-url: ${VERIDEX_OLLAMA_BASE_URL:http://localhost:11434}
       model: ${VERIDEX_OLLAMA_EMBEDDING_MODEL:qwen3-embedding}
 
+springdoc:
+  paths-to-match: /api/**
+  default-support-form-authentication: false
+
 management:
   endpoints:
     web:
