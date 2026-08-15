@@ -45,7 +45,15 @@ class ApiKeyServiceTest {
     void scopeMatchesNamespacePaths() {
         assertThat(ApiKeyScope.QA.allows("POST", "/api/qa/ask")).isTrue();
         assertThat(ApiKeyScope.QA.allows("GET", "/api/qa/conversations")).isTrue();
+        assertThat(ApiKeyScope.QA.allows("GET", "/api/conversations/x")).isTrue();
         assertThat(ApiKeyScope.QA.allows("GET", "/api/evaluation/datasets")).isFalse();
+        for (ApiKeyScope scope : ApiKeyScope.values()) {
+            if (scope != ApiKeyScope.QA) {
+                assertThat(scope.allows("GET", "/api/conversations/x"))
+                        .as("scope %s", scope.value())
+                        .isFalse();
+            }
+        }
 
         assertThat(ApiKeyScope.KNOWLEDGE_READ.allows("GET", "/api/knowledge-bases")).isTrue();
         assertThat(ApiKeyScope.KNOWLEDGE_READ.allows("GET", "/api/documents/x/versions/y/chunks")).isTrue();

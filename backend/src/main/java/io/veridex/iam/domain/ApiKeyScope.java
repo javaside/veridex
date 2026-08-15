@@ -9,7 +9,7 @@ import java.util.Set;
  * 对所有 scope 均不允许 —— key 只能访问业务命名空间。
  */
 public enum ApiKeyScope {
-    QA("qa", List.of("/api/qa")) {
+    QA("qa", List.of("/api/qa", "/api/conversations")) {
         @Override public boolean allows(String method, String path) { return matches(path); }
     },
     KNOWLEDGE_READ("knowledge:read", List.of("/api/knowledge-bases", "/api/documents")) {
