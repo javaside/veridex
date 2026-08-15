@@ -44,6 +44,14 @@ export type VersionDetail = {
 
 export type PublishResult = { versionId: string; versionNo: number }
 
+export const defaultConfig = (): ProfileConfig => ({
+  chunking: { maxChars: 2000, overlap: 80 },
+  retrieval: { topKPerChannel: 30, rrfK: 60, contextTopK: 6, perDocumentMax: 3, contextMaxChars: 4000 },
+  generation: { maxHistoryTurns: 6, minEvidenceChars: 50 },
+  prompt: { systemTemplate: '你是企业制度问答助手。只允许使用以下证据回答，不得使用模型通用知识补全。\n' },
+  model: { chatModel: 'deterministic', embeddingModel: 'deterministic' },
+})
+
 const json = async <T>(response: Response): Promise<T> => {
   if (!response.ok) {
     const message = await response.text().catch(() => '')
