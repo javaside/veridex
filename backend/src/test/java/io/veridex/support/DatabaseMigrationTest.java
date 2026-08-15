@@ -38,7 +38,7 @@ class DatabaseMigrationTest extends PostgresIntegrationTest {
                     versions.add(rows.getString("version"));
                     assertThat(rows.getBoolean("success")).isTrue();
                 }
-                assertThat(versions).contains("1", "2", "3", "4", "5", "6", "7", "8");
+                assertThat(versions).contains("1", "2", "3", "4", "5", "6", "7", "8", "9");
             }
         }
     }
@@ -142,6 +142,34 @@ class DatabaseMigrationTest extends PostgresIntegrationTest {
             assertColumn(evaluationColumns, "evaluation_case.evidence", "jsonb", null, false, "'[]'::jsonb");
             assertColumn(evaluationColumns, "dataset_version.version_no", "integer", null, false, null);
             assertColumn(evaluationColumns, "dataset_version_case.position", "integer", null, false, null);
+        }
+    }
+
+    @Test
+    void configurationProfileMigrationCreatesTwoTables() throws Exception {
+        try (Connection connection = dataSource.getConnection()) {
+            assertThat(tableNames(connection)).contains("configuration_profile", "configuration_profile_version");
+
+            var columns = new HashMap<String, ColumnContract>();
+            try (var statement = connection.prepareStatement("""
+                    SELECT table_name, column_name, data_type, character_maximum_length,
+                           is_nullable, column_default
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name IN ('configuration_profile', 'configuration_profile_version')
+                    """); var rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    columns.put(rows.getString("table_name") + "." + rows.getString("column_name"),
+                            new ColumnContract(rows.getString("data_type"),
+                                    rows.getObject("character_maximum_length", Integer.class),
+                                    "YES".equals(rows.getString("is_nullable")),
+                                    rows.getString("column_default")));
+                }
+            }
+            assertColumn(columns, "configuration_profile.name", "character varying", 200, false, null);
+            assertColumn(columns, "configuration_profile.draft", "jsonb", null, false, null);
+            assertColumn(columns, "configuration_profile_version.version_no", "integer", null, false, null);
+            assertColumn(columns, "configuration_profile_version.config", "jsonb", null, false, null);
         }
     }
 
