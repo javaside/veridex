@@ -5,7 +5,7 @@ CREATE TABLE evaluation_run (
     dataset_id UUID NOT NULL REFERENCES evaluation_dataset(id) ON DELETE CASCADE,
     dataset_version_id UUID NOT NULL REFERENCES dataset_version(id) ON DELETE CASCADE,
     profile_id UUID NOT NULL,
-    profile_version_id UUID NOT NULL,
+    profile_version_no INTEGER NOT NULL,
     knowledge_scope JSONB NOT NULL DEFAULT '[]'::jsonb,
     status VARCHAR(20) NOT NULL,
     metrics JSONB NOT NULL DEFAULT '{}'::jsonb,

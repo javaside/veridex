@@ -30,8 +30,8 @@ public class EvaluationRun {
     @Column(name = "profile_id", nullable = false)
     private UUID profileId;
 
-    @Column(name = "profile_version_id", nullable = false)
-    private UUID profileVersionId;
+    @Column(name = "profile_version_no", nullable = false)
+    private int profileVersionNo;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "knowledge_scope", nullable = false, columnDefinition = "jsonb")
@@ -60,12 +60,12 @@ public class EvaluationRun {
     protected EvaluationRun() {
     }
 
-    public EvaluationRun(UUID datasetId, UUID datasetVersionId, UUID profileId, UUID profileVersionId,
+    public EvaluationRun(UUID datasetId, UUID datasetVersionId, UUID profileId, int profileVersionNo,
                          List<UUID> knowledgeScope, UUID createdBy) {
         this.datasetId = datasetId;
         this.datasetVersionId = datasetVersionId;
         this.profileId = profileId;
-        this.profileVersionId = profileVersionId;
+        this.profileVersionNo = profileVersionNo;
         this.knowledgeScopeJson = knowledgeScope.stream().map(id -> "\"" + id + "\"").toList().toString();
         this.createdBy = createdBy;
     }
@@ -86,7 +86,7 @@ public class EvaluationRun {
     public UUID getDatasetId() { return datasetId; }
     public UUID getDatasetVersionId() { return datasetVersionId; }
     public UUID getProfileId() { return profileId; }
-    public UUID getProfileVersionId() { return profileVersionId; }
+    public int getProfileVersionNo() { return profileVersionNo; }
     public String getKnowledgeScopeJson() { return knowledgeScopeJson; }
     public Status getStatus() { return status; }
     public String getMetricsJson() { return metricsJson; }
