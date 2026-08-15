@@ -7,6 +7,7 @@ import io.veridex.retrieval.api.HybridSearchResult;
 import io.veridex.retrieval.api.HybridSearchService;
 import io.veridex.retrieval.api.RankedHitView;
 import io.veridex.retrieval.api.RerankProvider;
+import io.veridex.retrieval.api.RetrievalParameters;
 import io.veridex.retrieval.api.SearchHit;
 import io.veridex.retrieval.infrastructure.OpenSearchRetrievalReader;
 import java.util.ArrayList;
@@ -24,11 +25,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class HybridSearchServiceImpl implements HybridSearchService {
 
-    private static final int TOP_K_PER_CHANNEL = 30;
-    private static final int RRF_K = 60;
-    private static final int CONTEXT_TOP_K = 6;
-    private static final int PER_DOCUMENT_MAX = 3;
-    private static final int MAX_CHARS = 4000;
+    private static final RetrievalParameters DEFAULT_PARAMETERS =
+            new RetrievalParameters(30, 60, 6, 3, 4000);
 
     private final OpenSearchRetrievalReader reader;
     private final IndexReleaseQuery indexReleases;
@@ -49,18 +47,25 @@ public class HybridSearchServiceImpl implements HybridSearchService {
     @Override
     public HybridSearchResult search(UUID userId, List<UUID> authorizedKnowledgeBaseIds,
                                      List<UUID> requestedKnowledgeBaseIds, String question) {
+        return search(userId, authorizedKnowledgeBaseIds, requestedKnowledgeBaseIds, question, DEFAULT_PARAMETERS);
+    }
+
+    @Override
+    public HybridSearchResult search(UUID userId, List<UUID> authorizedKnowledgeBaseIds,
+                                     List<UUID> requestedKnowledgeBaseIds, String question,
+                                     RetrievalParameters parameters) {
         List<UUID> scope = authorizedKnowledgeBaseIds.stream()
                 .filter(requestedKnowledgeBaseIds::contains)
                 .toList();
         List<SearchHit> all = new ArrayList<>();
         List<String> degradations = new ArrayList<>();
         for (UUID kbId : scope) {
-            all.addAll(searchKnowledgeBase(kbId, question, degradations));
+            all.addAll(searchKnowledgeBase(kbId, question, degradations, parameters));
         }
         List<RankFusion.RankedHit> fused = RankFusion.fuse(
                 all.stream().filter(h -> h.channel() == SearchHit.Channel.BM25).toList(),
                 all.stream().filter(h -> h.channel() == SearchHit.Channel.VECTOR).toList(),
-                RRF_K);
+                parameters.rrfK());
         List<SearchHit> reranked = reranker.rerank(
                 fused.stream().map(f -> new SearchHit(f.knowledgeBaseId(), f.documentVersionId(), f.chunkIndex(),
                         f.title(), f.structurePath(), f.text(), SearchHit.Channel.BM25, f.fusionScore())).toList(),
@@ -68,7 +73,7 @@ public class HybridSearchServiceImpl implements HybridSearchService {
         List<EvidencePiece> evidence = assembler.assemble(reranked.stream().map(r -> new RankFusion.RankedHit(
                 r.knowledgeBaseId(), r.documentVersionId(), r.chunkIndex(), r.title(), r.structurePath(),
                 r.text(), r.score(), r.score(), r.score())).toList(),
-                question, CONTEXT_TOP_K, PER_DOCUMENT_MAX, MAX_CHARS);
+                question, parameters.contextTopK(), parameters.perDocumentMax(), parameters.contextMaxChars());
 
         Set<String> inContext = evidence.stream()
                 .map(e -> e.documentVersionId() + ":" + e.chunkIndex())
@@ -84,7 +89,8 @@ public class HybridSearchServiceImpl implements HybridSearchService {
         return new HybridSearchResult(evidence, views, degradations);
     }
 
-    private List<SearchHit> searchKnowledgeBase(UUID kbId, String question, List<String> degradations) {
+    private List<SearchHit> searchKnowledgeBase(UUID kbId, String question, List<String> degradations,
+                                                RetrievalParameters parameters) {
         return indexReleases.findActiveRelease(kbId)
                 .map(release -> {
                     List<UUID> snapshotIds = indexReleases.listSnapshotDocumentVersionIds(release.releaseId());
@@ -100,13 +106,13 @@ public class HybridSearchServiceImpl implements HybridSearchService {
                     List<SearchHit> bm25 = null;
                     List<SearchHit> vector = null;
                     try {
-                        bm25 = reader.bm25(release.aliasName(), kbId, question, TOP_K_PER_CHANNEL)
+                        bm25 = reader.bm25(release.aliasName(), kbId, question, parameters.topKPerChannel())
                                 .stream().filter(h -> online.contains(h.documentVersionId())).toList();
                     } catch (RuntimeException e) {
                         degradations.add("bm25-retrieval-failed: " + e.getMessage());
                     }
                     try {
-                        vector = reader.vector(release.aliasName(), kbId, question, TOP_K_PER_CHANNEL)
+                        vector = reader.vector(release.aliasName(), kbId, question, parameters.topKPerChannel())
                                 .stream().filter(h -> online.contains(h.documentVersionId())).toList();
                     } catch (RuntimeException e) {
                         degradations.add("vector-retrieval-failed: " + e.getMessage());
