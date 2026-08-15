@@ -45,7 +45,10 @@ public class ApiKeyService {
 
     @Transactional(readOnly = true)
     public List<io.veridex.iam.api.ApiKeyView> listFor(UUID actorId, String actorRole) {
-        return apiKeys.findByUserIdOrderByCreatedAtDesc(actorId).stream()
+        List<ApiKey> visibleKeys = "PLATFORM_ADMIN".equals(actorRole)
+                ? apiKeys.findAllByOrderByCreatedAtDesc()
+                : apiKeys.findByUserIdOrderByCreatedAtDesc(actorId);
+        return visibleKeys.stream()
                 .map(ApiKeyService::toView)
                 .toList();
     }

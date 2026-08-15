@@ -307,15 +307,6 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .row-actions { justify-content: flex-start; flex-wrap: wrap; }
   .preview-drawer { width: 100%; }
   .page-actions .primary-button { width: 100%; }
-  .key-item { grid-template-columns: 1fr; gap: 9px; }
-  .key-meta { justify-content: flex-start; flex-wrap: wrap; gap: 12px 20px; }
-  .key-scopes, .key-item-foot { grid-column: 1; grid-row: auto; }
-  .key-item-foot { justify-content: flex-start; }
-  .key-scope-list { grid-template-columns: 1fr; }
-  .key-scope-list label:nth-child(odd) { border-right: 0; }
-  .key-scope-list label:nth-child(n + 2) { border-top: 1px solid var(--border); }
-  .create-key-dialog .dialog-actions { flex-direction: column-reverse; }
-  .create-key-dialog .dialog-actions button { width: 100%; }
 }
 
 /* Evaluation */
@@ -448,6 +439,19 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .key-scope-list small { color: var(--text-muted); font-size: 9px; line-height: 1.4; }
 .key-token-display { margin: 3px 0 5px; padding: 12px; border: 1px dashed var(--border-strong); border-radius: var(--radius-control); background: var(--surface-muted); word-break: break-all; user-select: all; }
 .key-token-display code { font-size: 12px; line-height: 1.6; }
+
+@media (max-width: 767px) {
+  .key-item { min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 9px; }
+  .key-meta { min-width: 0; justify-content: flex-start; flex-wrap: wrap; gap: 12px 20px; }
+  .key-scopes, .key-item-foot { min-width: 0; grid-column: 1; grid-row: auto; }
+  .key-scopes code, .key-identity span { overflow-wrap: anywhere; white-space: normal; }
+  .key-item-foot { justify-content: flex-start; }
+  .key-scope-list { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+  .key-scope-list label:nth-child(odd) { border-right: 0; }
+  .key-scope-list label:nth-child(n + 2) { border-top: 1px solid var(--border); }
+  .create-key-dialog .dialog-actions { flex-direction: column-reverse; }
+  .create-key-dialog .dialog-actions button { width: 100%; }
+}
 
 /* Feedback admin */
 .feedback-list { margin: 0; padding: 10px; list-style: none; display: grid; gap: 8px; }

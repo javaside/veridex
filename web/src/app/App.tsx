@@ -3,7 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { authApi, type CurrentUser } from '../features/auth/authApi'
 import { LoginPage } from '../features/auth/LoginPage'
 import { AppShell } from './AppShell'
-import { workspaceRoutes } from './routes'
+import { routesForRole } from './routes'
 
 export function App() {
   const [user, setUser] = useState<CurrentUser | null>(null)
@@ -45,11 +45,13 @@ export function App() {
     }
   }
 
+  const visibleRoutes = routesForRole(user.role)
+
   return (
     <AppShell user={user} onLogout={logout} loggingOut={loggingOut} logoutError={logoutError}>
       <Routes>
-        {workspaceRoutes.map((route) => (
-          <Route key={route.path} path={route.path} element={route.content} />
+        {visibleRoutes.map((route) => (
+          <Route key={route.path} path={route.path} element={typeof route.content === 'function' ? route.content(user) : route.content} />
         ))}
         <Route path="/login" element={<Navigate to="/workbench" replace />} />
         <Route path="*" element={<Navigate to="/workbench" replace />} />

@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -134,6 +135,32 @@ class ApiKeyServiceTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> service.createFor(ACTOR_ADMIN, "PLATFORM_ADMIN", ACTOR_ADMIN, "x", List.of()))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void platformAdminListsAllKeysNewestFirst() {
+        ApiKeyRepository repo = mock(ApiKeyRepository.class);
+        when(repo.findAllByOrderByCreatedAtDesc()).thenReturn(List.of());
+        ApiKeyService service = new ApiKeyService(repo,
+                mock(PlatformUserRepository.class), new ApiKeyTokenGenerator());
+
+        assertThat(service.listFor(ACTOR_ADMIN, "PLATFORM_ADMIN")).isEmpty();
+
+        verify(repo).findAllByOrderByCreatedAtDesc();
+        verify(repo, never()).findByUserIdOrderByCreatedAtDesc(any());
+    }
+
+    @Test
+    void knowledgeAdminListsOnlyOwnKeysNewestFirst() {
+        ApiKeyRepository repo = mock(ApiKeyRepository.class);
+        when(repo.findByUserIdOrderByCreatedAtDesc(ACTOR_KADMIN)).thenReturn(List.of());
+        ApiKeyService service = new ApiKeyService(repo,
+                mock(PlatformUserRepository.class), new ApiKeyTokenGenerator());
+
+        assertThat(service.listFor(ACTOR_KADMIN, "KNOWLEDGE_ADMIN")).isEmpty();
+
+        verify(repo).findByUserIdOrderByCreatedAtDesc(ACTOR_KADMIN);
+        verify(repo, never()).findAllByOrderByCreatedAtDesc();
     }
 
     @Test

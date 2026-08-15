@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
+import { useModalFocus } from './useModalFocus'
 
 export function ConfirmDialog({ open, title, description, confirmLabel, danger, confirmDisabled, cancelDisabled, onConfirm, onCancel }: {
   open: boolean
@@ -11,21 +12,22 @@ export function ConfirmDialog({ open, title, description, confirmLabel, danger, 
   onConfirm: () => void
   onCancel: () => void
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
   const confirmRef = useRef<HTMLButtonElement>(null)
 
-  useEffect(() => {
-    if (!open) return
-    const handleKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !cancelDisabled) onCancel() }
-    document.addEventListener('keydown', handleKey)
-    confirmRef.current?.focus()
-    return () => document.removeEventListener('keydown', handleKey)
-  }, [cancelDisabled, open, onCancel])
+  useModalFocus({
+    active: open,
+    containerRef: dialogRef,
+    initialFocusRef: confirmRef,
+    onEscape: onCancel,
+    escapeDisabled: cancelDisabled,
+  })
 
   if (!open) return null
   return (
     <div className="dialog-layer">
       <button className="dialog-backdrop" type="button" aria-label="关闭对话框" onClick={onCancel} disabled={cancelDisabled} />
-      <div className="confirm-dialog" role="dialog" aria-modal="true" aria-label={title}>
+      <div ref={dialogRef} className="confirm-dialog" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}>
         <h3>{title}</h3>
         <p>{description}</p>
         <div className="dialog-actions">

@@ -2,7 +2,7 @@ import { SignOut } from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import type { CurrentUser } from '../features/auth/authApi'
-import { workspaceRoutes } from './routes'
+import { routesForRole } from './routes'
 
 export function AppShell({ user, onLogout, loggingOut, logoutError, children }: { user: CurrentUser; onLogout: () => void; loggingOut: boolean; logoutError: string | null; children: ReactNode }) {
   const initials = user.displayName.slice(0, 2).toUpperCase()
@@ -15,7 +15,7 @@ export function AppShell({ user, onLogout, loggingOut, logoutError, children }: 
           <div><strong>Veridex</strong><small>本地开发环境</small></div>
         </div>
         <nav className="workspace-nav" aria-label="平台工作区">
-          {workspaceRoutes.map((route) => {
+          {routesForRole(user.role).map((route) => {
             const Icon = route.icon
             return (
               <NavLink key={route.path} to={route.path}>

@@ -1,13 +1,14 @@
 import { Key, Plus } from '@phosphor-icons/react'
 import { useCallback, useEffect, useState } from 'react'
 import { PageHeader } from '../../app/PageHeader'
+import type { CurrentUser } from '../auth/authApi'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Toast } from '../../components/Toast'
 import { adminApi, type ApiKeyView } from './adminApi'
 import { CreateKeyDialog } from './components/CreateKeyDialog'
 import { KeyList } from './components/KeyList'
 
-export function ApiKeyAdminPage() {
+export function ApiKeyAdminPage({ user }: { user: CurrentUser }) {
   const [keys, setKeys] = useState<ApiKeyView[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -44,15 +45,25 @@ export function ApiKeyAdminPage() {
 
   const revoke = async () => {
     if (!revokeTarget || revokeLoading) return
+    const target = revokeTarget
     setRevokeLoading(true)
     try {
-      await adminApi.revokeKey(revokeTarget.id)
-      await load()
-      setRevokeTarget(null)
-      setToast({ type: 'success', message: 'API key 已吊销' })
+      await adminApi.revokeKey(target.id)
     } catch (caught) {
       setRevokeTarget(null)
       setToast({ type: 'error', message: caught instanceof Error ? caught.message : '吊销失败' })
+      setRevokeLoading(false)
+      return
+    }
+
+    setKeys((current) => current.map((key) => key.id === target.id ? { ...key, revokedAt: new Date().toISOString() } : key))
+    setRevokeTarget(null)
+    try {
+      await load()
+      setToast({ type: 'success', message: 'API key 已吊销' })
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : '列表刷新失败'
+      setToast({ type: 'error', message: `API key 已吊销，但刷新列表失败：${message}` })
     } finally {
       setRevokeLoading(false)
     }
@@ -75,6 +86,7 @@ export function ApiKeyAdminPage() {
       </div>
       {creating && (
         <CreateKeyDialog
+          user={user}
           onCancel={() => setCreating(false)}
           onDone={() => { setCreating(false); void refresh(); setToast({ type: 'success', message: 'API key 已创建' }) }}
           onNotify={(type, message) => setToast({ type, message })}

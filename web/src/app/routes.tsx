@@ -1,5 +1,6 @@
 import { ChatCircleDots, ChatCircleText, Database, Gauge, ShieldCheck, SlidersHorizontal } from '@phosphor-icons/react'
 import type { ComponentType, ReactNode } from 'react'
+import type { CurrentUser } from '../features/auth/authApi'
 import { KnowledgePage } from '../features/knowledge/KnowledgePage'
 import { QaPage } from '../features/qa/QaPage'
 import { EvaluationPage } from '../features/evaluation/EvaluationPage'
@@ -12,8 +13,11 @@ export type WorkspaceRoute = {
   label: string
   englishLabel: string
   icon: ComponentType<{ size?: number; weight?: 'regular' | 'fill' }>
-  content: ReactNode
+  content: ReactNode | ((user: CurrentUser) => ReactNode)
+  roles?: string[]
 }
+
+export const routesForRole = (role: string) => workspaceRoutes.filter((route) => !route.roles || route.roles.includes(role))
 
 export const workspaceRoutes: WorkspaceRoute[] = [
   {
@@ -38,6 +42,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
   {
     path: '/admin', label: '平台管理', englishLabel: 'Administration', icon: ShieldCheck,
-    content: <ApiKeyAdminPage />,
+    content: (user) => <ApiKeyAdminPage user={user} />,
+    roles: ['PLATFORM_ADMIN', 'KNOWLEDGE_ADMIN'],
   },
 ]

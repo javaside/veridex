@@ -9,5 +9,7 @@ public interface ApiKeyRepository extends JpaRepository<ApiKey, UUID> {
 
     Optional<ApiKey> findByTokenHash(String tokenHash);
 
+    List<ApiKey> findAllByOrderByCreatedAtDesc();
+
     List<ApiKey> findByUserIdOrderByCreatedAtDesc(UUID userId);
 }

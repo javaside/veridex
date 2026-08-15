@@ -36,11 +36,13 @@
 | `/evaluation` | 质量评测 | Evaluation | `EvaluationPage`（评测集、评测运行、对比门禁） |
 | `/configuration` | 配置版本 | Configuration | `ConfigurationPage`（五维 RAG 配置草稿 + 发布） |
 | `/feedback` | 反馈管理 | Feedback | `FeedbackPage`（点踩列表、转坏例） |
-| `/admin` | 平台管理 | Administration | `ApiKeyAdminPage`（API key 创建、列表与吊销） |
+| `/admin` | 平台管理 | Administration | `ApiKeyAdminPage`（仅 PLATFORM_ADMIN / KNOWLEDGE_ADMIN；API key 创建、列表与吊销） |
+
+`/admin` 的导航与路由按当前用户角色过滤。`PLATFORM_ADMIN` 可查看和吊销全部 key，并可通过可选目标用户 UUID 代理签发；`KNOWLEDGE_ADMIN` 仅能查看、签发和吊销自己的 key；`EMPLOYEE` 不显示入口，直接访问也会回到 `/workbench`。
 
 ## 3. 数据库迁移
 
-Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V11：
+Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V12：
 
 | 版本 | 内容 |
 |---|---|
@@ -55,6 +57,7 @@ Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V11�
 | V9 | Phase 4-b 配置版本：`configuration_profile`、`configuration_profile_version` |
 | V10 | Phase 4-c 反馈：`feedback` |
 | V11 | Phase 4-d 评测运行：`evaluation_run`、`evaluation_run_case` |
+| V12 | Phase 5-a API key：`api_key`（哈希凭据、scope、吊销与使用时间） |
 
 ## 4. API 概览
 
@@ -63,9 +66,9 @@ Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V11�
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/auth/me` | 当前登录用户 |
-| GET | `/api/iam/keys` | 列出当前管理员的 API key（不返回 token 明文） |
-| POST | `/api/iam/keys` | 创建 scoped API key（token 明文仅在创建响应返回一次） |
-| DELETE | `/api/iam/keys/{keyId}` | 吊销 API key |
+| GET | `/api/iam/keys` | PLATFORM_ADMIN 列出全部 key；KNOWLEDGE_ADMIN 仅列出自己的 key（不返回 token 明文） |
+| POST | `/api/iam/keys` | 创建 scoped API key；平台管理员可指定 `userId`，知识管理员仅能为自己签发（token 明文仅返回一次） |
+| DELETE | `/api/iam/keys/{keyId}` | 平台管理员可吊销任意 key；知识管理员仅能吊销自己的 key |
 
 ### 4.2 OpenAPI
 
