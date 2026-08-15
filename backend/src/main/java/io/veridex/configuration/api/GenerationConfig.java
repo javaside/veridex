@@ -1,4 +1,4 @@
-package io.veridex.configuration.domain;
+package io.veridex.configuration.api;
 
 public record GenerationConfig(int maxHistoryTurns, int minEvidenceChars) {
 }

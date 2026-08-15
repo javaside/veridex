@@ -1,10 +1,10 @@
 package io.veridex.configuration.application;
 
+import io.veridex.configuration.api.ProfileConfig;
 import io.veridex.configuration.domain.ConfigurationProfile;
 import io.veridex.configuration.domain.ConfigurationProfileRepository;
 import io.veridex.configuration.domain.ConfigurationProfileVersion;
 import io.veridex.configuration.domain.ConfigurationProfileVersionRepository;
-import io.veridex.configuration.domain.ProfileConfig;
 import io.veridex.configuration.domain.ProfileDefaults;
 import java.util.List;
 import java.util.UUID;
