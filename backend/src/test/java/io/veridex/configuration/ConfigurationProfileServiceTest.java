@@ -6,12 +6,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.veridex.configuration.api.ProfileConfig;
 import io.veridex.configuration.application.ConfigurationProfileService;
 import io.veridex.configuration.domain.ConfigurationProfile;
 import io.veridex.configuration.domain.ConfigurationProfileRepository;
 import io.veridex.configuration.domain.ConfigurationProfileVersion;
 import io.veridex.configuration.domain.ConfigurationProfileVersionRepository;
-import io.veridex.configuration.domain.ProfileConfig;
 import io.veridex.configuration.domain.ProfileDefaults;
 import java.util.Optional;
 import java.util.UUID;

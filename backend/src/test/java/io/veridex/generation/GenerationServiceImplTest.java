@@ -40,7 +40,8 @@ class GenerationServiceImplTest {
 
     @Test
     void refusesWhenPolicySaysSo() {
-        when(refusalPolicy.evaluate(any())).thenReturn(RefusalReason.NO_RELEVANT_EVIDENCE);
+        when(refusalPolicy.evaluate(any(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(RefusalReason.NO_RELEVANT_EVIDENCE);
         var result = service.generate("q", List.of(), List.of());
         assertThat(result.refusalReason()).isEqualTo(RefusalReason.NO_RELEVANT_EVIDENCE);
         assertThat(result.answer()).isNull();
@@ -52,7 +53,7 @@ class GenerationServiceImplTest {
         UUID versionId = UUID.randomUUID();
         var evidence = List.of(new EvidencePiece(1, UUID.randomUUID(), versionId, 0, "t", "1",
                 "员工请假需提前两个工作日提交申请。"));
-        when(refusalPolicy.evaluate(evidence)).thenReturn(null);
+        when(refusalPolicy.evaluate(eq(evidence), org.mockito.ArgumentMatchers.anyInt())).thenReturn(null);
         when(model.call(any(Prompt.class))).thenReturn(new ChatResponse(List.of(
                 new Generation(new AssistantMessage("根据《t》[1]，员工请假需提前两个工作日提交申请")))));
         when(citationValidator.validate(any(), eq(evidence), any())).thenReturn(List.of(
@@ -71,7 +72,7 @@ class GenerationServiceImplTest {
     void generatesWithHistoryInjected() {
         var evidence = List.of(new EvidencePiece(1, UUID.randomUUID(), UUID.randomUUID(), 0, "t", "1",
                 "年假最长不超过十五个工作日。"));
-        when(refusalPolicy.evaluate(evidence)).thenReturn(null);
+        when(refusalPolicy.evaluate(eq(evidence), org.mockito.ArgumentMatchers.anyInt())).thenReturn(null);
         when(model.call(any(Prompt.class))).thenReturn(new ChatResponse(List.of(
                 new Generation(new AssistantMessage("根据《t》[1]，年假最长不超过十五个工作日")))));
         when(citationValidator.validate(any(), eq(evidence), any())).thenReturn(List.of());
