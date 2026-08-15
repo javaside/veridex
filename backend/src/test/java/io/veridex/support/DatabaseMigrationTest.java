@@ -38,7 +38,7 @@ class DatabaseMigrationTest extends PostgresIntegrationTest {
                     versions.add(rows.getString("version"));
                     assertThat(rows.getBoolean("success")).isTrue();
                 }
-                assertThat(versions).contains("1", "2", "3", "4", "5", "6", "7", "8", "9");
+                assertThat(versions).contains("1", "2", "3", "4", "5", "6", "7", "8", "9", "10");
             }
         }
     }
@@ -170,6 +170,33 @@ class DatabaseMigrationTest extends PostgresIntegrationTest {
             assertColumn(columns, "configuration_profile.draft", "jsonb", null, false, null);
             assertColumn(columns, "configuration_profile_version.version_no", "integer", null, false, null);
             assertColumn(columns, "configuration_profile_version.config", "jsonb", null, false, null);
+        }
+    }
+
+    @Test
+    void feedbackMigrationCreatesTable() throws Exception {
+        try (Connection connection = dataSource.getConnection()) {
+            assertThat(tableNames(connection)).contains("feedback");
+
+            var columns = new HashMap<String, ColumnContract>();
+            try (var statement = connection.prepareStatement("""
+                    SELECT column_name, data_type, character_maximum_length, is_nullable, column_default
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'feedback'
+                    """); var rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    columns.put(rows.getString("column_name"),
+                            new ColumnContract(rows.getString("data_type"),
+                                    rows.getObject("character_maximum_length", Integer.class),
+                                    "YES".equals(rows.getString("is_nullable")),
+                                    rows.getString("column_default")));
+                }
+            }
+            assertColumn(columns, "rating", "character varying", 10, false, null);
+            assertColumn(columns, "reason_code", "character varying", 40, true, null);
+            assertColumn(columns, "question", "text", null, false, null);
+            assertColumn(columns, "answer", "text", null, false, null);
+            assertColumn(columns, "evidence", "jsonb", null, false, "'[]'::jsonb");
         }
     }
 
