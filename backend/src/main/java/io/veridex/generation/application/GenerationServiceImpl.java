@@ -2,6 +2,7 @@ package io.veridex.generation.application;
 
 import io.veridex.conversation.api.MessageRecord;
 import io.veridex.generation.api.CitationView;
+import io.veridex.generation.api.GenerationParameters;
 import io.veridex.generation.api.GenerationResult;
 import io.veridex.generation.api.GenerationService;
 import io.veridex.generation.infrastructure.DeterministicChatModel;
@@ -23,7 +24,10 @@ import org.springframework.stereotype.Service;
 @Service
 public class GenerationServiceImpl implements GenerationService {
 
-    private static final int MAX_HISTORY_TURNS = 6;
+    private static final String DEFAULT_SYSTEM_TEMPLATE =
+            "你是企业制度问答助手。只允许使用以下证据回答，不得使用模型通用知识补全。\n";
+    private static final GenerationParameters DEFAULT_PARAMETERS =
+            new GenerationParameters(50, DEFAULT_SYSTEM_TEMPLATE, "deterministic");
 
     private final DeterministicChatModel model;
     private final RefusalPolicy refusalPolicy;
@@ -40,12 +44,18 @@ public class GenerationServiceImpl implements GenerationService {
 
     @Override
     public GenerationResult generate(String question, List<EvidencePiece> evidence, List<MessageRecord> history) {
-        RefusalReason refusal = refusalPolicy.evaluate(evidence);
+        return generate(question, evidence, history, DEFAULT_PARAMETERS);
+    }
+
+    @Override
+    public GenerationResult generate(String question, List<EvidencePiece> evidence,
+                                     List<MessageRecord> history, GenerationParameters parameters) {
+        RefusalReason refusal = refusalPolicy.evaluate(evidence, parameters.minEvidenceChars());
         if (refusal != null) {
-            return new GenerationResult(null, List.of(), refusal, "deterministic", 0, 0, 0, null);
+            return new GenerationResult(null, List.of(), refusal, parameters.model(), 0, 0, 0, null);
         }
 
-        String system = buildSystemPrompt(evidence);
+        String system = buildSystemPrompt(evidence, parameters.systemTemplate());
         List<Message> messages = new ArrayList<>();
         messages.add(new SystemMessage(system));
         for (MessageRecord record : history) {
@@ -66,7 +76,7 @@ public class GenerationServiceImpl implements GenerationService {
                 documentIdByVersionId(evidence));
         String contextHash = Integer.toHexString(evidence.hashCode());
 
-        return new GenerationResult(answer, citations, null, "deterministic",
+        return new GenerationResult(answer, citations, null, parameters.model(),
                 inputTokens, outputTokens, durationMs, contextHash);
     }
 
@@ -75,8 +85,8 @@ public class GenerationServiceImpl implements GenerationService {
         return documentVersions.findDocumentIdByVersionIds(versionIds);
     }
 
-    private String buildSystemPrompt(List<EvidencePiece> evidence) {
-        StringBuilder sb = new StringBuilder("你是企业制度问答助手。只允许使用以下证据回答，不得使用模型通用知识补全。\n");
+    private String buildSystemPrompt(List<EvidencePiece> evidence, String systemTemplate) {
+        StringBuilder sb = new StringBuilder(systemTemplate);
         for (EvidencePiece e : evidence) {
             sb.append("[EVIDENCE ").append(e.citationIndex()).append("|").append(e.title())
                     .append("|").append(e.text()).append("]\n");
