@@ -66,7 +66,7 @@ public class SecurityConfig {
                                 "role", user.getRole().name())));
                     }
                 })
-                .failureHandler((req, res, exc) -> res.sendError(401)))
+                .failureHandler((req, res, exc) -> res.setStatus(401)))
             .logout(logout -> logout
                 .logoutUrl("/api/auth/logout")
                 .logoutSuccessHandler((req, res, auth) -> res.setStatus(204)));

@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.authorization.AuthorizationResult;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.stereotype.Component;
@@ -51,7 +52,8 @@ public class ApiKeyScopeAuthorizationManager implements AuthorizationManager<Req
     public AuthorizationResult authorize(java.util.function.Supplier<? extends Authentication> authenticationSupplier,
                                          RequestAuthorizationContext context) {
         Authentication authentication = authenticationSupplier.get();
-        if (authentication == null || !authentication.isAuthenticated()) {
+        if (authentication == null || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken) {
             return new AuthorizationDecision(false);
         }
         if (!(authentication instanceof ApiKeyAuthFilter.ApiKeyAuthentication keyAuthentication)) {
