@@ -8,6 +8,7 @@ const workspaces = [
   ['/knowledge', '知识管理'],
   ['/evaluation', '质量评测'],
   ['/configuration', '配置版本'],
+  ['/feedback', '反馈管理'],
   ['/admin', '平台管理'],
 ] as const
 
@@ -48,6 +49,17 @@ describe('App routes', () => {
 
     expect(await screen.findByRole('heading', { name: '配置版本', level: 1 })).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: '配置', level: 2 })).toBeInTheDocument()
+  })
+
+  test('renders the feedback workspace page for /feedback', async () => {
+    render(
+      <MemoryRouter initialEntries={['/feedback']}>
+        <App />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('heading', { name: '反馈管理', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '反馈', level: 2 })).toBeInTheDocument()
   })
 
   test('renders the administration coming soon page for /admin', async () => {

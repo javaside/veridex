@@ -10,6 +10,7 @@ vi.mock('./qaApi', () => ({
     ask: vi.fn(),
     conversations: vi.fn(),
     messages: vi.fn(),
+    feedback: vi.fn(),
   },
 }))
 vi.mock('../knowledge/knowledgeApi', () => ({
