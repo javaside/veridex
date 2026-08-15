@@ -343,6 +343,14 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .version-detail strong { display: block; font-size: 13px; }
 .version-detail small { color: var(--text-muted); font-size: 11px; }
 
+/* Configuration */
+.config-section { border: 1px solid var(--border); border-radius: var(--radius-control); padding: 12px; display: grid; gap: 10px; }
+.config-section legend { padding: 0 6px; color: var(--text-muted); font-size: 11px; font-weight: 650; }
+.config-section label { display: grid; gap: 5px; font-size: 11px; color: var(--text-secondary); }
+.config-section input, .config-section textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: #f8fafa; color: var(--text-primary); font: inherit; }
+.config-section textarea { resize: vertical; }
+.config-preview { margin: 0; padding: 14px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--surface-muted); overflow-x: auto; white-space: pre-wrap; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }

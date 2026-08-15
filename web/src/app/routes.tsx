@@ -1,8 +1,9 @@
-import { ChatCircleText, Database, Gauge, ShieldCheck } from '@phosphor-icons/react'
+import { ChatCircleText, Database, Gauge, ShieldCheck, SlidersHorizontal } from '@phosphor-icons/react'
 import type { ComponentType, ReactNode } from 'react'
 import { KnowledgePage } from '../features/knowledge/KnowledgePage'
 import { QaPage } from '../features/qa/QaPage'
 import { EvaluationPage } from '../features/evaluation/EvaluationPage'
+import { ConfigurationPage } from '../features/configuration/ConfigurationPage'
 import { ComingSoonPage } from './ComingSoonPage'
 
 export type WorkspaceRoute = {
@@ -25,6 +26,10 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     path: '/evaluation', label: '质量评测', englishLabel: 'Evaluation', icon: Gauge,
     content: <EvaluationPage />,
+  },
+  {
+    path: '/configuration', label: '配置版本', englishLabel: 'Configuration', icon: SlidersHorizontal,
+    content: <ConfigurationPage />,
   },
   {
     path: '/admin', label: '平台管理', englishLabel: 'Administration', icon: ShieldCheck,
