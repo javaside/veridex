@@ -351,6 +351,28 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .config-section textarea { resize: vertical; }
 .config-preview { margin: 0; padding: 14px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--surface-muted); overflow-x: auto; white-space: pre-wrap; }
 
+/* Feedback */
+.chat-feedback { display: flex; gap: 6px; margin-top: 6px; }
+.chat-feedback button { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-panel); color: var(--text-muted); cursor: pointer; }
+.chat-feedback button:hover { background: var(--surface-muted); color: var(--text-primary); }
+.feedback-reason-list { display: grid; gap: 6px; margin-top: 14px; }
+.feedback-reason-list button { min-height: 38px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface-panel); color: var(--text-primary); font-size: 12px; cursor: pointer; }
+.feedback-reason-list button:hover { background: var(--surface-muted); }
+
+/* Feedback admin */
+.feedback-list { margin: 0; padding: 10px; list-style: none; display: grid; gap: 8px; }
+.feedback-item { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-control); display: grid; gap: 8px; }
+.feedback-item-head { display: flex; justify-content: space-between; align-items: center; }
+.feedback-reason { font-size: 11px; font-weight: 650; color: var(--text-primary); background: var(--surface-muted); padding: 3px 8px; border-radius: 999px; }
+.feedback-meta { font-size: 11px; color: var(--text-muted); }
+.feedback-question { margin: 0; font-size: 13px; font-weight: 650; color: var(--text-primary); }
+.feedback-answer { margin: 0; font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+.feedback-item-foot { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-muted); }
+.dialog-description { margin: 0 0 12px; font-size: 12px; color: var(--text-secondary); }
+.dialog-field { display: grid; gap: 5px; font-size: 12px; color: var(--text-primary); font-weight: 650; margin-bottom: 12px; }
+.dialog-field select { min-height: 36px; padding: 0 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface-panel); color: var(--text-primary); }
+.dialog-warning { margin: 8px 0 0; font-size: 11px; color: var(--text-muted); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }

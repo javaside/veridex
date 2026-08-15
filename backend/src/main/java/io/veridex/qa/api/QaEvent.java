@@ -22,7 +22,7 @@ public sealed interface QaEvent {
     record CitationAvailable(List<CitationView> citations) implements QaEvent {
     }
 
-    record AnswerCompleted() implements QaEvent {
+    record AnswerCompleted(UUID runId) implements QaEvent {
     }
 
     record AnswerRefused(String reason, String message) implements QaEvent {

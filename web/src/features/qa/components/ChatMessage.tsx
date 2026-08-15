@@ -1,11 +1,13 @@
+import { ThumbsDown, ThumbsUp } from '@phosphor-icons/react'
 import type { Citation } from '../qaApi'
 
 /** 把文本中的 [n] 引用编号渲染为可点击 chip（点击由父组件处理，n 为 0 时不可点）。 */
-export function ChatMessage({ role, content, citations, onCitationClick }: {
+export function ChatMessage({ role, content, citations, onCitationClick, onFeedback }: {
   role: 'USER' | 'ASSISTANT' | 'SYSTEM' | 'ERROR'
   content: string
   citations?: Citation[]
   onCitationClick?: (citation: Citation) => void
+  onFeedback?: (rating: 'UP' | 'DOWN') => void
 }) {
   if (role === 'USER') {
     return <div className="chat-message chat-user"><div className="chat-bubble">{content}</div></div>
@@ -49,6 +51,12 @@ export function ChatMessage({ role, content, citations, onCitationClick }: {
               [{citation.citationIndex}] {citation.sourceLocation ?? '来源'}
             </button>
           ))}
+        </div>
+      )}
+      {onFeedback && (
+        <div className="chat-feedback">
+          <button type="button" aria-label="有帮助" onClick={() => onFeedback('UP')}><ThumbsUp size={15} aria-hidden="true" /></button>
+          <button type="button" aria-label="有问题" onClick={() => onFeedback('DOWN')}><ThumbsDown size={15} aria-hidden="true" /></button>
         </div>
       )}
     </div>
