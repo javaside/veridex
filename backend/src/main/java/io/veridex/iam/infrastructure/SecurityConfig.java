@@ -1,5 +1,6 @@
 package io.veridex.iam.infrastructure;
 
+import io.veridex.iam.application.ApiKeyService;
 import io.veridex.iam.domain.PlatformUser;
 import java.util.Map;
 import org.springframework.context.annotation.Bean;
@@ -11,6 +12,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import tools.jackson.databind.json.JsonMapper;
 
 @Configuration
@@ -18,9 +20,14 @@ import tools.jackson.databind.json.JsonMapper;
 public class SecurityConfig {
 
     private final JsonMapper jsonMapper;
+    private final ApiKeyService apiKeyService;
+    private final ApiKeyScopeAuthorizationManager scopeAuthorizationManager;
 
-    public SecurityConfig(JsonMapper jsonMapper) {
+    public SecurityConfig(JsonMapper jsonMapper, ApiKeyService apiKeyService,
+                          ApiKeyScopeAuthorizationManager scopeAuthorizationManager) {
         this.jsonMapper = jsonMapper;
+        this.apiKeyService = apiKeyService;
+        this.scopeAuthorizationManager = scopeAuthorizationManager;
     }
 
     @Bean
@@ -28,10 +35,13 @@ public class SecurityConfig {
         http
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/actuator/**").permitAll()
-                .requestMatchers("/api/auth/login", "/api/auth/logout").permitAll()
+                .requestMatchers("/actuator/**").access(scopeAuthorizationManager::authorizeNonApiKey)
+                .requestMatchers("/api/auth/login", "/api/auth/logout")
+                    .access(scopeAuthorizationManager::authorizeNonApiKey)
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .anyRequest().authenticated())
+                .requestMatchers("/v3/api-docs/**").access(scopeAuthorizationManager::authorizeAdminSession)
+                .anyRequest().access(scopeAuthorizationManager))
+            .addFilterBefore(new ApiKeyAuthFilter(apiKeyService), UsernamePasswordAuthenticationFilter.class)
             .formLogin(form -> form
                 .loginProcessingUrl("/api/auth/login")
                 .successHandler((req, res, auth) -> {

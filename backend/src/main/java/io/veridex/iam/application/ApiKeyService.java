@@ -82,16 +82,12 @@ public class ApiKeyService {
         if (scopes == null || scopes.isEmpty()) {
             throw new IllegalArgumentException("scopes must not be empty");
         }
-        StringBuilder csv = new StringBuilder();
-        for (String s : scopes) {
-            String normalized = s.trim().toUpperCase();
-            ApiKeyScope.valueOf(normalized); // 未知值抛 IllegalArgumentException
-            if (!csv.isEmpty()) {
-                csv.append(',');
-            }
-            csv.append(normalized);
-        }
-        return csv.toString();
+        return scopes.stream()
+                .map(ApiKeyScope::fromValue)
+                .distinct()
+                .map(ApiKeyScope::value)
+                .reduce((left, right) -> left + "," + right)
+                .orElseThrow();
     }
 
     private static String validateName(String name) {
@@ -102,8 +98,11 @@ public class ApiKeyService {
     }
 
     private static io.veridex.iam.api.ApiKeyView toView(ApiKey key) {
+        List<String> scopes = ApiKeyScope.parse(key.getScopes()).stream()
+                .map(ApiKeyScope::value)
+                .toList();
         return new io.veridex.iam.api.ApiKeyView(
                 key.getId(), key.getUserId(), key.getName(), key.getTokenPrefix(),
-                List.of(key.getScopes().split(",")), key.getCreatedAt(), key.getRevokedAt(), key.getLastUsedAt());
+                scopes, key.getCreatedAt(), key.getRevokedAt(), key.getLastUsedAt());
     }
 }

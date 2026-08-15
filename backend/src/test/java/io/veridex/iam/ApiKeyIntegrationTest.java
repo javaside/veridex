@@ -21,7 +21,10 @@ class ApiKeyIntegrationTest extends PostgresIntegrationTest {
 
     private void login(String username) {
         rest.post().uri("/api/auth/login?username=" + username + "&password=veridex")
-                .exchange().expectStatus().isOk();
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.username").isEqualTo(username);
     }
 
     @Test
@@ -34,7 +37,7 @@ class ApiKeyIntegrationTest extends PostgresIntegrationTest {
                 .expectStatus().isCreated()
                 .expectBody()
                 .jsonPath("$.token").value(v -> assertThat((String) v).startsWith("vd_"))
-                .jsonPath("$.scopes[0]").isEqualTo("QA");
+                .jsonPath("$.scopes[0]").isEqualTo("qa");
 
         rest.get().uri("/api/iam/keys")
                 .exchange()
@@ -59,9 +62,16 @@ class ApiKeyIntegrationTest extends PostgresIntegrationTest {
     @Test
     void employeeIsForbiddenFromKeyManagement() {
         login("employee");
-        rest.get().uri("/api/iam/keys").exchange().expectStatus().isForbidden();
+        rest.get().uri("/api/iam/keys")
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody()
+                .jsonPath("$.status").isEqualTo(403);
         rest.post().uri("/api/iam/keys")
                 .body(new io.veridex.iam.api.CreateKeyRequest("x", null, List.of("qa")))
-                .exchange().expectStatus().isForbidden();
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody()
+                .jsonPath("$.status").isEqualTo(403);
     }
 }

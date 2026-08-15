@@ -1,8 +1,7 @@
 package io.veridex.iam;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import io.veridex.support.PostgresIntegrationTest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
@@ -12,6 +11,11 @@ import org.springframework.test.web.servlet.client.RestTestClient;
 class AuthFlowIntegrationTest extends PostgresIntegrationTest {
 
     @Autowired RestTestClient rest;
+
+    @BeforeEach
+    void clearSession() {
+        rest.post().uri("/api/auth/logout").exchange().expectStatus().isNoContent();
+    }
 
     @Test
     void loginWithSeedUserEstablishesSessionAndMeReturnsProfile() {

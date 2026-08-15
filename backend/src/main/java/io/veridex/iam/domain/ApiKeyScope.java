@@ -9,33 +9,52 @@ import java.util.Set;
  * 对所有 scope 均不允许 —— key 只能访问业务命名空间。
  */
 public enum ApiKeyScope {
-    QA(List.of("/api/qa")) {
+    QA("qa", List.of("/api/qa")) {
         @Override public boolean allows(String method, String path) { return matches(path); }
     },
-    KNOWLEDGE_READ(List.of("/api/knowledge-bases", "/api/documents")) {
+    KNOWLEDGE_READ("knowledge:read", List.of("/api/knowledge-bases", "/api/documents")) {
         @Override public boolean allows(String method, String path) {
             return "GET".equalsIgnoreCase(method) && matches(path);
         }
     },
-    KNOWLEDGE_WRITE(List.of("/api/knowledge-bases", "/api/documents")) {
+    KNOWLEDGE_WRITE("knowledge:write", List.of("/api/knowledge-bases", "/api/documents")) {
         @Override public boolean allows(String method, String path) {
             return !"GET".equalsIgnoreCase(method) && !"OPTIONS".equalsIgnoreCase(method) && matches(path);
         }
     },
-    CONFIGURATION(List.of("/api/configuration")) {
+    CONFIGURATION("configuration", List.of("/api/configuration")) {
         @Override public boolean allows(String method, String path) { return matches(path); }
     },
-    EVALUATION(List.of("/api/evaluation")) {
+    EVALUATION("evaluation", List.of("/api/evaluation")) {
         @Override public boolean allows(String method, String path) { return matches(path); }
     },
-    FEEDBACK(List.of("/api/feedback")) {
+    FEEDBACK("feedback", List.of("/api/feedback")) {
         @Override public boolean allows(String method, String path) { return matches(path); }
     };
 
+    private final String value;
     private final List<String> prefixes;
 
-    ApiKeyScope(List<String> prefixes) {
+    ApiKeyScope(String value, List<String> prefixes) {
+        this.value = value;
         this.prefixes = prefixes;
+    }
+
+    public String value() {
+        return value;
+    }
+
+    public static ApiKeyScope fromValue(String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("scope must not be null");
+        }
+        String normalized = value.trim();
+        for (ApiKeyScope scope : values()) {
+            if (scope.value.equalsIgnoreCase(normalized) || scope.name().equalsIgnoreCase(normalized)) {
+                return scope;
+            }
+        }
+        throw new IllegalArgumentException("unknown api key scope: " + value);
     }
 
     protected boolean matches(String path) {
@@ -51,7 +70,7 @@ public enum ApiKeyScope {
         }
         Set<ApiKeyScope> set = new LinkedHashSet<>();
         for (String part : csv.split(",")) {
-            set.add(ApiKeyScope.valueOf(part.trim()));
+            set.add(fromValue(part));
         }
         return set;
     }

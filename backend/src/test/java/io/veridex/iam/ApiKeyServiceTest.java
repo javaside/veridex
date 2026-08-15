@@ -77,7 +77,7 @@ class ApiKeyServiceTest {
         ApiKeyCreatedView created = service.createFor(ACTOR_ADMIN, "PLATFORM_ADMIN", ACTOR_ADMIN, "集成用", List.of("qa"));
 
         assertThat(created.token()).startsWith("vd_");
-        assertThat(created.scopes()).isEqualTo(List.of("QA"));
+        assertThat(created.scopes()).isEqualTo(List.of("qa"));
         verify(repo).save(argThat((ApiKey k) ->
                 k.getTokenHash().length() == 64
                         && !k.getTokenHash().equals(created.token())
