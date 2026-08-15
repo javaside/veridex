@@ -4,6 +4,7 @@ import io.veridex.iam.api.CurrentActor;
 import io.veridex.knowledge.application.DocumentService;
 import io.veridex.knowledge.domain.Document;
 import io.veridex.knowledge.domain.DocumentVersion;
+import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
@@ -31,7 +32,8 @@ public class DocumentController {
 
     @PostMapping
     public ResponseEntity<DocumentVersionView> upload(@PathVariable UUID kbId,
-                                                      @RequestParam("file") MultipartFile file)
+                                                      @RequestParam("file") MultipartFile file,
+                                                      HttpServletRequest request)
             throws IOException {
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().build();
@@ -39,7 +41,7 @@ public class DocumentController {
         String filename = file.getOriginalFilename() == null ? "untitled" : file.getOriginalFilename();
         String contentType = file.getContentType() == null ? "application/octet-stream" : file.getContentType();
         DocumentVersion version = uploadHandler.upload(CurrentActor.id(), kbId, filename, contentType,
-                file.getBytes());
+                file.getBytes(), request);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(DocumentVersionView.from(version));
     }
 

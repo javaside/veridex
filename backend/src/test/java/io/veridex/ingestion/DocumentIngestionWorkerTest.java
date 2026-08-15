@@ -96,6 +96,8 @@ class DocumentIngestionWorkerTest {
         verify(storage).put(eq(objectKey + ".chunks.json"), any(), eq("application/json"), ArgumentMatchers.anyLong());
         verify(documents).setParsedObjectKey(versionId, objectKey + ".parsed.json");
         verify(documents).markReady(versionId, 1);
+        verify(audit).record(eq(null), eq("ingestion.completed"), eq("document_version"), eq(versionId),
+                eq(null), eq(java.util.Map.of("chunkCount", 1, "knowledgeBaseId", knowledgeBaseId.toString())));
         verify(channel).basicAck(1L, false);
     }
 

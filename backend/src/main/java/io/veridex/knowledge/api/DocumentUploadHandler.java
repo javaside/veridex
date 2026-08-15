@@ -4,7 +4,9 @@ import io.veridex.audit.api.AuditRecorder;
 import io.veridex.knowledge.application.DocumentService;
 import io.veridex.knowledge.api.ObjectStorage;
 import io.veridex.knowledge.domain.DocumentVersion;
+import io.veridex.shared.infrastructure.RequestIds;
 import io.veridex.shared.outbox.OutboxWriter;
+import jakarta.servlet.http.HttpServletRequest;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.Map;
@@ -30,7 +32,7 @@ public class DocumentUploadHandler {
 
     @Transactional
     public DocumentVersion upload(UUID actorId, UUID kbId, String filename, String contentType,
-                                  byte[] content) {
+                                  byte[] content, HttpServletRequest request) {
         // content 来自 MultipartFile.getBytes()（≤50MB，内存可容纳），保证 sha256 与 put 用同一份字节
         String sha256 = sha256Hex(content);
         DocumentVersion version = documents.upload(actorId, kbId, filename, contentType, content.length, sha256);
@@ -43,7 +45,7 @@ public class DocumentUploadHandler {
                         "objectKey", version.getObjectKey(),
                         "filename", filename,
                         "contentType", contentType));
-        audit.record(actorId, "document.upload", "document_version", version.getId(), null,
+        audit.record(actorId, "document.upload", "document_version", version.getId(), RequestIds.current(request),
                 Map.of("knowledgeBaseId", kbId.toString(), "filename", filename));
         return version;
     }
