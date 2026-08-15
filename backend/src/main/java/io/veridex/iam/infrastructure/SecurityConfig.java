@@ -42,7 +42,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/login", "/api/auth/logout")
                     .access(scopeAuthorizationManager::authorizeNonApiKey)
                 .requestMatchers(HttpMethod.OPTIONS, "/**").access(scopeAuthorizationManager::authorizeOptions)
-                .requestMatchers("/v3/api-docs/**").access(scopeAuthorizationManager::authorizeAdminSession)
+                .requestMatchers("/v3/api-docs", "/v3/api-docs.yaml", "/v3/api-docs/**")
+                    .access(scopeAuthorizationManager::authorizeAdminSession)
                 .anyRequest().access(scopeAuthorizationManager))
             .exceptionHandling(exceptions -> exceptions
                 .defaultAuthenticationEntryPointFor(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),

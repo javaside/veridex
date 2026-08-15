@@ -10,6 +10,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
+import org.springframework.http.MediaType;
 import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.servlet.client.RestTestClient;
 import tools.jackson.databind.json.JsonMapper;
@@ -38,10 +39,13 @@ class OpenApiDocsTest extends PostgresIntegrationTest {
         var response = rest.get().uri("/v3/api-docs")
                 .exchange()
                 .expectStatus().isOk()
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
                 .expectBody(String.class)
                 .returnResult();
-        var paths = jsonMapper.readTree(response.getResponseBody()).get("paths");
+        var document = jsonMapper.readTree(response.getResponseBody());
+        var paths = document.get("paths");
 
+        assertThat(document.get("openapi").asText()).startsWith("3.");
         assertThat(paths.propertyNames()).allMatch(path -> path.startsWith("/api/"));
         assertThat(paths.get("/api/qa/ask")).isNotNull();
         assertThat(paths.get("/api/iam/keys")).isNotNull();
@@ -66,10 +70,39 @@ class OpenApiDocsTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void adminSessionSeesOpenApiYaml() {
+        login("admin");
+
+        rest.get().uri("/v3/api-docs.yaml")
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentType("application/vnd.oai.openapi")
+                .expectBody(String.class)
+                .value(body -> assertThat(body)
+                        .contains("openapi: 3.")
+                        .contains("/api/qa/ask:"));
+    }
+
+    @Test
+    void employeeSessionIsForbiddenFromOpenApiYaml() {
+        login("employee");
+
+        rest.get().uri("/v3/api-docs.yaml")
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody().consumeWith(response -> {});
+    }
+
+    @Test
     void adminApiKeyIsForbiddenWithInsufficientScope() {
         String token = apiKeys.createFor(ADMIN, "PLATFORM_ADMIN", ADMIN, "OpenAPI test", List.of("qa")).token();
 
-        rest.get().uri("/v3/api-docs")
+        assertApiKeyCannotAccessDocs(token, "/v3/api-docs");
+        assertApiKeyCannotAccessDocs(token, "/v3/api-docs.yaml");
+    }
+
+    private void assertApiKeyCannotAccessDocs(String token, String path) {
+        rest.get().uri(path)
                 .headers(headers -> headers.setBearerAuth(token))
                 .exchange()
                 .expectStatus().isForbidden()
