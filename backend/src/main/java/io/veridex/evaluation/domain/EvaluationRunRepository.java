@@ -5,5 +5,6 @@ import java.util.UUID;
 import org.springframework.data.repository.CrudRepository;
 
 public interface EvaluationRunRepository extends CrudRepository<EvaluationRun, UUID> {
+    List<EvaluationRun> findAllByOrderByCreatedAtDesc();
     List<EvaluationRun> findByDatasetIdOrderByCreatedAtDesc(UUID datasetId);
 }
