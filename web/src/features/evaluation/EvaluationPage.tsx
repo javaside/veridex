@@ -5,6 +5,7 @@ import { Toast } from '../../components/Toast'
 import { evaluationApi, type DatasetView, type VersionDetail, type VersionView } from './evaluationApi'
 import { CaseWorkspace } from './components/CaseWorkspace'
 import { DatasetList } from './components/DatasetList'
+import { RunPanel } from './components/RunPanel'
 
 export function EvaluationPage() {
   const [datasets, setDatasets] = useState<DatasetView[]>([])
@@ -114,6 +115,7 @@ export function EvaluationPage() {
                   <ol>{versionDetail.cases.map((c) => <li key={c.position}><strong>{c.question}</strong><small>{c.expectedBehavior}</small></li>)}</ol>
                 </div>
               )}
+              <RunPanel datasetId={selected.id} versions={versions} onNotify={(type, message) => setToast({ type, message })} />
             </>
           ) : (
             <div className="panel state-block workspace-empty"><FolderOpen size={34} aria-hidden="true" /><h2>选择一个数据集</h2><p>从左侧选择数据集，或创建第一个数据集开始管理用例。</p></div>
