@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.time.Clock;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -27,7 +26,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private final RateLimitProperties properties;
     private final Clock clock;
-    private final AtomicReference<Window> currentWindow = new AtomicReference<>();
+    private Window currentWindow;
 
     @Autowired
     public RateLimitFilter(RateLimitProperties properties) {
@@ -48,9 +47,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
-        long epochSecond = clock.instant().getEpochSecond();
-        long minute = epochSecond / 60;
-        Window window = windowFor(minute);
+        SampledWindow sampled = sampleWindow();
+        long epochSecond = sampled.epochSecond();
+        Window window = sampled.window();
         int count = window.counts().computeIfAbsent(userKey(), ignored -> new AtomicInteger()).incrementAndGet();
         if (count > limit) {
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
@@ -63,17 +62,13 @@ public class RateLimitFilter extends OncePerRequestFilter {
         chain.doFilter(request, response);
     }
 
-    private Window windowFor(long minute) {
-        while (true) {
-            Window existing = currentWindow.get();
-            if (existing != null && existing.minute() >= minute) {
-                return existing;
-            }
-            Window replacement = new Window(minute, new ConcurrentHashMap<>());
-            if (currentWindow.compareAndSet(existing, replacement)) {
-                return replacement;
-            }
+    private synchronized SampledWindow sampleWindow() {
+        long epochSecond = clock.instant().getEpochSecond();
+        long minute = epochSecond / 60;
+        if (currentWindow == null || currentWindow.minute() < minute) {
+            currentWindow = new Window(minute, new ConcurrentHashMap<>());
         }
+        return new SampledWindow(epochSecond, currentWindow);
     }
 
     private String userKey() {
@@ -84,6 +79,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
         String name = authentication.getName();
         return name == null || name.isBlank() ? ANONYMOUS_KEY : name;
+    }
+
+    private record SampledWindow(long epochSecond, Window window) {
     }
 
     private record Window(long minute, ConcurrentHashMap<String, AtomicInteger> counts) {

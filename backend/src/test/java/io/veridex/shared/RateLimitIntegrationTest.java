@@ -3,6 +3,7 @@ package io.veridex.shared;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.veridex.VeridexApplication;
+import io.veridex.iam.application.ApiKeyService;
 import io.veridex.shared.infrastructure.RequestIds;
 import io.veridex.support.PostgresIntegrationTest;
 import java.net.CookieManager;
@@ -11,7 +12,10 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
@@ -20,7 +24,28 @@ import org.springframework.boot.test.web.server.LocalServerPort;
         properties = {"spring.jpa.hibernate.ddl-auto=validate", "veridex.api.rate-limit-per-minute=3"})
 class RateLimitIntegrationTest extends PostgresIntegrationTest {
 
+    private static final UUID ADMIN = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
     @LocalServerPort int port;
+    @Autowired ApiKeyService apiKeys;
+
+    @Test
+    void sessionAndBearerApiKeyForSameUsernameShareOneBucket() throws Exception {
+        String token = apiKeys.createFor(ADMIN, "PLATFORM_ADMIN", ADMIN, "rate-limit-test", List.of("qa")).token();
+        HttpClient session = sessionClient();
+        assertThat(session.send(post("/api/auth/login?username=admin&password=veridex"),
+                HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(200);
+
+        assertThat(session.send(get("/api/qa/conversations"), HttpResponse.BodyHandlers.ofString()).statusCode())
+                .isEqualTo(200);
+        assertThat(session.send(get("/api/qa/conversations"), HttpResponse.BodyHandlers.ofString()).statusCode())
+                .isEqualTo(200);
+
+        assertThat(HttpClient.newHttpClient().send(bearerGet("/api/qa/conversations", token),
+                HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(200);
+        assertThat(HttpClient.newHttpClient().send(bearerGet("/api/qa/conversations", token),
+                HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(429);
+    }
 
     @Test
     void fourthAuthenticatedRequestWithinMinuteGetsRateLimitResponse() throws Exception {
@@ -58,6 +83,13 @@ class RateLimitIntegrationTest extends PostgresIntegrationTest {
 
     private HttpRequest get(String path) {
         return HttpRequest.newBuilder(URI.create(baseUri() + path)).GET().build();
+    }
+
+    private HttpRequest bearerGet(String path, String token) {
+        return HttpRequest.newBuilder(URI.create(baseUri() + path))
+                .header("Authorization", "Bearer " + token)
+                .GET()
+                .build();
     }
 
     private String baseUri() {

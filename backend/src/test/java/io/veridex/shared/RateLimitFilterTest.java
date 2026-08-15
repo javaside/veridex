@@ -12,7 +12,11 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -54,7 +58,7 @@ class RateLimitFilterTest {
     }
 
     @Test
-    void countsAuthenticationTypesWithSameNameInOneUserBucket() throws Exception {
+    void countsSameUsernameInOneUserBucket() throws Exception {
         RateLimitFilter filter = filterWithLimit(1);
         authenticateAs("employee");
         assertThat(run(filter).getStatus()).isEqualTo(200);
@@ -86,6 +90,34 @@ class RateLimitFilterTest {
 
         clock.setInstant(Instant.parse("2026-08-16T00:01:00Z"));
         assertThat(run(filter).getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    void assignsDelayedOldMinuteRequestToItsSampledWindowWithoutRollingBack() throws Exception {
+        InterleavingClock clock = new InterleavingClock(
+                Instant.parse("2026-08-16T00:00:59Z"), Instant.parse("2026-08-16T00:01:00Z"));
+        RateLimitProperties properties = new RateLimitProperties();
+        properties.setPerMinute(1);
+        RateLimitFilter filter = new RateLimitFilter(properties, clock);
+
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var oldMinuteRequest = executor.submit(() -> runAs(filter, "employee").getStatus());
+            clock.awaitOldMinuteSampled();
+            AtomicReference<Thread> newMinuteThread = new AtomicReference<>();
+            var newMinuteRequest = executor.submit(() -> {
+                newMinuteThread.set(Thread.currentThread());
+                return runAs(filter, "employee").getStatus();
+            });
+
+            clock.awaitSecondRequestReadyOrClockCalled(newMinuteThread);
+            clock.releaseOldMinuteRequest();
+            assertThat(newMinuteRequest.get(5, TimeUnit.SECONDS)).isEqualTo(200);
+            assertThat(oldMinuteRequest.get(5, TimeUnit.SECONDS)).isEqualTo(200);
+
+            assertThat(runAs(filter, "employee").getStatus()).isEqualTo(429);
+        } finally {
+            clock.releaseOldMinuteRequest();
+        }
     }
 
     @Test
@@ -126,6 +158,16 @@ class RateLimitFilterTest {
         return response;
     }
 
+    private MockHttpServletResponse runAs(RateLimitFilter filter, String username)
+            throws ServletException, IOException {
+        authenticateAs(username);
+        try {
+            return run(filter);
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+    }
+
     private void authenticateAs(String username) {
         var token = new TestingAuthenticationToken(username, "credentials");
         token.setAuthenticated(true);
@@ -137,6 +179,67 @@ class RateLimitFilterTest {
             return result.get();
         } catch (Exception exception) {
             throw new AssertionError(exception);
+        }
+    }
+
+    private static final class InterleavingClock extends Clock {
+
+        private final Instant oldMinute;
+        private final Instant newMinute;
+        private final AtomicInteger calls = new AtomicInteger();
+        private final CountDownLatch oldMinuteSampled = new CountDownLatch(1);
+        private final CountDownLatch secondClockCall = new CountDownLatch(1);
+        private final CountDownLatch releaseOldMinute = new CountDownLatch(1);
+
+        private InterleavingClock(Instant oldMinute, Instant newMinute) {
+            this.oldMinute = oldMinute;
+            this.newMinute = newMinute;
+        }
+
+        void awaitOldMinuteSampled() throws InterruptedException {
+            assertThat(oldMinuteSampled.await(5, TimeUnit.SECONDS)).isTrue();
+        }
+
+        void awaitSecondRequestReadyOrClockCalled(AtomicReference<Thread> requestThread) throws InterruptedException {
+            while (secondClockCall.getCount() != 0) {
+                Thread thread = requestThread.get();
+                if (thread != null && thread.getState() == Thread.State.BLOCKED) {
+                    return;
+                }
+                Thread.onSpinWait();
+            }
+        }
+
+        void releaseOldMinuteRequest() {
+            releaseOldMinute.countDown();
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            if (calls.getAndIncrement() != 0) {
+                secondClockCall.countDown();
+                return newMinute;
+            }
+            oldMinuteSampled.countDown();
+            try {
+                if (!releaseOldMinute.await(5, TimeUnit.SECONDS)) {
+                    throw new AssertionError("old-minute request was not released");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(exception);
+            }
+            return oldMinute;
         }
     }
 
