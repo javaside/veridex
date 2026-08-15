@@ -104,6 +104,28 @@ class ApiKeyIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void platformAdminCannotCreateKeyForUnknownTargetUser() {
+        login("admin");
+        UUID unknownUser = UUID.randomUUID();
+        String keyName = "unknown-owner-" + UUID.randomUUID();
+
+        rest.post().uri("/api/iam/keys")
+                .body(new io.veridex.iam.api.CreateKeyRequest(keyName, unknownUser.toString(), List.of("qa")))
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectHeader().contentTypeCompatibleWith("application/problem+json")
+                .expectBody()
+                .jsonPath("$.status").isEqualTo(400)
+                .jsonPath("$.detail").isEqualTo("target user not found: " + unknownUser);
+
+        rest.get().uri("/api/iam/keys")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$[*].name").value(values -> assertThat(values.toString()).doesNotContain(keyName));
+    }
+
+    @Test
     void createRejectsNonCanonicalScopeNames() {
         login("admin");
 

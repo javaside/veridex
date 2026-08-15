@@ -45,6 +45,11 @@ export function CreateKeyDialog({ user, onDone, onCancel, onNotify }: {
     escapeDisabled: submitting || createdToken !== null,
   })
 
+  const normalizedTarget = targetUserId.trim()
+  const ownerDescription = normalizedTarget
+    ? `为目标用户 ${normalizedTarget} 签发凭据。`
+    : '为当前管理员签发凭据。'
+
   const toggleScope = (scope: ApiKeyScope) => {
     setScopes((current) => current.includes(scope) ? current.filter((value) => value !== scope) : [...current, scope])
   }
@@ -52,7 +57,6 @@ export function CreateKeyDialog({ user, onDone, onCancel, onNotify }: {
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!name.trim() || scopes.length === 0 || submitting) return
-    const normalizedTarget = targetUserId.trim()
     if (normalizedTarget && !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(normalizedTarget)) {
       setError('目标用户 ID 必须是有效的 UUID')
       return
@@ -102,7 +106,7 @@ export function CreateKeyDialog({ user, onDone, onCancel, onNotify }: {
       <form ref={dialogRef as React.RefObject<HTMLFormElement>} className="confirm-dialog create-key-dialog" role="dialog" aria-modal="true" aria-label="创建 API key" tabIndex={-1} onSubmit={(event) => void submit(event)}>
         <span className="dialog-key-icon"><Key size={21} aria-hidden="true" /></span>
         <h3>创建 API key</h3>
-        <p className="dialog-description">为当前管理员签发凭据。按最小权限原则选择所需作用域。</p>
+        <p className="dialog-description">{ownerDescription}按最小权限原则选择所需作用域。</p>
         {error && <p className="row-error" role="alert">{error}</p>}
         <label className="dialog-field" htmlFor="api-key-name">名称</label>
         <input ref={nameRef} id="api-key-name" className="dialog-input" value={name} maxLength={200} disabled={submitting} onChange={(event) => setName(event.target.value)} placeholder="如：数据同步脚本" />

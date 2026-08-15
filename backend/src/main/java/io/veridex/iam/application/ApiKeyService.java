@@ -35,6 +35,9 @@ public class ApiKeyService {
         }
         String validatedScopes = validateScopes(scopes);
         String validatedName = validateName(name);
+        if (!users.existsById(targetUserId)) {
+            throw new IllegalArgumentException("target user not found: " + targetUserId);
+        }
         ApiKeyTokenGenerator.PlainToken plain = generator.issue();
         ApiKey key = new ApiKey(targetUserId, validatedName, plain.hash(), plain.prefix(), validatedScopes);
         apiKeys.save(key);

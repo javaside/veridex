@@ -80,8 +80,10 @@ class ApiKeyServiceTest {
     @Test
     void createHashesTokenAndStoresScopes() {
         ApiKeyRepository repo = mock(ApiKeyRepository.class);
+        PlatformUserRepository users = mock(PlatformUserRepository.class);
         when(repo.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        ApiKeyService service = new ApiKeyService(repo, mock(PlatformUserRepository.class), new ApiKeyTokenGenerator());
+        when(users.existsById(ACTOR_ADMIN)).thenReturn(true);
+        ApiKeyService service = new ApiKeyService(repo, users, new ApiKeyTokenGenerator());
 
         ApiKeyCreatedView created = service.createFor(ACTOR_ADMIN, "PLATFORM_ADMIN", ACTOR_ADMIN, "集成用", List.of("qa"));
 
@@ -94,11 +96,29 @@ class ApiKeyServiceTest {
     }
 
     @Test
+    void createRejectsUnknownTargetUserBeforeIssuingOrSavingToken() {
+        ApiKeyRepository repo = mock(ApiKeyRepository.class);
+        PlatformUserRepository users = mock(PlatformUserRepository.class);
+        ApiKeyTokenGenerator generator = mock(ApiKeyTokenGenerator.class);
+        when(users.existsById(ACTOR_KADMIN)).thenReturn(false);
+        ApiKeyService service = new ApiKeyService(repo, users, generator);
+
+        assertThatThrownBy(() -> service.createFor(
+                ACTOR_ADMIN, "PLATFORM_ADMIN", ACTOR_KADMIN, "delegated", List.of("qa")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("target user not found: " + ACTOR_KADMIN);
+
+        verify(generator, never()).issue();
+        verify(repo, never()).save(any());
+    }
+
+    @Test
     void createAcceptsOnlyExactWireScopeNames() {
         ApiKeyRepository repo = mock(ApiKeyRepository.class);
+        PlatformUserRepository users = mock(PlatformUserRepository.class);
         when(repo.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        ApiKeyService service = new ApiKeyService(repo,
-                mock(PlatformUserRepository.class), new ApiKeyTokenGenerator());
+        when(users.existsById(ACTOR_ADMIN)).thenReturn(true);
+        ApiKeyService service = new ApiKeyService(repo, users, new ApiKeyTokenGenerator());
 
         ApiKeyCreatedView created = service.createFor(ACTOR_ADMIN, "PLATFORM_ADMIN", ACTOR_ADMIN, "x",
                 List.of("qa", "knowledge:read", "knowledge:write", "configuration", "evaluation", "feedback"));

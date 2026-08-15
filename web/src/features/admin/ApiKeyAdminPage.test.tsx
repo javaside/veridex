@@ -105,9 +105,12 @@ test('platform admin can optionally create a key for a valid target user UUID wi
 
   renderAdmin()
   fireEvent.click(await screen.findByRole('button', { name: '创建 API key' }))
+  expect(screen.getByText('为当前管理员签发凭据。按最小权限原则选择所需作用域。')).toBeInTheDocument()
   fireEvent.change(screen.getByLabelText('名称'), { target: { value: ' 新 key ' } })
   const targetUserId = '00000000-0000-0000-0000-000000000099'
   fireEvent.change(screen.getByLabelText('目标用户 ID（可选）'), { target: { value: targetUserId } })
+  expect(screen.getByText(`为目标用户 ${targetUserId} 签发凭据。按最小权限原则选择所需作用域。`)).toBeInTheDocument()
+  expect(screen.queryByText('为当前管理员签发凭据。按最小权限原则选择所需作用域。')).not.toBeInTheDocument()
   for (const scope of ['qa', 'knowledge:read', 'knowledge:write', 'configuration', 'evaluation', 'feedback']) {
     fireEvent.click(screen.getByLabelText(new RegExp(scope.replace(':', '\\:'))))
   }

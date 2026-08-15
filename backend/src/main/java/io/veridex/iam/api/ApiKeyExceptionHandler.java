@@ -5,16 +5,9 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import tools.jackson.databind.ObjectMapper;
 
 @RestControllerAdvice
 public class ApiKeyExceptionHandler {
-
-    private final ObjectMapper objectMapper;
-
-    public ApiKeyExceptionHandler(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-    }
 
     @ExceptionHandler(SecurityException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
