@@ -1,5 +1,11 @@
 package io.veridex.shared.outbox;
 
+import io.veridex.shared.infrastructure.messaging.RabbitTopology;
+import io.veridex.shared.observability.OutboxObservability;
+import io.veridex.shared.observability.RabbitContextPropagation;
+import io.veridex.shared.observability.TelemetryErrorCode;
+import io.veridex.shared.observability.TelemetryOutcome;
+import io.veridex.shared.observability.TelemetryTag;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.slf4j.Logger;
@@ -8,7 +14,6 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
-import tools.jackson.databind.json.JsonMapper;
 
 @Component
 public class OutboxPublisher {
@@ -17,31 +22,50 @@ public class OutboxPublisher {
 
     private final OutboxEventRepository repository;
     private final RabbitTemplate rabbit;
-    private final JsonMapper objectMapper;
+    private final OutboxObservability observability;
 
-    public OutboxPublisher(OutboxEventRepository repository, RabbitTemplate rabbit, JsonMapper objectMapper) {
+    public OutboxPublisher(OutboxEventRepository repository, RabbitTemplate rabbit,
+                           OutboxObservability observability) {
         this.repository = repository;
         this.rabbit = rabbit;
-        this.objectMapper = objectMapper;
+        this.observability = observability;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void publishPending(OutboxCommitEvent event) {
         List<OutboxEventEntity> pending = repository.findUnpublished();
         for (OutboxEventEntity outboxEvent : pending) {
+            var observation = observability.startPublish();
             try {
-                // payload 原样透传（调用方已序列化为合法 JSON 对象文本）
+                byte[] payload = outboxEvent.getPayload().getBytes(StandardCharsets.UTF_8);
                 rabbit.convertAndSend(
-                        io.veridex.shared.infrastructure.messaging.RabbitTopology.INGESTION_EXCHANGE,
+                        RabbitTopology.INGESTION_EXCHANGE,
                         routingKeyFor(outboxEvent.getEventType()),
-                        outboxEvent.getPayload().getBytes(StandardCharsets.UTF_8));
+                        payload,
+                        message -> {
+                            RabbitContextPropagation.writeHeaders(outboxEvent.getPropagationContext(),
+                                    outboxEvent.getId(), message.getMessageProperties());
+                            return message;
+                        });
                 outboxEvent.markPublished();
+                observation.success(TelemetryTag.outboxOutcome(TelemetryOutcome.Outbox.SUCCESS));
             } catch (Exception e) {
-                log.warn("failed to publish outbox event {}: {}", outboxEvent.getId(), e.getMessage());
-                outboxEvent.recordFailure(e.getMessage());
+                log.warn("outbox publish failed; error_code=outbox_publish_failed");
+                outboxEvent.recordFailure(TelemetryErrorCode.OUTBOX_PUBLISH_FAILED.wireValue());
+                observability.recordPublishFailure();
+                observation.failure(TelemetryErrorCode.OUTBOX_PUBLISH_FAILED);
             } finally {
-                repository.save(outboxEvent);
+                observation.close();
+                saveEventState(outboxEvent);
             }
+        }
+    }
+
+    private void saveEventState(OutboxEventEntity event) {
+        try {
+            repository.save(event);
+        } catch (RuntimeException ignored) {
+            log.warn("outbox state persistence failed; error_code=outbox_state_persist_failed");
         }
     }
 

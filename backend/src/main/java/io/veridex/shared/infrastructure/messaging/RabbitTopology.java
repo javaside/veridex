@@ -1,10 +1,15 @@
 package io.veridex.shared.infrastructure.messaging;
 
+import io.veridex.shared.observability.RabbitContextPropagation;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
+import org.springframework.amqp.rabbit.config.ContainerCustomizer;
+import org.springframework.amqp.rabbit.listener.DirectMessageListenerContainer;
+import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
+import org.springframework.boot.amqp.autoconfigure.RabbitTemplateCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -16,6 +21,27 @@ public class RabbitTopology {
     public static final String INGESTION_ROUTING_KEY = "document.ingest";
     public static final String DLX = "veridex.dlx";
     public static final String DLQ = "ingestion.document.dlq";
+
+    @Bean
+    RabbitTemplateCustomizer rabbitTemplateObservations() {
+        return template -> {
+            template.setObservationEnabled(true);
+            template.addBeforePublishPostProcessors(message -> {
+                RabbitContextPropagation.restorePersistedTraceHeaders(message.getMessageProperties());
+                return message;
+            });
+        };
+    }
+
+    @Bean
+    ContainerCustomizer<SimpleMessageListenerContainer> simpleRabbitListenerObservations() {
+        return container -> container.setObservationEnabled(true);
+    }
+
+    @Bean
+    ContainerCustomizer<DirectMessageListenerContainer> directRabbitListenerObservations() {
+        return container -> container.setObservationEnabled(true);
+    }
 
     @Bean
     DirectExchange ingestionExchange() {

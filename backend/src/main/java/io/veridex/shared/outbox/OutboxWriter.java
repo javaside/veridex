@@ -1,5 +1,6 @@
 package io.veridex.shared.outbox;
 
+import io.veridex.shared.observability.RabbitContextPropagation;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
@@ -12,19 +13,23 @@ public class OutboxWriter {
     private final OutboxEventRepository repository;
     private final JsonMapper objectMapper;
     private final ApplicationEventPublisher events;
+    private final RabbitContextPropagation contextPropagation;
 
     public OutboxWriter(OutboxEventRepository repository, JsonMapper objectMapper,
-                        ApplicationEventPublisher events) {
+                        ApplicationEventPublisher events, RabbitContextPropagation contextPropagation) {
         this.repository = repository;
         this.objectMapper = objectMapper;
         this.events = events;
+        this.contextPropagation = contextPropagation;
     }
 
     @Transactional
     public void record(String aggregateType, UUID aggregateId, String eventType, Object payload) {
         try {
             String json = objectMapper.writeValueAsString(payload);
-            repository.save(new OutboxEventEntity(aggregateType, aggregateId, eventType, json));
+            OutboxEventEntity outboxEvent = new OutboxEventEntity(aggregateType, aggregateId, eventType, json);
+            outboxEvent.setPropagationContext(contextPropagation.captureCurrent());
+            repository.save(outboxEvent);
         } catch (Exception e) {
             throw new IllegalArgumentException("cannot serialize outbox payload for " + eventType, e);
         }

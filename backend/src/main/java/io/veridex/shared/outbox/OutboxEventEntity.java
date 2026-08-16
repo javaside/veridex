@@ -1,5 +1,6 @@
 package io.veridex.shared.outbox;
 
+import io.veridex.shared.observability.RabbitPropagationContext;
 import java.time.Instant;
 import java.util.UUID;
 import jakarta.persistence.Column;
@@ -72,9 +73,20 @@ public class OutboxEventEntity {
     public String getTraceparent() { return traceparent; }
     public String getTracestate() { return tracestate; }
     public String getRequestId() { return requestId; }
+    public String getLastError() { return lastError; }
+    public RabbitPropagationContext getPropagationContext() {
+        return new RabbitPropagationContext(traceparent, tracestate, requestId);
+    }
+    public void setPropagationContext(RabbitPropagationContext context) {
+        if (context != null) {
+            this.traceparent = context.traceparent();
+            this.tracestate = context.tracestate();
+            this.requestId = context.requestId();
+        }
+    }
     public void markPublished() { this.publishedAt = Instant.now(); }
-    public void recordFailure(String error) {
+    public void recordFailure(String errorCode) {
         this.attempts++;
-        this.lastError = error;
+        this.lastError = errorCode;
     }
 }

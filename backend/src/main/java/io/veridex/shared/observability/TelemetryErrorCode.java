@@ -11,6 +11,7 @@ public enum TelemetryErrorCode {
     MODEL_ERROR("model_error"),
     STORAGE_ERROR("storage_error"),
     PARSE_ERROR("parse_error"),
+    OUTBOX_PUBLISH_FAILED("outbox_publish_failed"),
     UNKNOWN("unknown");
 
     private final String wireValue;
