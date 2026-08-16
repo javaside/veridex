@@ -7,6 +7,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.observation.ObservationRegistry;
 import io.veridex.conversation.api.MessageRecord;
 import io.veridex.generation.api.CitationView;
 import io.veridex.generation.api.GenerationResult;
@@ -17,12 +19,14 @@ import io.veridex.generation.infrastructure.DeterministicChatModel;
 import io.veridex.knowledge.api.DocumentVersionQuery;
 import io.veridex.retrieval.api.EvidencePiece;
 import io.veridex.shared.RefusalReason;
+import io.veridex.shared.observability.VeridexObservability;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -36,6 +40,7 @@ class GenerationServiceImplTest {
     @Mock RefusalPolicy refusalPolicy;
     @Mock CitationValidator citationValidator;
     @Mock DocumentVersionQuery documentVersions;
+    @Spy VeridexObservability observability = new VeridexObservability(new SimpleMeterRegistry(), ObservationRegistry.create());
     @InjectMocks GenerationServiceImpl service;
 
     @Test
@@ -66,6 +71,23 @@ class GenerationServiceImplTest {
         assertThat(result.citations().get(0).validationStatus()).isEqualTo("VALID");
         assertThat(result.citations().get(0).documentId()).isNotNull();
         assertThat(result.model()).isEqualTo("deterministic");
+    }
+
+    @Test
+    void recordsModelFailureWithBoundedTags() {
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        GenerationServiceImpl instrumented = new GenerationServiceImpl(model, refusalPolicy, citationValidator,
+                documentVersions, new VeridexObservability(meters, ObservationRegistry.create()));
+        var evidence = List.of(new EvidencePiece(1, UUID.randomUUID(), UUID.randomUUID(), 0, "t", "1", "text"));
+        when(refusalPolicy.evaluate(eq(evidence), org.mockito.ArgumentMatchers.anyInt())).thenReturn(null);
+        when(model.call(any(Prompt.class))).thenThrow(new RuntimeException("SENSITIVE_MODEL_FAILURE"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> instrumented.generate("SENSITIVE_QUESTION", evidence, List.of()))
+                .isInstanceOf(RuntimeException.class);
+
+        assertThat(meters.find("veridex.generation.model").tag("outcome", "error").timer().count()).isEqualTo(1);
+        assertThat(meters.find("veridex.generation.model").timer().getId().getTags())
+                .allMatch(tag -> !tag.getValue().contains("SENSITIVE") && !tag.getValue().contains(evidence.getFirst().documentVersionId().toString()));
     }
 
     @Test

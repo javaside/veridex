@@ -22,7 +22,10 @@ import io.veridex.retrieval.api.EvidencePiece;
 import io.veridex.retrieval.api.HybridSearchResult;
 import io.veridex.retrieval.api.HybridSearchService;
 import io.veridex.retrieval.api.RankedHitView;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.observation.ObservationRegistry;
 import io.veridex.shared.RefusalReason;
+import io.veridex.shared.observability.VeridexObservability;
 import io.veridex.trace.api.QueryRunRecorder;
 import java.util.List;
 import java.util.Optional;
@@ -31,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -41,6 +45,7 @@ class QuestionAnsweringServiceTest {
     @Mock QueryRunRecorder recorder;
     @Mock HybridSearchService hybridSearch;
     @Mock GenerationService generation;
+    @Spy VeridexObservability observability = new VeridexObservability(new SimpleMeterRegistry(), ObservationRegistry.create());
 
     @InjectMocks QuestionAnsweringServiceImpl service;
 
@@ -114,6 +119,27 @@ class QuestionAnsweringServiceTest {
 
         verify(conversations).create(USER, "请假");
         assertThat(events.get(events.size() - 1)).isInstanceOf(QaEvent.AnswerRefused.class);
+    }
+
+    @Test
+    void recordsCompletedQaRunWithBoundedTags() {
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        QuestionAnsweringServiceImpl instrumented = new QuestionAnsweringServiceImpl(knowledgeScope, conversations,
+                recorder, hybridSearch, generation, new VeridexObservability(meters, ObservationRegistry.create()));
+        when(knowledgeScope.resolve(USER, List.of(KB))).thenReturn(List.of(KB));
+        when(conversations.findOwned(USER, CONV)).thenReturn(Optional.of(new ConversationView(CONV, "t", java.time.Instant.now())));
+        when(recorder.start(any(), eq(CONV), eq(List.of(KB)), any(), any())).thenReturn(UUID.randomUUID());
+        when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假"))
+                .thenReturn(new HybridSearchResult(List.of(), List.of(), List.of()));
+        when(generation.generate(eq("请假"), eq(List.of()), any())).thenReturn(
+                new GenerationResult(null, List.of(), RefusalReason.NO_RELEVANT_EVIDENCE,
+                        "deterministic", 0, 0, 0, null));
+
+        instrumented.ask(USER, new AskRequest("请假", List.of(KB), CONV));
+
+        assertThat(meters.find("veridex.qa.run").tag("outcome", "refused").timer().count()).isEqualTo(1);
+        assertThat(meters.find("veridex.qa.run").timer().getId().getTags())
+                .allMatch(tag -> !tag.getValue().contains("请假") && !tag.getValue().contains(USER.toString()));
     }
 
     @Test

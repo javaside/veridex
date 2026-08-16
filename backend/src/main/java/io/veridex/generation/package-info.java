@@ -1,5 +1,5 @@
 @org.springframework.modulith.ApplicationModule(
         displayName = "Generation",
-        allowedDependencies = {"shared", "retrieval::api", "conversation::api", "knowledge::api"}
+        allowedDependencies = {"shared", "shared::observability", "retrieval::api", "conversation::api", "knowledge::api"}
 )
 package io.veridex.generation;

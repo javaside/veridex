@@ -10,6 +10,11 @@ import io.veridex.retrieval.api.RerankProvider;
 import io.veridex.retrieval.api.RetrievalParameters;
 import io.veridex.retrieval.api.SearchHit;
 import io.veridex.retrieval.infrastructure.OpenSearchRetrievalReader;
+import io.veridex.shared.observability.ObservationName;
+import io.veridex.shared.observability.TelemetryErrorCode;
+import io.veridex.shared.observability.TelemetryOutcome;
+import io.veridex.shared.observability.TelemetryTag;
+import io.veridex.shared.observability.VeridexObservability;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -33,15 +38,17 @@ public class HybridSearchServiceImpl implements HybridSearchService {
     private final DocumentVersionQuery documentVersions;
     private final ContextAssemblyService assembler;
     private final RerankProvider reranker;
+    private final VeridexObservability observability;
 
     public HybridSearchServiceImpl(OpenSearchRetrievalReader reader, IndexReleaseQuery indexReleases,
                                    DocumentVersionQuery documentVersions, ContextAssemblyService assembler,
-                                   RerankProvider reranker) {
+                                   RerankProvider reranker, VeridexObservability observability) {
         this.reader = reader;
         this.indexReleases = indexReleases;
         this.documentVersions = documentVersions;
         this.assembler = assembler;
         this.reranker = reranker;
+        this.observability = observability;
     }
 
     @Override
@@ -54,6 +61,24 @@ public class HybridSearchServiceImpl implements HybridSearchService {
     public HybridSearchResult search(UUID userId, List<UUID> authorizedKnowledgeBaseIds,
                                      List<UUID> requestedKnowledgeBaseIds, String question,
                                      RetrievalParameters parameters) {
+        var observation = observability.start(ObservationName.RETRIEVAL_RUN);
+        try {
+            HybridSearchResult result = searchInternal(userId, authorizedKnowledgeBaseIds, requestedKnowledgeBaseIds,
+                    question, parameters);
+            observation.success(TelemetryTag.retrievalOutcome(result.degradations().isEmpty()
+                    ? TelemetryOutcome.Retrieval.SUCCESS : TelemetryOutcome.Retrieval.DEGRADED));
+            return result;
+        } catch (RuntimeException e) {
+            observation.failure(TelemetryErrorCode.classify(e));
+            throw e;
+        } finally {
+            observation.close();
+        }
+    }
+
+    private HybridSearchResult searchInternal(UUID userId, List<UUID> authorizedKnowledgeBaseIds,
+                                              List<UUID> requestedKnowledgeBaseIds, String question,
+                                              RetrievalParameters parameters) {
         List<UUID> scope = authorizedKnowledgeBaseIds.stream()
                 .filter(requestedKnowledgeBaseIds::contains)
                 .toList();

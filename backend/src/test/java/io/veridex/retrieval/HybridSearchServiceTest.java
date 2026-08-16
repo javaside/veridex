@@ -10,6 +10,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.observation.ObservationRegistry;
 import io.veridex.indexing.api.IndexReleaseQuery;
 import io.veridex.indexing.api.IndexReleaseQuery.ActiveRelease;
 import io.veridex.knowledge.api.DocumentVersionQuery;
@@ -20,6 +22,7 @@ import io.veridex.retrieval.api.SearchHit;
 import io.veridex.retrieval.application.ContextAssemblyService;
 import io.veridex.retrieval.application.HybridSearchServiceImpl;
 import io.veridex.retrieval.infrastructure.OpenSearchRetrievalReader;
+import io.veridex.shared.observability.VeridexObservability;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -37,6 +41,7 @@ class HybridSearchServiceTest {
     @Mock DocumentVersionQuery documentVersions;
     @Mock ContextAssemblyService assembler;
     @Mock RerankProvider reranker;
+    @Spy VeridexObservability observability = new VeridexObservability(new SimpleMeterRegistry(), ObservationRegistry.create());
     @InjectMocks HybridSearchServiceImpl service;
 
     private static final UUID USER = UUID.randomUUID();
@@ -141,6 +146,27 @@ class HybridSearchServiceTest {
         var outcome = service.search(USER, List.of(KB), List.of(KB), "请假");
         assertThat(outcome.hits()).isNotEmpty();
         assertThat(outcome.degradations()).anyMatch(d -> d.contains("bm25"));
+    }
+
+    @Test
+    void recordsDegradedRetrievalWithoutSensitiveTags() {
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        HybridSearchServiceImpl instrumented = new HybridSearchServiceImpl(reader, indexReleases, documentVersions,
+                assembler, reranker, new VeridexObservability(meters, ObservationRegistry.create()));
+        UUID ver = UUID.randomUUID();
+        passthroughRerank();
+        when(indexReleases.findActiveRelease(KB)).thenReturn(Optional.of(new ActiveRelease(RELEASE, "alias")));
+        when(indexReleases.listSnapshotDocumentVersionIds(RELEASE)).thenReturn(List.of(ver));
+        when(documentVersions.findOnlineVersionIds(List.of(ver))).thenReturn(List.of(ver));
+        when(reader.bm25(any(), eq(KB), any(), eq(30))).thenReturn(List.of());
+        when(reader.vector(any(), eq(KB), any(), eq(30))).thenThrow(new RuntimeException("sensitive failure"));
+        when(assembler.assemble(any(), any(), eq(6), eq(3), eq(4000))).thenReturn(List.of());
+
+        instrumented.search(USER, List.of(KB), List.of(KB), "SENSITIVE_QUESTION");
+
+        assertThat(meters.find("veridex.retrieval.run").tag("outcome", "degraded").timer().count()).isEqualTo(1);
+        assertThat(meters.find("veridex.retrieval.run").timer().getId().getTags())
+                .allMatch(tag -> !tag.getValue().contains("SENSITIVE") && !tag.getValue().contains(USER.toString()));
     }
 
     @Test

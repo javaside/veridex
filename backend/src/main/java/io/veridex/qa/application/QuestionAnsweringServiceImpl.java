@@ -11,6 +11,11 @@ import io.veridex.qa.api.QaEvent;
 import io.veridex.retrieval.api.HybridSearchResult;
 import io.veridex.retrieval.api.HybridSearchService;
 import io.veridex.shared.RefusalReason;
+import io.veridex.shared.observability.ObservationName;
+import io.veridex.shared.observability.TelemetryErrorCode;
+import io.veridex.shared.observability.TelemetryOutcome;
+import io.veridex.shared.observability.TelemetryTag;
+import io.veridex.shared.observability.VeridexObservability;
 import io.veridex.trace.api.QueryRunRecorder;
 import io.veridex.trace.api.QueryRunRecorder.CitationRecord;
 import io.veridex.trace.api.QueryRunRecorder.GenerationRecord;
@@ -35,29 +40,46 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
     private final QueryRunRecorder recorder;
     private final HybridSearchService hybridSearch;
     private final GenerationService generation;
+    private final VeridexObservability observability;
 
     public QuestionAnsweringServiceImpl(KnowledgeScopeQuery knowledgeScope, ConversationService conversations,
                                         QueryRunRecorder recorder, HybridSearchService hybridSearch,
-                                        GenerationService generation) {
+                                        GenerationService generation, VeridexObservability observability) {
         this.knowledgeScope = knowledgeScope;
         this.conversations = conversations;
         this.recorder = recorder;
         this.hybridSearch = hybridSearch;
         this.generation = generation;
+        this.observability = observability;
     }
 
     @Override
     public List<QaEvent> ask(UUID userId, AskRequest request) {
         UUID[] runRef = new UUID[1];
+        boolean existingConversation = request.conversationId() != null;
+        var observation = observability.start(ObservationName.QA_RUN,
+                TelemetryTag.conversation(existingConversation ? TelemetryOutcome.Conversation.EXISTING
+                        : TelemetryOutcome.Conversation.NEW));
         try {
-            return execute(userId, request, runRef);
+            List<QaEvent> result = execute(userId, request, runRef);
+            observation.success(TelemetryTag.qaOutcome(classify(result)));
+            return result;
         } catch (Exception e) {
-            String message = e.getMessage() != null ? e.getMessage() : "系统错误";
+            observation.failure(TelemetryErrorCode.classify(e));
             if (runRef[0] != null) {
-                recorder.fail(runRef[0], message);
+                recorder.fail(runRef[0], TelemetryErrorCode.classify(e).wireValue());
             }
+            String message = e.getMessage() != null ? e.getMessage() : "系统错误";
             return List.of(new QaEvent.RunFailed(message));
+        } finally {
+            observation.close();
         }
+    }
+
+    private static TelemetryOutcome.Qa classify(List<QaEvent> events) {
+        return events.stream().anyMatch(QaEvent.AnswerRefused.class::isInstance)
+                ? TelemetryOutcome.Qa.REFUSED
+                : TelemetryOutcome.Qa.COMPLETED;
     }
 
     private List<QaEvent> execute(UUID userId, AskRequest request, UUID[] runRef) {

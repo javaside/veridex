@@ -9,6 +9,12 @@ import io.veridex.generation.infrastructure.DeterministicChatModel;
 import io.veridex.knowledge.api.DocumentVersionQuery;
 import io.veridex.retrieval.api.EvidencePiece;
 import io.veridex.shared.RefusalReason;
+import io.veridex.shared.observability.BoundedModelTags;
+import io.veridex.shared.observability.ObservationName;
+import io.veridex.shared.observability.TelemetryErrorCode;
+import io.veridex.shared.observability.TelemetryOutcome;
+import io.veridex.shared.observability.TelemetryTag;
+import io.veridex.shared.observability.VeridexObservability;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -33,13 +39,18 @@ public class GenerationServiceImpl implements GenerationService {
     private final RefusalPolicy refusalPolicy;
     private final CitationValidator citationValidator;
     private final DocumentVersionQuery documentVersions;
+    private final VeridexObservability observability;
+    private final BoundedModelTags modelTags;
 
     public GenerationServiceImpl(DeterministicChatModel model, RefusalPolicy refusalPolicy,
-                                 CitationValidator citationValidator, DocumentVersionQuery documentVersions) {
+                                 CitationValidator citationValidator, DocumentVersionQuery documentVersions,
+                                 VeridexObservability observability) {
         this.model = model;
         this.refusalPolicy = refusalPolicy;
         this.citationValidator = citationValidator;
         this.documentVersions = documentVersions;
+        this.observability = observability;
+        this.modelTags = new BoundedModelTags(java.util.Set.of("deterministic"));
     }
 
     @Override
@@ -65,8 +76,19 @@ public class GenerationServiceImpl implements GenerationService {
         }
         messages.add(new UserMessage(question));
 
+        var boundedTags = modelTags.resolve("deterministic", parameters.model());
+        ChatResponse response;
         long start = System.nanoTime();
-        ChatResponse response = model.call(new Prompt(messages));
+        var observation = observability.start(ObservationName.GENERATION_MODEL, boundedTags.tags());
+        try {
+            response = model.call(new Prompt(messages));
+            observation.success(TelemetryTag.generationOutcome(TelemetryOutcome.Generation.SUCCESS));
+        } catch (RuntimeException e) {
+            observation.failure(TelemetryErrorCode.classify(e));
+            throw e;
+        } finally {
+            observation.close();
+        }
         long durationMs = (System.nanoTime() - start) / 1_000_000;
         String answer = response.getResult().getOutput().getText();
         int outputTokens = answer.length() / 4;
