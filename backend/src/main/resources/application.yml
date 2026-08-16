@@ -64,6 +64,10 @@ veridex:
       max-plaintext-size: ${VERIDEX_TRACE_BODY_MAX_PLAINTEXT_SIZE:256KiB}
       cleanup-interval: ${VERIDEX_TRACE_BODY_CLEANUP_INTERVAL:1h}
       cleanup-batch-size: ${VERIDEX_TRACE_BODY_CLEANUP_BATCH_SIZE:500}
+      fingerprint-key: ${VERIDEX_TRACE_BODY_FINGERPRINT_KEY:}
+      current-key-id: ${VERIDEX_TRACE_BODY_CURRENT_KEY_ID:}
+      current-key: ${VERIDEX_TRACE_BODY_CURRENT_KEY:}
+      historical-keys: ${VERIDEX_TRACE_BODY_HISTORICAL_KEYS:}
 
 springdoc:
   paths-to-match: /api/**

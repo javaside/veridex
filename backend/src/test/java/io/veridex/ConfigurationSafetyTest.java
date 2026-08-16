@@ -22,6 +22,11 @@ class ConfigurationSafetyTest {
         assertThat(environment.getProperty("veridex.trace.body.retention")).isEqualTo("24h");
         assertThat(environment.getProperty("veridex.trace.body.max-plaintext-size")).isEqualTo("256KiB");
         assertThat(environment.getProperty("veridex.trace.body.cleanup-interval")).isEqualTo("1h");
+        assertThat(environment.getProperty("veridex.trace.body.cleanup-batch-size")).isEqualTo("500");
+        assertThat(environment.getProperty("veridex.trace.body.fingerprint-key")).isEmpty();
+        assertThat(environment.getProperty("veridex.trace.body.current-key-id")).isEmpty();
+        assertThat(environment.getProperty("veridex.trace.body.current-key")).isEmpty();
+        assertThat(environment.getProperty("veridex.trace.body.historical-keys")).isEmpty();
         assertThat(environment.getProperty("spring.ai.chat.client.observations.log-prompt", Boolean.class)).isFalse();
         assertThat(environment.getProperty("spring.ai.chat.client.observations.log-completion", Boolean.class)).isFalse();
         assertThat(environment.getProperty("spring.ai.vectorstore.observations.log-query-response", Boolean.class)).isFalse();
