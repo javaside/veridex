@@ -13,6 +13,7 @@ public enum TelemetryErrorCode {
     PARSE_ERROR("parse_error"),
     OUTBOX_PUBLISH_FAILED("outbox_publish_failed"),
     INGESTION_UNKNOWN("ingestion_unknown"),
+    INDEXING_PUBLISH_FAILED("indexing_publish_failed"),
     UNKNOWN("unknown");
 
     private final String wireValue;

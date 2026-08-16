@@ -9,6 +9,11 @@ import io.veridex.indexing.api.ReleaseView;
 import io.veridex.knowledge.api.DocumentVersionProcessing;
 import io.veridex.knowledge.api.DocumentVersionProcessing.ReadyVersion;
 import io.veridex.knowledge.api.ObjectStorage;
+import io.veridex.shared.observability.ObservationName;
+import io.veridex.shared.observability.TelemetryErrorCode;
+import io.veridex.shared.observability.TelemetryOutcome;
+import io.veridex.shared.observability.TelemetryTag;
+import io.veridex.shared.observability.VeridexObservability;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
@@ -33,21 +38,32 @@ public class KnowledgeBasePublishService {
     private final ChunkIndexer indexer;
     private final IndexReleaseManager releases;
     private final JsonMapper jsonMapper;
+    private final VeridexObservability observability;
 
     public KnowledgeBasePublishService(DocumentVersionProcessing documents, ObjectStorage storage,
                                        ChunkIndexer indexer, IndexReleaseManager releases,
                                        JsonMapper jsonMapper) {
+        this(documents, storage, indexer, releases, jsonMapper, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public KnowledgeBasePublishService(DocumentVersionProcessing documents, ObjectStorage storage,
+                                       ChunkIndexer indexer, IndexReleaseManager releases,
+                                       JsonMapper jsonMapper, VeridexObservability observability) {
         this.documents = documents;
         this.storage = storage;
         this.indexer = indexer;
         this.releases = releases;
         this.jsonMapper = jsonMapper;
+        this.observability = observability;
     }
 
     @Transactional
     public PublishResult publish(UUID knowledgeBaseId) {
+        var observation = observability == null ? null : observability.start(ObservationName.INDEXING_PUBLISH);
         List<ReadyVersion> ready = documents.listReadyVersions(knowledgeBaseId);
         if (ready.isEmpty()) {
+            finishFailure(observation);
             throw new IllegalStateException("no READY document versions to publish");
         }
         DraftRelease draft = releases.createDraft(knowledgeBaseId,
@@ -69,15 +85,28 @@ public class KnowledgeBasePublishService {
             try {
                 releases.discardDraft(draft.releaseId());
             } catch (Exception cleanup) {
-                log.error("failed to discard draft {}", draft.releaseId(), cleanup);
+                log.warn("indexing draft cleanup failed; error_code=indexing_cleanup_failed");
             }
+            finishFailure(observation);
             throw e;
         }
         ReleaseView view = releases.listReleases(knowledgeBaseId).stream()
                 .filter(r -> r.releaseId().equals(draft.releaseId()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("published release not found"));
-        return new PublishResult(view, documents.countNotReady(knowledgeBaseId));
+        PublishResult result = new PublishResult(view, documents.countNotReady(knowledgeBaseId));
+        if (observation != null) {
+            observation.success(TelemetryTag.indexingOutcome(TelemetryOutcome.Indexing.SUCCESS));
+            observation.close();
+        }
+        return result;
+    }
+
+    private static void finishFailure(VeridexObservability.ObservationScope observation) {
+        if (observation != null) {
+            observation.failure(TelemetryErrorCode.INDEXING_PUBLISH_FAILED);
+            observation.close();
+        }
     }
 
     @SuppressWarnings("unchecked")
