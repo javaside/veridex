@@ -55,6 +55,15 @@ veridex:
     ollama:
       base-url: ${VERIDEX_OLLAMA_BASE_URL:http://localhost:11434}
       model: ${VERIDEX_OLLAMA_EMBEDDING_MODEL:qwen3-embedding}
+  observability:
+    environment: ${VERIDEX_ENVIRONMENT:local}
+  trace:
+    body:
+      capture-policy: ${VERIDEX_TRACE_BODY_CAPTURE_POLICY:NONE}
+      retention: ${VERIDEX_TRACE_BODY_RETENTION:24h}
+      max-plaintext-size: ${VERIDEX_TRACE_BODY_MAX_PLAINTEXT_SIZE:256KiB}
+      cleanup-interval: ${VERIDEX_TRACE_BODY_CLEANUP_INTERVAL:1h}
+      cleanup-batch-size: ${VERIDEX_TRACE_BODY_CLEANUP_BATCH_SIZE:500}
 
 springdoc:
   paths-to-match: /api/**
@@ -69,3 +78,20 @@ management:
     health:
       probes:
         enabled: true
+  tracing:
+    sampling:
+      probability: ${VERIDEX_TRACING_SAMPLING_PROBABILITY:0.1}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${VERIDEX_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      environment: ${VERIDEX_ENVIRONMENT:local}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        veridex.qa.run: true
+        veridex.generation.model: true

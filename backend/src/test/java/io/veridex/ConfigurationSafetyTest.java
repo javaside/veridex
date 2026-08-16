@@ -16,7 +16,12 @@ class ConfigurationSafetyTest {
     Environment environment;
 
     @Test
-    void sensitiveAiObservationContentIsDisabledByDefault() {
+    void observabilityUsesSafeDefaults() {
+        assertThat(environment.getProperty("management.tracing.sampling.probability")).isEqualTo("0.1");
+        assertThat(environment.getProperty("veridex.trace.body.capture-policy")).isEqualTo("NONE");
+        assertThat(environment.getProperty("veridex.trace.body.retention")).isEqualTo("24h");
+        assertThat(environment.getProperty("veridex.trace.body.max-plaintext-size")).isEqualTo("256KiB");
+        assertThat(environment.getProperty("veridex.trace.body.cleanup-interval")).isEqualTo("1h");
         assertThat(environment.getProperty("spring.ai.chat.client.observations.log-prompt", Boolean.class)).isFalse();
         assertThat(environment.getProperty("spring.ai.chat.client.observations.log-completion", Boolean.class)).isFalse();
         assertThat(environment.getProperty("spring.ai.vectorstore.observations.log-query-response", Boolean.class)).isFalse();
