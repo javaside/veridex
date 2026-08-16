@@ -80,6 +80,7 @@ class VeridexObservabilityTest {
 
         observability.increment(MetricName.TRACE_BODY_CAPTURE);
         observability.record(MetricName.TRACE_BODY_CLEANUP, 1.0);
+        observability.recordCount(MetricName.TRACE_BODY_CLEANUP, 1.0);
         try (var scope = observability.start(ObservationName.QA_RUN)) {
             scope.success(TelemetryTag.qaOutcome(TelemetryOutcome.Qa.COMPLETED));
         }

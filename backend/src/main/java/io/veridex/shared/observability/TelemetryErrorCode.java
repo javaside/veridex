@@ -1,6 +1,7 @@
 package io.veridex.shared.observability;
 
 import java.io.IOException;
+import java.util.Set;
 import java.util.concurrent.TimeoutException;
 
 public enum TelemetryErrorCode {
@@ -20,6 +21,11 @@ public enum TelemetryErrorCode {
 
     public String wireValue() {
         return wireValue;
+    }
+
+    public static Set<String> persistedQueryRunCodes() {
+        return Set.of(OPENSEARCH_TIMEOUT.name(), EMBEDDING_UNAVAILABLE.name(), DUAL_RETRIEVAL_FAILED.name(),
+                MODEL_ERROR.name(), STORAGE_ERROR.name(), PARSE_ERROR.name(), UNKNOWN.name(), "TRACE_FAILURE");
     }
 
     public static TelemetryErrorCode classify(Exception exception) {

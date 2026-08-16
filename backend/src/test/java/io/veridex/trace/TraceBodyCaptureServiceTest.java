@@ -1,11 +1,15 @@
 package io.veridex.trace;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyShort;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.observation.ObservationRegistry;
+import io.veridex.shared.observability.VeridexObservability;
 import io.veridex.trace.api.TraceBodyCapture;
 import io.veridex.trace.application.TraceBodyCaptureService;
 import io.veridex.trace.application.TraceBodyWriter;
@@ -66,5 +70,27 @@ class TraceBodyCaptureServiceTest {
                 .when(writer).write(any(), any(), any(), any(), any(), anyShort(), any(), any());
         var service = new TraceBodyCaptureService(properties, crypto, writer, new JsonMapper());
         service.capture(UUID.randomUUID(), TraceBodyCapture.TerminalOutcome.COMPLETED, null, material("answer"));
+    }
+
+    @Test
+    void recordsOnlyFixedCaptureAndSkipTelemetry() {
+        var meters = new SimpleMeterRegistry();
+        var observability = new VeridexObservability(meters, ObservationRegistry.create());
+        var all = properties(TraceBodyProperties.CapturePolicy.ALL, 4096);
+        when(crypto.encrypt(any(), anyShort(), any())).thenReturn(
+                new TraceBodyCrypto.EncryptedPayload("current", new byte[12], new byte[]{1}));
+        var captured = new TraceBodyCaptureService(all, crypto, writer, new JsonMapper(), observability);
+
+        captured.capture(UUID.randomUUID(), TraceBodyCapture.TerminalOutcome.COMPLETED, null, material("answer"));
+        var disabled = new TraceBodyCaptureService(properties(TraceBodyProperties.CapturePolicy.NONE, 4096),
+                crypto, writer, new JsonMapper(), observability);
+        disabled.capture(UUID.randomUUID(), TraceBodyCapture.TerminalOutcome.FAILED, "secret-error", material("answer"));
+
+        assertThat(meters.find("veridex.trace.body.capture").tag("outcome", "success").counter().count())
+                .isEqualTo(1);
+        assertThat(meters.find("veridex.trace.body.capture.skipped").tag("reason", "policy_disabled")
+                .counter().count()).isEqualTo(1);
+        assertThat(meters.getMeters()).allSatisfy(meter -> assertThat(meter.getId().getTags())
+                .noneMatch(tag -> tag.getValue().contains("secret")));
     }
 }

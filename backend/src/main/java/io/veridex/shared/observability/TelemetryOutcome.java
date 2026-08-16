@@ -62,4 +62,24 @@ public final class TelemetryOutcome {
         WRITER_FAILURE,
         POLICY_DISABLED
     }
+
+    public enum TraceBodyOutcome {
+        SUCCESS,
+        NOT_FOUND,
+        DECRYPT_FAILED,
+        DENIED,
+        FAILURE
+    }
+
+    public enum TraceBodyDeniedReason {
+        INVALID_REASON,
+        UNAUTHORIZED
+    }
+
+    public enum TraceBodyCleanupReason {
+        EXPIRED,
+        QUERY_RUN_SCRUB,
+        MAINTENANCE_FAILURE,
+        INVALID_CONFIGURATION
+    }
 }

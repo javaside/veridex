@@ -1,6 +1,7 @@
 package io.veridex.trace.application;
 
 import io.veridex.shared.RefusalReason;
+import io.veridex.shared.observability.TelemetryErrorCode;
 import io.veridex.trace.api.QueryRunRecorder;
 import io.veridex.trace.domain.Citation;
 import io.veridex.trace.domain.CitationRepository;
@@ -77,7 +78,8 @@ public class QueryRunRecorderImpl implements QueryRunRecorder {
     @Override
     public void fail(UUID runId, String error) {
         runs.findById(runId).ifPresent(run -> run.fail(
-                error != null && error.matches("[A-Z0-9_]{1,64}") ? error : "TRACE_FAILURE"));
+                error != null && TelemetryErrorCode.persistedQueryRunCodes().contains(error)
+                        ? error : "TRACE_FAILURE"));
     }
 
     @Override

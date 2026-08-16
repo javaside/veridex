@@ -56,6 +56,22 @@ public final class TelemetryTag {
         return fixed("reason", value);
     }
 
+    public static TelemetryTag traceBodyOutcome(TelemetryOutcome.TraceBodyOutcome value) {
+        return fixed("outcome", value);
+    }
+
+    public static TelemetryTag deniedReason(TelemetryOutcome.TraceBodyDeniedReason value) {
+        return fixed("reason", value);
+    }
+
+    public static TelemetryTag cleanupOutcome(TelemetryOutcome.TraceBodyOutcome value) {
+        return fixed("outcome", value);
+    }
+
+    public static TelemetryTag cleanupReason(TelemetryOutcome.TraceBodyCleanupReason value) {
+        return fixed("reason", value);
+    }
+
     public static TelemetryTag errorCode(TelemetryErrorCode value) {
         return new TelemetryTag("error_code", value.wireValue());
     }
