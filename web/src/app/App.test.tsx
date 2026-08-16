@@ -16,7 +16,8 @@ function LocationProbe() {
   return <output aria-label="当前路径">{useLocation().pathname}</output>
 }
 
-const meJson = JSON.stringify({ id: '1', username: 'admin', displayName: '管理员', role: 'PLATFORM_ADMIN' })
+const userJson = (role: string) => JSON.stringify({ id: '1', username: 'admin', displayName: '管理员', role })
+const meJson = userJson('PLATFORM_ADMIN')
 
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
@@ -62,16 +63,47 @@ describe('App routes', () => {
     expect(await screen.findByRole('heading', { name: '反馈', level: 2 })).toBeInTheDocument()
   })
 
-  test('renders the administration coming soon page for /admin', async () => {
+  test('renders the API key management page for /admin', async () => {
     render(
       <MemoryRouter initialEntries={['/admin']}>
         <App />
       </MemoryRouter>,
     )
 
-    expect(await screen.findByRole('heading', { name: '平台管理', level: 1 })).toBeInTheDocument()
-    expect(screen.getAllByText('Phase 5')).not.toHaveLength(0)
-    expect(screen.getByRole('link', { name: '前往知识管理' })).toHaveAttribute('href', '/knowledge')
+    expect(await screen.findByRole('heading', { name: 'API key 管理', level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '访问凭据', level: 2 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '暂无 API key' })).toBeInTheDocument()
+  })
+
+  test.each(['PLATFORM_ADMIN', 'KNOWLEDGE_ADMIN'])('%s can see and use the admin route', async (role) => {
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      if (String(input).includes('/api/auth/me')) {
+        return Promise.resolve(new Response(userJson(role), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      }
+      return Promise.resolve(new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    })
+
+    render(<MemoryRouter initialEntries={['/admin']}><App /><LocationProbe /></MemoryRouter>)
+
+    expect(await screen.findByRole('heading', { name: 'API key 管理', level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '平台管理' })).toHaveAttribute('href', '/admin')
+    expect(screen.getByRole('status', { name: '当前路径' })).toHaveTextContent('/admin')
+  })
+
+  test('EMPLOYEE neither sees admin navigation nor can operate the admin route', async () => {
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      if (String(input).includes('/api/auth/me')) {
+        return Promise.resolve(new Response(userJson('EMPLOYEE'), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      }
+      return Promise.resolve(new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    })
+
+    render(<MemoryRouter initialEntries={['/admin']}><App /><LocationProbe /></MemoryRouter>)
+
+    expect(await screen.findByRole('heading', { name: '员工问答', level: 1 })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '平台管理' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'API key 管理' })).not.toBeInTheDocument()
+    expect(screen.getByRole('status', { name: '当前路径' })).toHaveTextContent('/workbench')
   })
 
   test('renders the knowledge workspace page for /knowledge', async () => {

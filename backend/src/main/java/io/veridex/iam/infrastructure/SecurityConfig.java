@@ -1,16 +1,21 @@
 package io.veridex.iam.infrastructure;
 
+import io.veridex.iam.application.ApiKeyService;
 import io.veridex.iam.domain.PlatformUser;
 import java.util.Map;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import tools.jackson.databind.json.JsonMapper;
 
 @Configuration
@@ -18,9 +23,14 @@ import tools.jackson.databind.json.JsonMapper;
 public class SecurityConfig {
 
     private final JsonMapper jsonMapper;
+    private final ApiKeyService apiKeyService;
+    private final ApiKeyScopeAuthorizationManager scopeAuthorizationManager;
 
-    public SecurityConfig(JsonMapper jsonMapper) {
+    public SecurityConfig(JsonMapper jsonMapper, ApiKeyService apiKeyService,
+                          ApiKeyScopeAuthorizationManager scopeAuthorizationManager) {
         this.jsonMapper = jsonMapper;
+        this.apiKeyService = apiKeyService;
+        this.scopeAuthorizationManager = scopeAuthorizationManager;
     }
 
     @Bean
@@ -28,10 +38,29 @@ public class SecurityConfig {
         http
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/actuator/**").permitAll()
-                .requestMatchers("/api/auth/login", "/api/auth/logout").permitAll()
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .anyRequest().authenticated())
+                .requestMatchers("/actuator/**").access(scopeAuthorizationManager::authorizeNonApiKey)
+                .requestMatchers("/api/auth/login", "/api/auth/logout")
+                    .access(scopeAuthorizationManager::authorizeNonApiKey)
+                .requestMatchers(HttpMethod.OPTIONS, "/**").access(scopeAuthorizationManager::authorizeOptions)
+                .requestMatchers("/v3/api-docs", "/v3/api-docs.yaml", "/v3/api-docs/**")
+                    .access(scopeAuthorizationManager::authorizeAdminSession)
+                .anyRequest().access(scopeAuthorizationManager))
+            .exceptionHandling(exceptions -> exceptions
+                .defaultAuthenticationEntryPointFor(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
+                        request -> request.getRequestURI().startsWith("/v3/api-docs"))
+                .defaultAuthenticationEntryPointFor(new LoginUrlAuthenticationEntryPoint("/login"),
+                        request -> request.getRequestURI().startsWith("/api/"))
+                .accessDeniedHandler((request, response, denied) -> {
+                if (org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication()
+                        instanceof ApiKeyAuthFilter.ApiKeyAuthentication) {
+                    response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                    response.getWriter().write("{\"error\":\"insufficient_scope\"}");
+                    return;
+                }
+                response.sendError(jakarta.servlet.http.HttpServletResponse.SC_FORBIDDEN);
+            }))
+            .addFilterBefore(new ApiKeyAuthFilter(apiKeyService), UsernamePasswordAuthenticationFilter.class)
             .formLogin(form -> form
                 .loginProcessingUrl("/api/auth/login")
                 .successHandler((req, res, auth) -> {
@@ -46,7 +75,7 @@ public class SecurityConfig {
                                 "role", user.getRole().name())));
                     }
                 })
-                .failureHandler((req, res, exc) -> res.sendError(401)))
+                .failureHandler((req, res, exc) -> res.setStatus(401)))
             .logout(logout -> logout
                 .logoutUrl("/api/auth/logout")
                 .logoutSuccessHandler((req, res, auth) -> res.setStatus(204)));

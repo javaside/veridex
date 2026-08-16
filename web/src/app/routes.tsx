@@ -1,19 +1,23 @@
 import { ChatCircleDots, ChatCircleText, Database, Gauge, ShieldCheck, SlidersHorizontal } from '@phosphor-icons/react'
 import type { ComponentType, ReactNode } from 'react'
+import type { CurrentUser } from '../features/auth/authApi'
 import { KnowledgePage } from '../features/knowledge/KnowledgePage'
 import { QaPage } from '../features/qa/QaPage'
 import { EvaluationPage } from '../features/evaluation/EvaluationPage'
 import { ConfigurationPage } from '../features/configuration/ConfigurationPage'
 import { FeedbackPage } from '../features/feedback/FeedbackPage'
-import { ComingSoonPage } from './ComingSoonPage'
+import { ApiKeyAdminPage } from '../features/admin/ApiKeyAdminPage'
 
 export type WorkspaceRoute = {
   path: string
   label: string
   englishLabel: string
   icon: ComponentType<{ size?: number; weight?: 'regular' | 'fill' }>
-  content: ReactNode
+  content: ReactNode | ((user: CurrentUser) => ReactNode)
+  roles?: string[]
 }
+
+export const routesForRole = (role: string) => workspaceRoutes.filter((route) => !route.roles || route.roles.includes(role))
 
 export const workspaceRoutes: WorkspaceRoute[] = [
   {
@@ -38,6 +42,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
   {
     path: '/admin', label: '平台管理', englishLabel: 'Administration', icon: ShieldCheck,
-    content: <ComingSoonPage title="平台管理" phase="Phase 5" description="管理安全、可观测性与企业部署。" capabilities={['访问治理', '运行监控', '备份与恢复']} />,
+    content: (user) => <ApiKeyAdminPage user={user} />,
+    roles: ['PLATFORM_ADMIN', 'KNOWLEDGE_ADMIN'],
   },
 ]
