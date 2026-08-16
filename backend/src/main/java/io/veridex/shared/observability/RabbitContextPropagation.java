@@ -75,7 +75,7 @@ public class RabbitContextPropagation {
     }
 
     public static RabbitPropagationContext extract(MessageProperties properties) {
-        if (!CURRENT_VERSION.equals(header(properties, TELEMETRY_VERSION))) {
+        if (properties == null || !CURRENT_VERSION.equals(header(properties, TELEMETRY_VERSION))) {
             return new RabbitPropagationContext(null, null, null);
         }
         return sanitized(header(properties, TRACEPARENT), header(properties, TRACESTATE),

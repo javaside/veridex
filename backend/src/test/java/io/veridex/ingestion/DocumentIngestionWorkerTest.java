@@ -62,7 +62,7 @@ class DocumentIngestionWorkerTest {
                 + "\",\"filename\":\"guide.md\",\"contentType\":\"text/markdown\"}";
         worker.onIngest(payload.getBytes(StandardCharsets.UTF_8), channel, 2L);
 
-        verify(documents).markFailed(versionId, "put failed");
+        verify(documents).markFailed(versionId, "ingestion_unknown");
         verify(channel).basicReject(2L, false);
         verify(documents, never()).markReady(any(), org.mockito.ArgumentMatchers.anyInt());
     }

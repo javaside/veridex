@@ -110,6 +110,11 @@ public class DocumentService implements DocumentVersionProcessing {
         return (int) (documents.findByKnowledgeBaseIdOrderByCreatedAtDesc(knowledgeBaseId).size() - ready);
     }
 
+    @Override
+    public long countProcessingSince(java.time.Instant threshold) {
+        return versions.countByStatusAndProcessingStartedAtBefore(DocumentVersionStatus.PROCESSING, threshold);
+    }
+
     private DocumentVersion require(UUID versionId) {
         return versions.findById(versionId)
                 .orElseThrow(() -> new IllegalArgumentException("unknown document version " + versionId));

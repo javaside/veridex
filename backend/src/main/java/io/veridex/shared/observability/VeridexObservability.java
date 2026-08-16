@@ -2,6 +2,7 @@ package io.veridex.shared.observability;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.observation.Observation;
@@ -47,6 +48,13 @@ public class VeridexObservability {
     public void recordCount(MetricName name, double value, TelemetryTag... tags) {
         try {
             DistributionSummary.builder(name.value()).tags(toTags(tags)).register(meters).record(value);
+        } catch (RuntimeException ignored) {
+        }
+    }
+
+    public void registerGauge(MetricName name, java.util.function.ToDoubleFunction<Object> supplier) {
+        try {
+            Gauge.builder(name.value(), new Object(), supplier).register(meters);
         } catch (RuntimeException ignored) {
         }
     }

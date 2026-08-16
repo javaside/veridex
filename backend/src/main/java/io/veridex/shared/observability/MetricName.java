@@ -9,6 +9,7 @@ public enum MetricName {
     OUTBOX_PUBLISH_FAILURE("veridex.outbox.publish.failure"),
     INGESTION_ACK("veridex.ingestion.ack"),
     INGESTION_REJECT("veridex.ingestion.reject"),
+    INGESTION_PROCESSING_STUCK("veridex.ingestion.processing.stuck"),
     INDEXING_OPERATION("veridex.indexing.operation"),
     TRACE_BODY_CAPTURE("veridex.trace.body.capture"),
     TRACE_BODY_CAPTURE_SKIPPED("veridex.trace.body.capture.skipped"),

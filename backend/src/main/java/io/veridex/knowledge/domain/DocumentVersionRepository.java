@@ -12,4 +12,6 @@ public interface DocumentVersionRepository extends CrudRepository<DocumentVersio
     long countByDocumentId(UUID documentId);
 
     Optional<DocumentVersion> findFirstByDocumentIdOrderByVersionNoDesc(UUID documentId);
+
+    long countByStatusAndProcessingStartedAtBefore(DocumentVersionStatus status, java.time.Instant threshold);
 }

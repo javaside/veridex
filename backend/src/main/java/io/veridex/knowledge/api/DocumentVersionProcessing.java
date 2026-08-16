@@ -1,5 +1,6 @@
 package io.veridex.knowledge.api;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -24,4 +25,6 @@ public interface DocumentVersionProcessing {
     List<ReadyVersion> listReadyVersions(UUID knowledgeBaseId);
 
     int countNotReady(UUID knowledgeBaseId);
+
+    long countProcessingSince(Instant threshold);
 }

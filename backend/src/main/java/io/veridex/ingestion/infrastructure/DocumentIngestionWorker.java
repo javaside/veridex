@@ -8,12 +8,21 @@ import io.veridex.ingestion.domain.Chunk;
 import io.veridex.ingestion.domain.ParsedDocument;
 import io.veridex.knowledge.api.DocumentVersionProcessing;
 import io.veridex.knowledge.api.ObjectStorage;
+import io.veridex.shared.observability.ObservationName;
+import io.veridex.shared.observability.RabbitContextPropagation;
+import io.veridex.shared.observability.TelemetryErrorCode;
+import io.veridex.shared.observability.TelemetryOutcome;
+import io.veridex.shared.observability.TelemetryTag;
+import io.veridex.shared.observability.VeridexObservability;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.amqp.support.AmqpHeaders;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
@@ -35,23 +44,48 @@ public class DocumentIngestionWorker {
     private final StructureChunker chunker;
     private final AuditRecorder audit;
     private final JsonMapper jsonMapper;
+    private final VeridexObservability observability;
+    private final RabbitContextPropagation propagation;
 
     public DocumentIngestionWorker(DocumentVersionProcessing documents, ObjectStorage storage,
                                    DocumentParser parser, StructureChunker chunker,
                                    AuditRecorder audit, JsonMapper jsonMapper) {
+        this(documents, storage, parser, chunker, audit, jsonMapper, null, null);
+    }
+
+    @Autowired
+    public DocumentIngestionWorker(DocumentVersionProcessing documents, ObjectStorage storage,
+                                   DocumentParser parser, StructureChunker chunker,
+                                   AuditRecorder audit, JsonMapper jsonMapper,
+                                   VeridexObservability observability, RabbitContextPropagation propagation) {
         this.documents = documents;
         this.storage = storage;
         this.parser = parser;
         this.chunker = chunker;
         this.audit = audit;
         this.jsonMapper = jsonMapper;
+        this.observability = observability;
+        this.propagation = propagation;
     }
 
     @RabbitListener(queues = io.veridex.shared.infrastructure.messaging.RabbitTopology.INGESTION_QUEUE)
     public void onIngest(byte[] payload, Channel channel,
-                         @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag) {
+                         @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag,
+                         MessageProperties properties) {
+        process(payload, channel, deliveryTag, properties);
+    }
+
+    public void onIngest(byte[] payload, Channel channel, long deliveryTag) {
+        process(payload, channel, deliveryTag, null);
+    }
+
+    private void process(byte[] payload, Channel channel, long deliveryTag, MessageProperties properties) {
         UUID versionId = null;
+        var observation = observability == null ? null : observability.start(ObservationName.INGESTION_RUN,
+                TelemetryTag.ingestionStage(TelemetryOutcome.IngestionStage.UNKNOWN));
+        String failureCode = TelemetryErrorCode.INGESTION_UNKNOWN.wireValue();
         try {
+            restoreRequestId(properties);
             Map<String, Object> message = jsonMapper.readValue(payload, Map.class);
             versionId = UUID.fromString(String.valueOf(message.get("documentVersionId")));
             UUID kbId = UUID.fromString(String.valueOf(message.get("knowledgeBaseId")));
@@ -61,12 +95,13 @@ public class DocumentIngestionWorker {
 
             String status = documents.findVersionStatus(versionId);
             if ("READY".equals(status)) {
-                // 幂等：已处理完成，直接确认
                 channel.basicAck(deliveryTag, false);
+                recordAck(TelemetryOutcome.Ingestion.ALREADY_READY);
+                finishSuccess(observation, TelemetryOutcome.Ingestion.ALREADY_READY);
                 return;
             }
             if (!"UPLOADED".equals(status)) {
-                throw new IllegalStateException("unexpected status " + status);
+                throw new IllegalStateException("unexpected status");
             }
             documents.markProcessing(versionId);
 
@@ -87,27 +122,61 @@ public class DocumentIngestionWorker {
             storage.put(objectKey + ".chunks.json",
                     new java.io.ByteArrayInputStream(chunksBytes), "application/json", chunksBytes.length);
             documents.setParsedObjectKey(versionId, objectKey + ".parsed.json");
-
             documents.markReady(versionId, chunks.size());
             audit.record(null, "ingestion.completed", "document_version", versionId, null,
                     Map.of("chunkCount", chunks.size(), "knowledgeBaseId", kbId.toString()));
 
             channel.basicAck(deliveryTag, false);
-            log.info("ingestion completed for version {}", versionId);
-        } catch (Exception e) {
-            log.error("ingestion failed for message", e);
+            recordAck(TelemetryOutcome.Ingestion.SUCCESS);
+            finishSuccess(observation, TelemetryOutcome.Ingestion.SUCCESS);
+        } catch (Exception exception) {
             if (versionId != null) {
                 try {
-                    documents.markFailed(versionId, e.getMessage());
+                    documents.markFailed(versionId, failureCode);
                 } catch (Exception ignored) {
                     // 状态标记失败不阻塞拒信
                 }
             }
             try {
                 channel.basicReject(deliveryTag, false);
-            } catch (Exception reject) {
-                log.error("failed to reject message", reject);
+            } catch (Exception ignored) {
+                // reject telemetry remains bounded and fail-open
             }
+            recordReject(TelemetryOutcome.Ingestion.FAILED);
+            if (observation != null) {
+                observation.failure(TelemetryErrorCode.INGESTION_UNKNOWN);
+                observation.close();
+            }
+        } finally {
+            MDC.remove("requestId");
+        }
+    }
+
+    private void restoreRequestId(MessageProperties properties) {
+        if (properties == null || propagation == null) return;
+        var context = propagation.extract(properties);
+        if (context.requestId() != null) MDC.put("requestId", context.requestId());
+    }
+
+    private void recordAck(TelemetryOutcome.Ingestion result) {
+        if (observability != null) {
+            observability.increment(io.veridex.shared.observability.MetricName.INGESTION_ACK,
+                    TelemetryTag.ingestionOutcome(result));
+        }
+    }
+
+    private void recordReject(TelemetryOutcome.Ingestion result) {
+        if (observability != null) {
+            observability.increment(io.veridex.shared.observability.MetricName.INGESTION_REJECT,
+                    TelemetryTag.ingestionOutcome(result));
+        }
+    }
+
+    private static void finishSuccess(VeridexObservability.ObservationScope observation,
+                                      TelemetryOutcome.Ingestion result) {
+        if (observation != null) {
+            observation.success(TelemetryTag.ingestionOutcome(result));
+            observation.close();
         }
     }
 }
