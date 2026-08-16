@@ -27,6 +27,7 @@ import io.micrometer.observation.ObservationRegistry;
 import io.veridex.shared.RefusalReason;
 import io.veridex.shared.observability.VeridexObservability;
 import io.veridex.trace.api.QueryRunRecorder;
+import io.veridex.trace.api.TraceBodyCapture;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -43,6 +44,7 @@ class QuestionAnsweringServiceTest {
     @Mock KnowledgeScopeQuery knowledgeScope;
     @Mock ConversationService conversations;
     @Mock QueryRunRecorder recorder;
+    @Mock TraceBodyCapture traceBodyCapture;
     @Mock HybridSearchService hybridSearch;
     @Mock GenerationService generation;
     @Spy VeridexObservability observability = new VeridexObservability(new SimpleMeterRegistry(), ObservationRegistry.create());
@@ -72,7 +74,7 @@ class QuestionAnsweringServiceTest {
                 KB, ver, 0, "BM25", 2.0, null, 2.0, 1, true, null)), List.of());
         when(knowledgeScope.resolve(USER, List.of(KB))).thenReturn(List.of(KB));
         when(conversations.findOwned(USER, CONV)).thenReturn(Optional.of(new ConversationView(CONV, "t", java.time.Instant.now())));
-        when(recorder.start(any(), eq(CONV), eq(List.of(KB)), any(), any())).thenReturn(UUID.randomUUID());
+        when(recorder.start(any(), eq(CONV), eq(List.of(KB)), any())).thenReturn(UUID.randomUUID());
         when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假")).thenReturn(searchResult);
         when(generation.generate(eq("请假"), eq(evidence), any())).thenReturn(
                 new GenerationResult("根据《请假制度》[1]，员工请假需提前两个工作日提交申请",
@@ -96,7 +98,7 @@ class QuestionAnsweringServiceTest {
     void retrievalFailureEmitsRunFailed() {
         when(knowledgeScope.resolve(USER, List.of(KB))).thenReturn(List.of(KB));
         when(conversations.create(any(), any())).thenReturn(new ConversationView(UUID.randomUUID(), "t", java.time.Instant.now()));
-        when(recorder.start(any(), any(), any(), any(), any())).thenReturn(UUID.randomUUID());
+        when(recorder.start(any(), any(), any(), any())).thenReturn(UUID.randomUUID());
         when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假")).thenThrow(new RuntimeException("opensearch down"));
         var events = service.ask(USER, new AskRequest("请假", List.of(KB), null));
         assertThat(events.get(events.size() - 1)).isInstanceOf(QaEvent.RunFailed.class);
@@ -108,7 +110,7 @@ class QuestionAnsweringServiceTest {
         var conversation = new ConversationView(UUID.randomUUID(), "请假", java.time.Instant.now());
         when(knowledgeScope.resolve(USER, List.of(KB))).thenReturn(List.of(KB));
         when(conversations.create(USER, "请假")).thenReturn(conversation);
-        when(recorder.start(any(), eq(conversation.id()), eq(List.of(KB)), any(), any())).thenReturn(UUID.randomUUID());
+        when(recorder.start(any(), eq(conversation.id()), eq(List.of(KB)), any())).thenReturn(UUID.randomUUID());
         when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假")).thenReturn(
                 new HybridSearchResult(List.of(), List.of(), List.of()));
         when(generation.generate(eq("请假"), eq(List.of()), any())).thenReturn(
@@ -125,10 +127,10 @@ class QuestionAnsweringServiceTest {
     void recordsCompletedQaRunWithBoundedTags() {
         SimpleMeterRegistry meters = new SimpleMeterRegistry();
         QuestionAnsweringServiceImpl instrumented = new QuestionAnsweringServiceImpl(knowledgeScope, conversations,
-                recorder, hybridSearch, generation, new VeridexObservability(meters, ObservationRegistry.create()));
+                recorder, hybridSearch, generation, new VeridexObservability(meters, ObservationRegistry.create()), traceBodyCapture);
         when(knowledgeScope.resolve(USER, List.of(KB))).thenReturn(List.of(KB));
         when(conversations.findOwned(USER, CONV)).thenReturn(Optional.of(new ConversationView(CONV, "t", java.time.Instant.now())));
-        when(recorder.start(any(), eq(CONV), eq(List.of(KB)), any(), any())).thenReturn(UUID.randomUUID());
+        when(recorder.start(any(), eq(CONV), eq(List.of(KB)), any())).thenReturn(UUID.randomUUID());
         when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假"))
                 .thenReturn(new HybridSearchResult(List.of(), List.of(), List.of()));
         when(generation.generate(eq("请假"), eq(List.of()), any())).thenReturn(

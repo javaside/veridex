@@ -60,6 +60,18 @@ public final class TelemetryTag {
         return new TelemetryTag("error_code", value.wireValue());
     }
 
+    public static TelemetryTag noError() {
+        return new TelemetryTag("error_code", "none");
+    }
+
+    public static TelemetryTag noErrorOutcome() {
+        return new TelemetryTag("error", "none");
+    }
+
+    public static TelemetryTag error() {
+        return new TelemetryTag("error", "error");
+    }
+
     static TelemetryTag model(String value) {
         return new TelemetryTag("model", value);
     }

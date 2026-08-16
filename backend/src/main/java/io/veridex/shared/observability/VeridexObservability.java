@@ -85,11 +85,19 @@ public class VeridexObservability {
         }
 
         public void success(TelemetryTag... outcomeTags) {
-            finish(outcomeTags);
+            finish(withNoError(outcomeTags));
+        }
+
+        private TelemetryTag[] withNoError(TelemetryTag... outcomeTags) {
+            TelemetryTag[] tagsWithError = new TelemetryTag[outcomeTags.length + 2];
+            tagsWithError[0] = TelemetryTag.noErrorOutcome();
+            tagsWithError[1] = TelemetryTag.noError();
+            System.arraycopy(outcomeTags, 0, tagsWithError, 2, outcomeTags.length);
+            return tagsWithError;
         }
 
         public void failure(TelemetryErrorCode errorCode) {
-            finish(TelemetryTag.errorCode(errorCode), failureOutcome());
+            finish(TelemetryTag.error(), TelemetryTag.errorCode(errorCode), failureOutcome());
         }
 
         private TelemetryTag failureOutcome() {
@@ -124,7 +132,7 @@ public class VeridexObservability {
         @Override
         public void close() {
             if (!closed && name != null) {
-                finish();
+                finish(withNoError());
             }
         }
     }

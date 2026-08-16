@@ -69,8 +69,8 @@ public class QueryRun {
                     List<UUID> knowledgeScope) {
         this.userId = userId;
         this.conversationId = conversationId;
-        this.question = question;
-        this.normalizedQuestion = normalizedQuestion;
+        this.question = "[REDACTED]";
+        this.normalizedQuestion = "[REDACTED]";
         this.knowledgeScopeJson = knowledgeScope.stream()
                 .map(id -> "\"" + id + "\"")
                 .toList()

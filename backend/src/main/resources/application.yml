@@ -61,7 +61,7 @@ veridex:
     body:
       capture-policy: ${VERIDEX_TRACE_BODY_CAPTURE_POLICY:NONE}
       retention: ${VERIDEX_TRACE_BODY_RETENTION:24h}
-      max-plaintext-size: ${VERIDEX_TRACE_BODY_MAX_PLAINTEXT_SIZE:256KiB}
+      max-plaintext-size: ${VERIDEX_TRACE_BODY_MAX_PLAINTEXT_SIZE:256KB}
       cleanup-interval: ${VERIDEX_TRACE_BODY_CLEANUP_INTERVAL:1h}
       cleanup-batch-size: ${VERIDEX_TRACE_BODY_CLEANUP_BATCH_SIZE:500}
       fingerprint-key: ${VERIDEX_TRACE_BODY_FINGERPRINT_KEY:}

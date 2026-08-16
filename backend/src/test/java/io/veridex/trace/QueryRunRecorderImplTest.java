@@ -41,9 +41,10 @@ class QueryRunRecorderImplTest {
     @Test
     void startPersistsReceivedRun() {
         when(runs.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        UUID id = recorder.start(USER, null, List.of(UUID.randomUUID()), "问题", "问题");
+        UUID id = recorder.start(USER, null, List.of(UUID.randomUUID()), "问题");
         assertThat(id).isNotNull();
-        verify(runs).save(argThat(r -> r.getStatus() == QueryRun.Status.RECEIVED));
+        verify(runs).save(argThat(r -> r.getStatus() == QueryRun.Status.RECEIVED
+                && r.getQuestion().equals("[REDACTED]")));
     }
 
     @Test
@@ -61,7 +62,7 @@ class QueryRunRecorderImplTest {
         when(runs.findById(RUN)).thenReturn(Optional.of(run));
         recorder.fail(RUN, "boom");
         assertThat(run.getStatus()).isEqualTo(QueryRun.Status.FAILED);
-        assertThat(run.getError()).contains("boom");
+        assertThat(run.getError()).isEqualTo("TRACE_FAILURE");
     }
 
     @Test

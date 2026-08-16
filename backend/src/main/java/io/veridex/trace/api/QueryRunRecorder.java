@@ -9,7 +9,7 @@ import java.util.UUID;
  */
 public interface QueryRunRecorder {
 
-    UUID start(UUID userId, UUID conversationId, List<UUID> knowledgeScope, String question, String normalizedQuestion);
+    UUID start(UUID userId, UUID conversationId, List<UUID> knowledgeScope, String normalizedQuestion);
 
     void markRetrieving(UUID runId, List<RetrievalHitRecord> hits);
 

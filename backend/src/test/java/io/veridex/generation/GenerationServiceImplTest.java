@@ -50,6 +50,7 @@ class GenerationServiceImplTest {
         var result = service.generate("q", List.of(), List.of());
         assertThat(result.refusalReason()).isEqualTo(RefusalReason.NO_RELEVANT_EVIDENCE);
         assertThat(result.answer()).isNull();
+        assertThat(result.promptMessages()).isEmpty();
         verify(model, never()).call(any(Prompt.class));
     }
 
@@ -67,6 +68,8 @@ class GenerationServiceImplTest {
         var result = service.generate("请假", evidence, List.of());
 
         assertThat(result.answer()).contains("[1]");
+        assertThat(result.promptMessages()).extracting(m -> m.role()).containsExactly("system", "user");
+        assertThat(result.promptMessages()).extracting(m -> m.content()).contains("请假");
         assertThat(result.citations()).hasSize(1);
         assertThat(result.citations().get(0).validationStatus()).isEqualTo("VALID");
         assertThat(result.citations().get(0).documentId()).isNotNull();

@@ -8,5 +8,10 @@ import java.util.List;
  */
 public record GenerationResult(String answer, List<CitationView> citations,
                                RefusalReason refusalReason, String model,
-                               int inputTokens, int outputTokens, long durationMs, String contextHash) {
+                               int inputTokens, int outputTokens, long durationMs, String contextHash,
+                               List<PromptMessageView> promptMessages) {
+    public GenerationResult(String answer, List<CitationView> citations, RefusalReason refusalReason,
+                            String model, int inputTokens, int outputTokens, long durationMs, String contextHash) {
+        this(answer, citations, refusalReason, model, inputTokens, outputTokens, durationMs, contextHash, List.of());
+    }
 }

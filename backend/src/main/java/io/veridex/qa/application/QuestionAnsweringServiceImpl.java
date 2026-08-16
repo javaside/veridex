@@ -4,6 +4,7 @@ import io.veridex.conversation.api.ConversationService;
 import io.veridex.conversation.api.ConversationView;
 import io.veridex.generation.api.CitationView;
 import io.veridex.generation.api.GenerationResult;
+import io.veridex.generation.api.PromptMessageView;
 import io.veridex.generation.api.GenerationService;
 import io.veridex.knowledge.api.KnowledgeScopeQuery;
 import io.veridex.qa.api.AskRequest;
@@ -20,6 +21,7 @@ import io.veridex.trace.api.QueryRunRecorder;
 import io.veridex.trace.api.QueryRunRecorder.CitationRecord;
 import io.veridex.trace.api.QueryRunRecorder.GenerationRecord;
 import io.veridex.trace.api.QueryRunRecorder.RetrievalHitRecord;
+import io.veridex.trace.api.TraceBodyCapture;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -41,16 +43,19 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
     private final HybridSearchService hybridSearch;
     private final GenerationService generation;
     private final VeridexObservability observability;
+    private final TraceBodyCapture traceBodyCapture;
 
     public QuestionAnsweringServiceImpl(KnowledgeScopeQuery knowledgeScope, ConversationService conversations,
                                         QueryRunRecorder recorder, HybridSearchService hybridSearch,
-                                        GenerationService generation, VeridexObservability observability) {
+                                        GenerationService generation, VeridexObservability observability,
+                                        TraceBodyCapture traceBodyCapture) {
         this.knowledgeScope = knowledgeScope;
         this.conversations = conversations;
         this.recorder = recorder;
         this.hybridSearch = hybridSearch;
         this.generation = generation;
         this.observability = observability;
+        this.traceBodyCapture = traceBodyCapture;
     }
 
     @Override
@@ -67,7 +72,10 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
         } catch (Exception e) {
             observation.failure(TelemetryErrorCode.classify(e));
             if (runRef[0] != null) {
-                recorder.fail(runRef[0], TelemetryErrorCode.classify(e).wireValue());
+                String errorCode = TelemetryErrorCode.classify(e).name();
+                recorder.fail(runRef[0], errorCode);
+                traceBodyCapture.capture(runRef[0], TraceBodyCapture.TerminalOutcome.FAILED, errorCode,
+                        new TraceBodyCapture.TraceBodyMaterial(request.question(), List.of(), null, List.of(), List.of()));
             }
             String message = e.getMessage() != null ? e.getMessage() : "系统错误";
             return List.of(new QaEvent.RunFailed(message));
@@ -97,7 +105,7 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
         }
 
         String normalized = request.question().trim();
-        UUID runId = recorder.start(userId, conversationId, scope, request.question(), normalized);
+        UUID runId = recorder.start(userId, conversationId, scope, normalized);
         runRef[0] = runId;
         List<QaEvent> events = new ArrayList<>();
         events.add(new QaEvent.RunStarted(runId, conversationId));
@@ -123,6 +131,8 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
             events.add(new QaEvent.AnswerRefused(result.refusalReason().name(),
                     refusalMessage(result.refusalReason())));
             recorder.refuse(runId, result.refusalReason());
+            traceBodyCapture.capture(runId, TraceBodyCapture.TerminalOutcome.REFUSED, result.refusalReason().name(),
+                    material(request.question(), result, searchResult.evidence()));
             return events;
         }
 
@@ -138,7 +148,22 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
         conversations.addMessage(conversationId, "ASSISTANT", result.answer(), runId);
         events.add(new QaEvent.AnswerCompleted(runId));
         recorder.complete(runId);
+        traceBodyCapture.capture(runId, TraceBodyCapture.TerminalOutcome.COMPLETED, null,
+                material(request.question(), result, searchResult.evidence()));
         return events;
+    }
+
+    private static TraceBodyCapture.TraceBodyMaterial material(String question, GenerationResult result,
+                                                                List<io.veridex.retrieval.api.EvidencePiece> evidence) {
+        var prompts = result.promptMessages().stream()
+                .map(p -> new TraceBodyCapture.PromptMessage(p.role(), p.content())).toList();
+        var evidenceSnapshots = evidence.stream()
+                .map(e -> new TraceBodyCapture.EvidenceSnapshot(e.citationIndex(), e.documentVersionId(),
+                        e.chunkIndex(), e.title(), e.structurePath(), e.text())).toList();
+        var citations = result.citations().stream()
+                .map(c -> new TraceBodyCapture.CitationSnapshot(c.citationIndex(), c.documentVersionId(),
+                        c.chunkIndex(), c.sourceLocation(), c.citationText(), c.validationStatus())).toList();
+        return new TraceBodyCapture.TraceBodyMaterial(question, prompts, result.answer(), evidenceSnapshots, citations);
     }
 
     private static String refusalMessage(RefusalReason reason) {

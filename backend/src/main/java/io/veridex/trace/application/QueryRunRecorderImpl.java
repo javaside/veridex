@@ -34,8 +34,8 @@ public class QueryRunRecorderImpl implements QueryRunRecorder {
 
     @Override
     public UUID start(UUID userId, UUID conversationId, List<UUID> knowledgeScope,
-                      String question, String normalizedQuestion) {
-        QueryRun saved = runs.save(new QueryRun(userId, conversationId, question, normalizedQuestion, knowledgeScope));
+                      String normalizedQuestion) {
+        QueryRun saved = runs.save(new QueryRun(userId, conversationId, "[REDACTED]", "[REDACTED]", knowledgeScope));
         return saved.getId();
     }
 
@@ -76,7 +76,8 @@ public class QueryRunRecorderImpl implements QueryRunRecorder {
 
     @Override
     public void fail(UUID runId, String error) {
-        runs.findById(runId).ifPresent(run -> run.fail(error));
+        runs.findById(runId).ifPresent(run -> run.fail(
+                error != null && error.matches("[A-Z0-9_]{1,64}") ? error : "TRACE_FAILURE"));
     }
 
     @Override

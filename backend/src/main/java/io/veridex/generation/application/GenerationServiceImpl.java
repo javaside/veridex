@@ -4,6 +4,7 @@ import io.veridex.conversation.api.MessageRecord;
 import io.veridex.generation.api.CitationView;
 import io.veridex.generation.api.GenerationParameters;
 import io.veridex.generation.api.GenerationResult;
+import io.veridex.generation.api.PromptMessageView;
 import io.veridex.generation.api.GenerationService;
 import io.veridex.generation.infrastructure.DeterministicChatModel;
 import io.veridex.knowledge.api.DocumentVersionQuery;
@@ -63,7 +64,7 @@ public class GenerationServiceImpl implements GenerationService {
                                      List<MessageRecord> history, GenerationParameters parameters) {
         RefusalReason refusal = refusalPolicy.evaluate(evidence, parameters.minEvidenceChars());
         if (refusal != null) {
-            return new GenerationResult(null, List.of(), refusal, parameters.model(), 0, 0, 0, null);
+            return new GenerationResult(null, List.of(), refusal, parameters.model(), 0, 0, 0, null, List.of());
         }
 
         String system = buildSystemPrompt(evidence, parameters.systemTemplate());
@@ -93,13 +94,16 @@ public class GenerationServiceImpl implements GenerationService {
         String answer = response.getResult().getOutput().getText();
         int outputTokens = answer.length() / 4;
         int inputTokens = (system.length() + question.length()) / 4;
+        List<PromptMessageView> promptMessages = messages.stream()
+                .map(message -> new PromptMessageView(message.getMessageType().getValue(), message.getText()))
+                .toList();
 
         List<CitationView> citations = citationValidator.validate(answer, evidence,
                 documentIdByVersionId(evidence));
         String contextHash = Integer.toHexString(evidence.hashCode());
 
         return new GenerationResult(answer, citations, null, parameters.model(),
-                inputTokens, outputTokens, durationMs, contextHash);
+                inputTokens, outputTokens, durationMs, contextHash, promptMessages);
     }
 
     private Map<UUID, UUID> documentIdByVersionId(List<EvidencePiece> evidence) {
