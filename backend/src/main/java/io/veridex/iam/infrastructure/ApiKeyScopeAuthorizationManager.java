@@ -48,6 +48,18 @@ public class ApiKeyScopeAuthorizationManager implements AuthorizationManager<Req
         return new AuthorizationDecision(adminSession);
     }
 
+    public AuthorizationResult authorizePlatformAdminSession(
+            java.util.function.Supplier<? extends Authentication> authenticationSupplier,
+            RequestAuthorizationContext context) {
+        Authentication authentication = authenticationSupplier.get();
+        boolean platformAdmin = authentication != null
+                && authentication.isAuthenticated()
+                && !(authentication instanceof ApiKeyAuthFilter.ApiKeyAuthentication)
+                && authentication.getAuthorities().stream().anyMatch(authority ->
+                        "ROLE_PLATFORM_ADMIN".equals(authority.getAuthority()));
+        return new AuthorizationDecision(platformAdmin);
+    }
+
     @Override
     public AuthorizationResult authorize(java.util.function.Supplier<? extends Authentication> authenticationSupplier,
                                          RequestAuthorizationContext context) {

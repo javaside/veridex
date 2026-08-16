@@ -44,6 +44,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").access(scopeAuthorizationManager::authorizeOptions)
                 .requestMatchers("/v3/api-docs", "/v3/api-docs.yaml", "/v3/api-docs/**")
                     .access(scopeAuthorizationManager::authorizeAdminSession)
+                .requestMatchers(HttpMethod.GET, "/api/traces/**")
+                    .access(scopeAuthorizationManager::authorizePlatformAdminSession)
                 .anyRequest().access(scopeAuthorizationManager))
             .exceptionHandling(exceptions -> exceptions
                 .defaultAuthenticationEntryPointFor(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
