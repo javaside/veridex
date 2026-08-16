@@ -11,7 +11,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import javax.sql.DataSource;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -38,7 +40,7 @@ class DatabaseMigrationTest extends PostgresIntegrationTest {
                     versions.add(rows.getString("version"));
                     assertThat(rows.getBoolean("success")).isTrue();
                 }
-                assertThat(versions).contains("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12");
+                assertThat(versions).contains("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13");
             }
         }
     }
@@ -230,6 +232,91 @@ class DatabaseMigrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void phase5bObservabilityMigrationCreatesSchemaContracts() throws Exception {
+        try (Connection connection = dataSource.getConnection()) {
+            assertThat(tableNames(connection)).contains("trace_body");
+
+            var observabilityColumns = columns(connection, "trace_body", "query_run", "outbox_event", "document_version");
+            assertColumn(observabilityColumns, "trace_body.query_run_id", "uuid", null, false, null);
+            assertColumn(observabilityColumns, "trace_body.capture_policy", "character varying", 20, false, null);
+            assertColumn(observabilityColumns, "trace_body.encrypted_body", "bytea", null, false, null);
+            assertColumn(observabilityColumns, "trace_body.encryption_key_id", "character varying", 100, false, null);
+            assertColumn(observabilityColumns, "trace_body.nonce", "bytea", null, false, null);
+            assertColumn(observabilityColumns, "trace_body.schema_version", "smallint", null, false, null);
+            assertColumn(observabilityColumns, "trace_body.created_at", "timestamp with time zone", null, false, null);
+            assertColumn(observabilityColumns, "trace_body.expires_at", "timestamp with time zone", null, false, null);
+            assertColumn(observabilityColumns, "query_run.question_fingerprint", "character varying", 64, true, null);
+            assertColumn(observabilityColumns, "outbox_event.traceparent", "character varying", 100, true, null);
+            assertColumn(observabilityColumns, "outbox_event.tracestate", "character varying", 512, true, null);
+            assertColumn(observabilityColumns, "outbox_event.request_id", "character varying", 100, true, null);
+            assertColumn(observabilityColumns, "document_version.processing_started_at",
+                    "timestamp with time zone", null, true, null);
+
+            assertSingleColumnConstraint(connection, "trace_body", "PRIMARY KEY", "query_run_id");
+            assertThat(foreignKeyDeleteAction(connection, "trace_body", "query_run_id", "query_run"))
+                    .isEqualTo("CASCADE");
+            assertThat(indexDefinition(connection, "idx_trace_body_expires_at")).contains("expires_at");
+        }
+    }
+
+    @Test
+    void phase5bObservabilityMigrationScrubsExistingQueryRunContent() throws Exception {
+        String schema = "phase5b_" + UUID.randomUUID().toString().replace("-", "");
+        Flyway flyway = Flyway.configure()
+                .dataSource(dataSource)
+                .schemas(schema)
+                .defaultSchema(schema)
+                .target("12")
+                .load();
+        try {
+            flyway.migrate();
+            UUID runId = UUID.randomUUID();
+            try (Connection connection = dataSource.getConnection();
+                 var statement = connection.prepareStatement("""
+                         INSERT INTO %s.query_run
+                             (id, user_id, question, normalized_question, status, error)
+                         VALUES (?, '00000000-0000-0000-0000-000000000003', ?, ?, 'FAILED', ?)
+                         """.formatted(schema))) {
+                statement.setObject(1, runId);
+                statement.setString(2, "SENSITIVE_LEGACY_QUESTION");
+                statement.setString(3, "sensitive legacy question");
+                statement.setString(4, "raw database error");
+                statement.executeUpdate();
+            }
+
+            Flyway.configure()
+                    .dataSource(dataSource)
+                    .schemas(schema)
+                    .defaultSchema(schema)
+                    .load()
+                    .migrate();
+
+            try (Connection connection = dataSource.getConnection();
+                 var statement = connection.prepareStatement("""
+                         SELECT question, normalized_question, error
+                         FROM %s.query_run
+                         WHERE id = ?
+                         """.formatted(schema))) {
+                statement.setObject(1, runId);
+                try (var rows = statement.executeQuery()) {
+                    assertThat(rows.next()).isTrue();
+                    assertThat(rows.getString("question")).isEqualTo("[REDACTED]");
+                    assertThat(rows.getString("normalized_question")).isEqualTo("[REDACTED]");
+                    assertThat(rows.getString("error")).isNull();
+                }
+            }
+        } finally {
+            Flyway.configure()
+                    .dataSource(dataSource)
+                    .schemas(schema)
+                    .defaultSchema(schema)
+                    .cleanDisabled(false)
+                    .load()
+                    .clean();
+        }
+    }
+
+    @Test
     void platformColumnsRetainPostgresTypesNullabilityAndDefaults() throws Exception {
         try (Connection connection = dataSource.getConnection()) {
             var columns = columns(connection);
@@ -300,23 +387,30 @@ class DatabaseMigrationTest extends PostgresIntegrationTest {
     }
 
     private static Map<String, ColumnContract> columns(Connection connection) throws SQLException {
+        return columns(connection, "installation", "outbox_event", "audit_event", "index_release");
+    }
+
+    private static Map<String, ColumnContract> columns(Connection connection, String... tableNames)
+            throws SQLException {
         var columns = new HashMap<String, ColumnContract>();
         try (var statement = connection.prepareStatement("""
                 SELECT table_name, column_name, data_type, character_maximum_length,
                        is_nullable, column_default
                 FROM information_schema.columns
                 WHERE table_schema = 'public'
-                  AND table_name IN ('installation', 'outbox_event', 'audit_event', 'index_release')
-                """);
-                var rows = statement.executeQuery()) {
-            while (rows.next()) {
-                columns.put(
-                        rows.getString("table_name") + "." + rows.getString("column_name"),
-                        new ColumnContract(
-                                rows.getString("data_type"),
-                                rows.getObject("character_maximum_length", Integer.class),
-                                "YES".equals(rows.getString("is_nullable")),
-                                rows.getString("column_default")));
+                  AND table_name = ANY (?)
+                """)) {
+            statement.setArray(1, connection.createArrayOf("text", tableNames));
+            try (var rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    columns.put(
+                            rows.getString("table_name") + "." + rows.getString("column_name"),
+                            new ColumnContract(
+                                    rows.getString("data_type"),
+                                    rows.getObject("character_maximum_length", Integer.class),
+                                    "YES".equals(rows.getString("is_nullable")),
+                                    rows.getString("column_default")));
+                }
             }
         }
         return columns;
@@ -356,6 +450,32 @@ class DatabaseMigrationTest extends PostgresIntegrationTest {
             try (var rows = statement.executeQuery()) {
                 assertThat(rows.next()).as("index %s", indexName).isTrue();
                 return canonicalSql(rows.getString("definition"));
+            }
+        }
+    }
+
+    private static String foreignKeyDeleteAction(
+            Connection connection, String table, String column, String referencedTable) throws SQLException {
+        try (var statement = connection.prepareStatement("""
+                SELECT rc.delete_rule
+                FROM information_schema.referential_constraints rc
+                JOIN information_schema.key_column_usage kcu
+                  ON kcu.constraint_schema = rc.constraint_schema
+                 AND kcu.constraint_name = rc.constraint_name
+                JOIN information_schema.constraint_column_usage ccu
+                  ON ccu.constraint_schema = rc.unique_constraint_schema
+                 AND ccu.constraint_name = rc.unique_constraint_name
+                WHERE kcu.constraint_schema = 'public'
+                  AND kcu.table_name = ?
+                  AND kcu.column_name = ?
+                  AND ccu.table_name = ?
+                """)) {
+            statement.setString(1, table);
+            statement.setString(2, column);
+            statement.setString(3, referencedTable);
+            try (var rows = statement.executeQuery()) {
+                assertThat(rows.next()).as("foreign key from %s.%s to %s", table, column, referencedTable).isTrue();
+                return rows.getString("delete_rule");
             }
         }
     }

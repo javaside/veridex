@@ -47,6 +47,9 @@ public class DocumentVersion {
     @Column(name = "processed_at")
     private Instant processedAt;
 
+    @Column(name = "processing_started_at")
+    private Instant processingStartedAt;
+
     protected DocumentVersion() {
     }
 
@@ -68,12 +71,14 @@ public class DocumentVersion {
     public String getErrorMessage() { return errorMessage; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getProcessedAt() { return processedAt; }
+    public Instant getProcessingStartedAt() { return processingStartedAt; }
 
     public void markProcessing() {
         if (status != DocumentVersionStatus.UPLOADED) {
             throw new IllegalStateException("cannot mark " + status + " as PROCESSING");
         }
         this.status = DocumentVersionStatus.PROCESSING;
+        this.processingStartedAt = Instant.now();
     }
 
     public void markReady(int chunkCount) {

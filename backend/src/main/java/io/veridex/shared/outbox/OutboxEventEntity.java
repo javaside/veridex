@@ -44,6 +44,15 @@ public class OutboxEventEntity {
     @Column(name = "last_error")
     private String lastError;
 
+    @Column(length = 100)
+    private String traceparent;
+
+    @Column(length = 512)
+    private String tracestate;
+
+    @Column(name = "request_id", length = 100)
+    private String requestId;
+
     protected OutboxEventEntity() {
     }
 
@@ -60,6 +69,9 @@ public class OutboxEventEntity {
     public String getEventType() { return eventType; }
     public String getPayload() { return payload; }
     public Instant getOccurredAt() { return occurredAt; }
+    public String getTraceparent() { return traceparent; }
+    public String getTracestate() { return tracestate; }
+    public String getRequestId() { return requestId; }
     public void markPublished() { this.publishedAt = Instant.now(); }
     public void recordFailure(String error) {
         this.attempts++;

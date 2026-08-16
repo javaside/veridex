@@ -39,6 +39,9 @@ public class QueryRun {
     @Column(name = "normalized_question", columnDefinition = "text")
     private String normalizedQuestion;
 
+    @Column(name = "question_fingerprint", length = 64)
+    private String questionFingerprint;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "knowledge_scope", nullable = false, columnDefinition = "jsonb")
     private String knowledgeScopeJson = "[]";
@@ -104,6 +107,7 @@ public class QueryRun {
     public UUID getUserId() { return userId; }
     public UUID getConversationId() { return conversationId; }
     public String getQuestion() { return question; }
+    public String getQuestionFingerprint() { return questionFingerprint; }
     public Status getStatus() { return status; }
     public String getRefusalReason() { return refusalReason; }
     public String getError() { return error; }
