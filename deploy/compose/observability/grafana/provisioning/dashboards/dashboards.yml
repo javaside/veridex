@@ -1,0 +1,10 @@
+apiVersion: 1
+
+providers:
+  - name: veridex
+    orgId: 1
+    folder: Veridex
+    type: file
+    disableDeletion: true
+    options:
+      path: /var/lib/grafana/dashboards

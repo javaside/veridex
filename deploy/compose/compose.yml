@@ -19,7 +19,8 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-veridex}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-veridex-local}
-    ports: ["5672:5672", "15672:15672"]
+    command: ["sh", "-c", "rabbitmq-plugins enable --offline rabbitmq_prometheus && rabbitmq-server"]
+    ports: ["5672:5672", "15672:15672", "15692:15692"]
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 5s
@@ -50,6 +51,51 @@ services:
       timeout: 3s
       retries: 20
 
+  prometheus:
+    image: prom/prometheus:v3.13.2
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    ports: ["9090:9090"]
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus"]
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  tempo:
+    image: grafana/tempo:3.0.3
+    ports: ["3200:3200"]
+    volumes:
+      - ./observability/tempo/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    command: ["-config.file=/etc/tempo.yaml"]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.158.0
+    ports: ["4317:4317", "4318:4318"]
+    volumes:
+      - ./observability/otel-collector/config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    depends_on:
+      - tempo
+
+  grafana:
+    image: grafana/grafana:13.1.3
+    ports: ["3000:3000"]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-veridex-local}
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - tempo
+
   opensearch:
     image: opensearchproject/opensearch:3.2.0
     environment:
@@ -70,3 +116,6 @@ volumes:
   postgres-data:
   minio-data:
   opensearch-data:
+  prometheus-data:
+  tempo-data:
+  grafana-data:

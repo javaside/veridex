@@ -1,0 +1,18 @@
+{
+  "uid": "veridex-overview",
+  "title": "Veridex Observability Overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "time": {"from": "now-1h", "to": "now"},
+  "templating": {"list": []},
+  "panels": [
+    {"id": 1, "type": "timeseries", "title": "HTTP request rate", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "sum(rate(http_server_requests_seconds_count[5m]))", "refId": "A"}], "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}},
+    {"id": 2, "type": "timeseries", "title": "QA outcomes", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "sum by (outcome) (rate(veridex_qa_run_seconds_count[5m]))", "refId": "A"}], "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}},
+    {"id": 3, "type": "timeseries", "title": "Retrieval outcomes", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "sum by (outcome) (rate(veridex_retrieval_run_seconds_count[5m]))", "refId": "A"}], "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}},
+    {"id": 4, "type": "timeseries", "title": "Generation model outcomes", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "sum by (outcome) (rate(veridex_generation_model_seconds_count[5m]))", "refId": "A"}], "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}},
+    {"id": 5, "type": "timeseries", "title": "Ingestion and outbox backlog", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "veridex_ingestion_processing_stuck", "refId": "A"}, {"expr": "veridex_outbox_pending", "refId": "B"}], "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}},
+    {"id": 6, "type": "timeseries", "title": "Index publishing outcomes", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "sum by (outcome) (rate(veridex_indexing_publish_seconds_count[5m]))", "refId": "A"}], "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}},
+    {"id": 7, "type": "timeseries", "title": "Trace body maintenance", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "sum by (reason) (rate(veridex_trace_body_cleanup_count[5m]))", "refId": "A"}], "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24}}
+  ]
+}

@@ -1,0 +1,73 @@
+groups:
+  - name: veridex-pilot
+    rules:
+      - alert: VeridexApiErrorRateHigh
+        expr: sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count[5m])), 1) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Veridex API error rate is high
+      - alert: VeridexQaFailureRateHigh
+        expr: sum(rate(veridex_qa_run_seconds_count{outcome="failed"}[10m])) / clamp_min(sum(rate(veridex_qa_run_seconds_count[10m])), 1) > 0.10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Veridex QA failure rate is high
+      - alert: VeridexIngestionQueueBacklog
+        expr: rabbitmq_queue_messages{queue="ingestion.document"} > 100
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Ingestion queue backlog is high
+      - alert: VeridexIngestionDlqMessages
+        expr: rabbitmq_queue_messages{queue="ingestion.document.dlq"} > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Ingestion DLQ contains messages
+      - alert: VeridexIngestionProcessingStuck
+        expr: veridex_ingestion_processing_stuck > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Documents are stuck in processing
+      - alert: VeridexOutboxBacklog
+        expr: veridex_outbox_pending > 100
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Outbox backlog is high
+      - alert: VeridexOutboxOldestEventAge
+        expr: veridex_outbox_oldest_unpublished_age_seconds > 900
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Oldest outbox event is delayed
+      - alert: VeridexRetrievalDegraded
+        expr: sum(rate(veridex_retrieval_run_seconds_count{outcome="degraded"}[10m])) / clamp_min(sum(rate(veridex_retrieval_run_seconds_count[10m])), 1) > 0.20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Retrieval degradation rate is high
+      - alert: VeridexModelErrors
+        expr: sum(rate(veridex_generation_model_seconds_count{outcome="error"}[10m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Model errors are occurring
+      - alert: VeridexIndexingErrors
+        expr: sum(rate(veridex_indexing_publish_seconds_count{outcome="error"}[10m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Index publishing errors are occurring
