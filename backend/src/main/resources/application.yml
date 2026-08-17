@@ -54,6 +54,11 @@ veridex:
     environment: ${VERIDEX_ENVIRONMENT:local}
     cors-allowed-origins: ${VERIDEX_CORS_ALLOWED_ORIGINS:http://localhost:5173}
     session-cookie-secure: ${VERIDEX_SESSION_COOKIE_SECURE:false}
+    upload:
+      max-file-bytes: ${VERIDEX_UPLOAD_MAX_FILE_BYTES:52428800}
+      max-archive-expanded-bytes: ${VERIDEX_UPLOAD_MAX_ARCHIVE_EXPANDED_BYTES:209715200}
+      max-archive-entries: ${VERIDEX_UPLOAD_MAX_ARCHIVE_ENTRIES:10000}
+      max-archive-depth: ${VERIDEX_UPLOAD_MAX_ARCHIVE_DEPTH:8}
   api:
     rate-limit-per-minute: ${VERIDEX_RATE_LIMIT_PER_MINUTE:600}
   storage:

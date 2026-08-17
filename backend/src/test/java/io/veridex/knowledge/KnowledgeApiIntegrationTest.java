@@ -4,6 +4,7 @@ import io.veridex.support.MinioContainerConfiguration;
 import io.veridex.support.PostgresIntegrationTest;
 import io.veridex.support.RabbitContainerConfiguration;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
@@ -25,11 +26,26 @@ class KnowledgeApiIntegrationTest extends PostgresIntegrationTest {
 
     private static final JsonMapper JSON = new JsonMapper();
 
-    private void loginAs(String username) {
+    private String csrfToken;
+
+    @BeforeEach
+    void clearSession() {
+        rest.post().uri("/api/auth/logout").exchange().expectStatus().isNoContent();
+        csrfToken = null;
+    }
+
+    private void loginAs(String username) throws Exception {
         rest.post().uri("/api/auth/login?username=" + username + "&password=veridex")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody().consumeWith(response -> {});
+        byte[] body = rest.get().uri("/api/auth/csrf")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .returnResult()
+                .getResponseBody();
+        csrfToken = JSON.readTree(body).path("token").asText();
     }
 
     @Test
@@ -37,6 +53,7 @@ class KnowledgeApiIntegrationTest extends PostgresIntegrationTest {
         loginAs("admin");
 
         var create = rest.post().uri("/api/knowledge-bases")
+                .header("X-XSRF-TOKEN", csrfToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body("{\"name\":\"产品手册\",\"description\":\"产品文档\"}")
                 .exchange()
@@ -47,6 +64,7 @@ class KnowledgeApiIntegrationTest extends PostgresIntegrationTest {
         String kbId = extractId(create.getResponseBody());
 
         rest.post().uri("/api/knowledge-bases/{kbId}/documents", kbId)
+                .header("X-XSRF-TOKEN", csrfToken)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
                 .body(multipart("intro.md", "# 产品介绍\n\n内容"))
                 .exchange()
@@ -66,6 +84,7 @@ class KnowledgeApiIntegrationTest extends PostgresIntegrationTest {
         // admin 建库（owner=admin），employee 无 MANAGE grant，上传被拒
         loginAs("admin");
         var create = rest.post().uri("/api/knowledge-bases")
+                .header("X-XSRF-TOKEN", csrfToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body("{\"name\":\"受限库\"}")
                 .exchange()
@@ -78,6 +97,7 @@ class KnowledgeApiIntegrationTest extends PostgresIntegrationTest {
         // 切换到 employee 会话（新登录覆盖 session）
         loginAs("employee");
         rest.post().uri("/api/knowledge-bases/{kbId}/documents", kbId)
+                .header("X-XSRF-TOKEN", csrfToken)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
                 .body(multipart("x.md", "x"))
                 .exchange()
@@ -89,6 +109,7 @@ class KnowledgeApiIntegrationTest extends PostgresIntegrationTest {
     void unsupportedDocumentTypeKeepsKnowledgeBadRequestContract() throws Exception {
         loginAs("admin");
         var create = rest.post().uri("/api/knowledge-bases")
+                .header("X-XSRF-TOKEN", csrfToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body("{\"name\":\"格式检查库\"}")
                 .exchange()
@@ -99,6 +120,7 @@ class KnowledgeApiIntegrationTest extends PostgresIntegrationTest {
         String kbId = extractId(create.getResponseBody());
 
         rest.post().uri("/api/knowledge-bases/{kbId}/documents", kbId)
+                .header("X-XSRF-TOKEN", csrfToken)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
                 .body(multipart("unsupported.exe", "x"))
                 .exchange()

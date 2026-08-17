@@ -4,6 +4,7 @@ import io.veridex.audit.api.AuditRecorder;
 import io.veridex.knowledge.application.DocumentService;
 import io.veridex.knowledge.api.ObjectStorage;
 import io.veridex.knowledge.domain.DocumentVersion;
+import io.veridex.knowledge.infrastructure.security.UploadContentInspector;
 import io.veridex.shared.infrastructure.RequestIds;
 import io.veridex.shared.outbox.OutboxWriter;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,18 +22,26 @@ public class DocumentUploadHandler {
     private final ObjectStorage storage;
     private final OutboxWriter outbox;
     private final AuditRecorder audit;
+    private final UploadContentInspector inspector;
 
     public DocumentUploadHandler(DocumentService documents, ObjectStorage storage,
-                                 OutboxWriter outbox, AuditRecorder audit) {
+                                 OutboxWriter outbox, AuditRecorder audit,
+                                 UploadContentInspector inspector) {
         this.documents = documents;
         this.storage = storage;
         this.outbox = outbox;
         this.audit = audit;
+        this.inspector = inspector;
     }
 
     @Transactional
     public DocumentVersion upload(UUID actorId, UUID kbId, String filename, String contentType,
                                   byte[] content, HttpServletRequest request) {
+        byte[] prefix = content.length <= 8 ? content : java.util.Arrays.copyOf(content, 8);
+        UploadContentInspector.InspectionResult inspection = inspector.inspect(filename, contentType, prefix, content.length);
+        if (!inspection.allowed()) {
+            throw new IllegalArgumentException(inspection.code());
+        }
         // content 来自 MultipartFile.getBytes()（≤50MB，内存可容纳），保证 sha256 与 put 用同一份字节
         String sha256 = sha256Hex(content);
         DocumentVersion version = documents.upload(actorId, kbId, filename, contentType, content.length, sha256);
