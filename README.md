@@ -126,12 +126,12 @@ docker compose -f deploy/compose/compose.yml logs -f
 ./mvnw -pl backend spring-boot:run
 ```
 
-后端默认监听 `http://localhost:8080`。Flyway 会在启动时自动创建或校验数据库结构。
+后端业务 API 默认监听 `http://localhost:8080`，Actuator 管理端点独立监听 `http://127.0.0.1:8081`（仅 `health`、`info`、`prometheus`）。Flyway 会在启动时自动创建或校验数据库结构。
 
 检查健康状态：
 
 ```bash
-curl --fail http://localhost:8080/actuator/health
+curl --fail http://localhost:8081/actuator/health
 ```
 
 正常响应包含：
@@ -149,7 +149,7 @@ npm --prefix web ci
 npm --prefix web run dev
 ```
 
-前端默认访问地址为 `http://localhost:5173`。Vite 会将 `/api` 和 `/actuator` 请求代理到 `http://localhost:8080`。
+前端默认访问地址为 `http://localhost:5173`。Vite 会将 `/api` 请求代理到 `http://localhost:8080`；Actuator 管理端点不通过 Vite 代理，直接访问 `http://localhost:8081`。
 
 依赖已经按 `web/package-lock.json` 安装后，日常启动可以只执行：
 
@@ -178,7 +178,7 @@ npm --prefix web run dev
 |---|---|---|
 | Web | `http://localhost:5173` | React 开发服务器 |
 | Backend | `http://localhost:8080` | Spring Boot API |
-| Backend Health | `http://localhost:8080/actuator/health` | 健康检查 |
+| Backend Health | `http://localhost:8081/actuator/health` | 管理端口健康检查 |
 | PostgreSQL | `localhost:5432` | 数据库 `veridex` |
 | RabbitMQ AMQP | `localhost:5672` | 应用消息连接 |
 | RabbitMQ UI | `http://localhost:15672` | 用户名 `veridex`，密码 `veridex-local` |
@@ -275,7 +275,7 @@ docker compose --env-file deploy/compose/.env.example -f deploy/compose/compose.
 ./scripts/verify-observability.sh
 ```
 
-Prometheus 抓取宿主机上的 `http://host.docker.internal:8080/actuator/prometheus` 和 RabbitMQ `15692/metrics`。Grafana 已预置 Prometheus、Tempo 数据源和 `Veridex Observability Overview` dashboard。Collector 接收 `4317` gRPC、`4318` HTTP OTLP，并将 traces 转发给 Tempo。
+Prometheus 抓取宿主机管理端口上的 `http://host.docker.internal:8081/actuator/prometheus` 和 RabbitMQ `15692/metrics`。Grafana 已预置 Prometheus、Tempo 数据源和 `Veridex Observability Overview` dashboard。Collector 接收 `4317` gRPC、`4318` HTTP OTLP，并将 traces 转发给 Tempo。
 
 普通 telemetry 默认不记录 question、prompt、answer、chunk 正文、凭据、原始异常或业务 UUID。Collector/Tempo 停止时 telemetry fail-open，业务请求仍应完成；恢复后重新执行一条请求即可验证链路。
 
@@ -387,7 +387,7 @@ docker compose -f deploy/compose/compose.yml logs opensearch
 依次检查：
 
 ```bash
-curl --fail http://localhost:8080/actuator/health
+curl --fail http://localhost:8081/actuator/health
 docker compose -f deploy/compose/compose.yml ps
 docker compose -f deploy/compose/compose.yml logs rabbitmq minio opensearch
 ```

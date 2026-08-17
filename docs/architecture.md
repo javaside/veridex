@@ -64,7 +64,7 @@ Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V12�
 
 `shared::observability` 提供固定 observation/metric 名称、低基数 outcome/stage/error tags、Rabbit propagation 和 fail-open meter 写入。QA、retrieval、generation、outbox、ingestion、indexing 只在稳定业务边界使用这些原语。metrics、span attributes/events 和普通日志禁止保存 question、prompt、answer、chunk/evidence 文本、凭据、原始异常消息或业务 UUID；run ID 只能作为 span/log correlation，不能作为 metric label。
 
-本地观测栈由 Prometheus、Grafana、OTel Collector 和 Tempo 组成，配置位于 `deploy/compose/observability`，固定镜像版本和校验入口为 `scripts/verify-observability.sh`。应用仍在宿主机运行，Prometheus 从 `host.docker.internal:8080/actuator/prometheus` 抓取，RabbitMQ metrics 从 `15692` 抓取。
+本地观测栈由 Prometheus、Grafana、OTel Collector 和 Tempo 组成，配置位于 `deploy/compose/observability`，固定镜像版本和校验入口为 `scripts/verify-observability.sh`。应用仍在宿主机运行，Prometheus 从宿主机管理端口 `host.docker.internal:8081/actuator/prometheus` 抓取，RabbitMQ metrics 从 `15692` 抓取。
 
 Trace body 默认 `NONE`。启用 `ERRORS`/`ALL` 时使用环境变量 key ring 配置 AES-256-GCM；body TTL 默认 24 小时、明文上限 256 KiB。只有 `PLATFORM_ADMIN` browser Session 可通过 `GET /api/traces/{runId}/body` 读取，必须提供合法 `X-Trace-Access-Reason`，响应 `no-store`，每次成功/拒绝/not-found/decrypt-failed 都审计。该 retention 不等同于删除 conversation、feedback、evaluation、备份、replica 或派生索引中的副本。
 
@@ -189,6 +189,16 @@ Feedback（rating=DOWN + reasonCode + evidence）
 评测集新 case → 再次发布数据集版本进入评测
 ```
 
-## 6. 与历史设计文档的关系
+## 6. 安全加固边界（Phase 5-c）
+
+- Actuator 独立管理端口（默认 `8081`，绑定 `127.0.0.1`），仅暴露 `health`、`info`、`prometheus`；业务端口不暴露 `/actuator/**`。
+- 浏览器 Session 写请求启用 CSRF（`XSRF-TOKEN` cookie + `X-XSRF-TOKEN` header）；Bearer API key 走无状态边界，不要求 CSRF。Session cookie 默认 `HttpOnly`、`SameSite=Lax`，生产/试点强制 `Secure`。
+- 上传入口校验大小、扩展名、MIME 和魔数一致性；压缩包受展开字节、条目数、嵌套深度和路径穿越约束；解析在独立临时目录内以配置超时执行，失败只使当前版本失败，旧 release 保持可用。
+- 出站请求只允许配置的 scheme/host/port，并在 DNS 解析后拒绝 loopback、link-local、RFC1918、CGNAT 与云 metadata 地址；禁用自动重定向并限制响应字节与超时。
+- 对象预览/下载在服务端按 actor 与 knowledge scope 授权，不存在与无权均返回 404（不泄露存在性）；预览和 trace-body 响应 `no-store`。
+- 安全配置错误 fail-fast；运行时安全检查 fail-closed；错误响应与 telemetry 不泄露正文、凭据、原始异常、磁盘路径或完整 query string。
+- 校验入口为 `scripts/verify-security.sh`（随 `scripts/verify.sh` 执行）。
+
+## 7. 与历史设计文档的关系
 
 `docs/superpowers/specs/` 与 `docs/superpowers/plans/` 下是按日期归档的设计与实施快照（Phase 1–4），保留原始决策过程，不再随代码演进更新。本文档与 [RAG 配置参数语义](rag-configuration-parameters.md) 是随代码更新的「当前态」说明，如两者冲突以代码和本文档为准。
