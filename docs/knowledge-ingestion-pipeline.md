@@ -1,6 +1,6 @@
 # 知识入库处理管道 — 架构说明
 
-> 本文档基于 `feature/phase2-ingestion` 分支当前实现（2026-08-11）整理，解释一次「上传文件 → 可被检索」的完整处理链路：每个环节做了什么、数据存在哪里、各组件职责边界。
+> 本文档基于当前 Phase 5-b 实现整理，解释一次「上传文件 → 可被检索」的完整处理链路、Rabbit context 传播、固定失败观测和隐私边界。
 
 ---
 
@@ -34,7 +34,9 @@
                                OpenSearch（向量+全文索引）
 ```
 
-失败路径：任一步异常 → 版本 `FAILED` → 消息进死信队列 `ingestion.document.dlq`，不影响其它已发布版本。
+消息业务 JSON 保持不变。Outbox 在事务内把合法的 W3C `traceparent`、`tracestate`、`x-request-id` 和固定 schema version 写入 headers，并将 trace context 同步保存到 outbox row；worker 消费时恢复 request ID 到 delivery-scoped MDC，处理结束后在 `finally` 清理。缺失、过长、未知版本或格式错误的 headers 会被安全忽略，不会拒绝业务消息。
+
+失败路径：任一步异常 → 版本 `FAILED`（只保存固定 `ingestion_unknown` 等错误码，不保存原始异常消息）→ 消息进死信队列 `ingestion.document.dlq`，不影响其它已发布版本。`veridex.ingestion.run` 使用固定 `result` 和 `failure_stage` tags；metrics 不包含 question、正文、凭据或任何业务 UUID。超过 15 分钟仍处于 `PROCESSING` 的版本通过 `veridex.ingestion.processing.stuck` gauge 暴露。
 
 ---
 

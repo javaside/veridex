@@ -8,16 +8,23 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-echo "==> [1/4] Maven clean verify"
+echo "==> [1/5] Maven clean verify"
 "${ROOT_DIR}/mvnw" -f "${ROOT_DIR}/pom.xml" clean verify
 
-echo "==> [2/4] Frontend tests (Vitest)"
+echo "==> [2/5] Frontend tests (Vitest)"
 npm --prefix "${ROOT_DIR}/web" test
 
-echo "==> [3/4] Frontend production build"
+echo "==> [3/5] Frontend production build"
 npm --prefix "${ROOT_DIR}/web" run build
 
-echo "==> [4/4] git diff --check"
+echo "==> [4/5] Observability stack checks"
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+  "${ROOT_DIR}/scripts/verify-observability.sh"
+else
+  echo "Docker unavailable; observability container checks skipped."
+fi
+
+echo "==> [5/5] git diff --check"
 git -C "${ROOT_DIR}" diff --check
 
 echo "==> verify.sh: all checks passed"

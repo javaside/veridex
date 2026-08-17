@@ -1,6 +1,6 @@
 # 架构与模块说明
 
-> 本文档基于当前代码状态整理（更新至 Phase 5-a），说明后端模块划分、前端路由、数据库迁移与 API 概览。它是面向开发者的「地图」，具体某个环节的参数语义见 [RAG 配置参数语义](rag-configuration-parameters.md)，知识入库链路见[知识入库处理管道](knowledge-ingestion-pipeline.md)。
+> 本文档基于当前代码状态整理（更新至 Phase 5-b），说明后端模块划分、前端路由、数据库迁移、API 与可观测性边界。它是面向开发者的「地图」，具体某个环节的参数语义见 [RAG 配置参数语义](rag-configuration-parameters.md)，知识入库链路见[知识入库处理管道](knowledge-ingestion-pipeline.md)。
 
 ## 1. 后端模块划分
 
@@ -12,8 +12,8 @@
 | `iam` | 身份与访问：用户、角色、Session 登录、当前用户上下文 | `shared` |
 | `audit` | 审计日志写入 | `shared`, `iam` |
 | `knowledge` | 知识库、文档、文档版本、授权范围 | `shared::config`, `shared::outbox`, `iam::api`, `audit::api` |
-| `ingestion` | 文档解析（Tika）、结构分块、异步 worker | `shared::messaging`, `knowledge::api`, `indexing::api`, `audit::api` |
-| `indexing` | 索引发布（IndexRelease）、OpenSearch 写入与别名 | `shared::config`, `knowledge::api`, `iam::api` |
+| `ingestion` | 文档解析（Tika）、结构分块、异步 worker、Rabbit context/MDC 恢复与 processing-stuck gauge | `shared::messaging`, `shared::observability`, `knowledge::api`, `indexing::api`, `audit::api` |
+| `indexing` | 索引发布（IndexRelease）、OpenSearch 写入与别名、发布 observation | `shared::config`, `shared::observability`, `knowledge::api`, `iam::api` |
 | `retrieval` | 混合检索（BM25 + 向量 + RRF 融合 + 上下文组装） | `shared`, `knowledge::api`, `indexing::api` |
 | `generation` | 生成回答、拒答策略、引用校验 | `shared`, `retrieval::api`, `conversation::api`, `knowledge::api` |
 | `conversation` | 会话与消息 | `shared`, `iam`, `generation` |
@@ -58,10 +58,19 @@ Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V12�
 | V10 | Phase 4-c 反馈：`feedback` |
 | V11 | Phase 4-d 评测运行：`evaluation_run`、`evaluation_run_case` |
 | V12 | Phase 5-a API key：`api_key`（哈希凭据、scope、吊销与使用时间） |
+| V13 | Phase 5-b 可观测性：`trace_body`、Rabbit propagation columns、QueryRun scrub/fingerprint |
 
-## 4. API 概览
+## 4. 可观测性边界
 
-### 4.1 认证（`iam`）
+`shared::observability` 提供固定 observation/metric 名称、低基数 outcome/stage/error tags、Rabbit propagation 和 fail-open meter 写入。QA、retrieval、generation、outbox、ingestion、indexing 只在稳定业务边界使用这些原语。metrics、span attributes/events 和普通日志禁止保存 question、prompt、answer、chunk/evidence 文本、凭据、原始异常消息或业务 UUID；run ID 只能作为 span/log correlation，不能作为 metric label。
+
+本地观测栈由 Prometheus、Grafana、OTel Collector 和 Tempo 组成，配置位于 `deploy/compose/observability`，固定镜像版本和校验入口为 `scripts/verify-observability.sh`。应用仍在宿主机运行，Prometheus 从 `host.docker.internal:8080/actuator/prometheus` 抓取，RabbitMQ metrics 从 `15692` 抓取。
+
+Trace body 默认 `NONE`。启用 `ERRORS`/`ALL` 时使用环境变量 key ring 配置 AES-256-GCM；body TTL 默认 24 小时、明文上限 256 KiB。只有 `PLATFORM_ADMIN` browser Session 可通过 `GET /api/traces/{runId}/body` 读取，必须提供合法 `X-Trace-Access-Reason`，响应 `no-store`，每次成功/拒绝/not-found/decrypt-failed 都审计。该 retention 不等同于删除 conversation、feedback、evaluation、备份、replica 或派生索引中的副本。
+
+## 5. API 概览
+
+### 5.1 认证（`iam`）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -70,13 +79,13 @@ Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V12�
 | POST | `/api/iam/keys` | 创建 scoped API key；平台管理员可指定 `userId`，知识管理员仅能为自己签发（token 明文仅返回一次） |
 | DELETE | `/api/iam/keys/{keyId}` | 平台管理员可吊销任意 key；知识管理员仅能吊销自己的 key |
 
-### 4.2 OpenAPI
+### 5.2 OpenAPI
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/v3/api-docs` | OpenAPI JSON 文档（仅管理员 Session） |
 
-### 4.3 知识管理（`knowledge`）
+### 5.3 知识管理（`knowledge`）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -89,7 +98,7 @@ Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V12�
 | GET | `/api/documents/{documentId}/versions/{versionId}/parsed` | 解析全文预览 |
 | GET | `/api/documents/{documentId}/versions/{versionId}/chunks` | 分块预览 |
 
-### 4.4 索引发布（`indexing`）
+### 5.4 索引发布（`indexing`）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -99,7 +108,7 @@ Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V12�
 | POST | `/api/knowledge-bases/{kbId}/releases/{releaseId}/offline` | 下架 |
 | POST | `/api/knowledge-bases/{kbId}/releases/{releaseId}/delete` | 删除 |
 
-### 4.5 问答（`qa`）
+### 5.5 问答（`qa`）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -108,7 +117,7 @@ Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V12�
 | GET | `/api/qa/conversations/{id}/messages` | 会话消息 |
 | POST | `/api/qa/feedback` | 占位（返回 204，实际反馈走 `/api/feedback`） |
 
-### 4.6 配置版本（`configuration`）
+### 5.6 配置版本（`configuration`）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -120,7 +129,7 @@ Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V12�
 | GET | `/api/configuration/profiles/{id}/versions` | 版本列表 |
 | GET | `/api/configuration/profiles/{id}/versions/{versionNo}` | 版本详情 |
 
-### 4.7 评测（`evaluation`）
+### 5.7 评测（`evaluation`）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -139,7 +148,7 @@ Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V12�
 | GET | `/api/evaluation/runs/{id}` | 运行详情 |
 | POST | `/api/evaluation/comparisons` | 两个运行对比 + 门禁判定 |
 
-### 4.8 反馈（`feedback`）
+### 5.8 反馈（`feedback`）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|

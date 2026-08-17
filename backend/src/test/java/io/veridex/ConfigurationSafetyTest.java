@@ -20,7 +20,7 @@ class ConfigurationSafetyTest {
         assertThat(environment.getProperty("management.tracing.sampling.probability")).isEqualTo("0.1");
         assertThat(environment.getProperty("veridex.trace.body.capture-policy")).isEqualTo("NONE");
         assertThat(environment.getProperty("veridex.trace.body.retention")).isEqualTo("24h");
-        assertThat(environment.getProperty("veridex.trace.body.max-plaintext-size")).isEqualTo("256KiB");
+        assertThat(environment.getProperty("veridex.trace.body.max-plaintext-size")).isEqualTo("256KB");
         assertThat(environment.getProperty("veridex.trace.body.cleanup-interval")).isEqualTo("1h");
         assertThat(environment.getProperty("veridex.trace.body.cleanup-batch-size")).isEqualTo("500");
         assertThat(environment.getProperty("veridex.trace.body.fingerprint-key")).isEmpty();

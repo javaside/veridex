@@ -10,7 +10,8 @@ Veridex 是面向企业私有化部署的 RAG（Retrieval-Augmented Generation�
 - **Phase 2：知识入库垂直切片** — 已完成
 - **Phase 3：带权限的 RAG 查询** — 已完成
 - **Phase 4：质量评测与运营闭环** — 已完成
-- **Phase 5：企业试点准备** — 尚未实现
+- **Phase 5-b：可观测性与受控 Trace Body** — 已完成
+- **Phase 5：企业试点准备** — 持续进行中
 
 详细阶段目标见[交付路线图](docs/superpowers/plans/2026-08-09-enterprise-rag-delivery-roadmap.md)。
 
@@ -185,6 +186,10 @@ npm --prefix web run dev
 | MinIO Console | `http://localhost:9001` | 用户名 `veridex`，密码 `veridex-local-secret` |
 | OpenSearch | `http://localhost:9200` | 本地关闭安全插件 |
 | Redis | `localhost:6379` | 当前主要作为后续能力基础设施 |
+| Prometheus | `http://localhost:9090` | 应用与 RabbitMQ metrics |
+| Grafana | `http://localhost:3000` | 预置 Veridex Overview dashboard |
+| Tempo | `http://localhost:3200` | trace 查询 API |
+| OTLP Collector | `localhost:4317/4318` | gRPC/HTTP trace 接收 |
 
 ### 应用种子用户
 
@@ -237,6 +242,18 @@ Spring Boot 配置位于 `backend/src/main/resources/application.yml`。常用�
 | `VERIDEX_EMBEDDING_DIMENSIONS` | `128` |
 | `VERIDEX_OLLAMA_BASE_URL` | `http://localhost:11434` |
 | `VERIDEX_OLLAMA_EMBEDDING_MODEL` | `qwen3-embedding` |
+| `VERIDEX_ENVIRONMENT` | `local` |
+| `VERIDEX_TRACING_SAMPLING_PROBABILITY` | `0.1` |
+| `VERIDEX_OTLP_ENDPOINT` | `http://localhost:4318/v1/traces` |
+| `VERIDEX_TRACE_BODY_CAPTURE_POLICY` | `NONE` |
+| `VERIDEX_TRACE_BODY_RETENTION` | `24h` |
+| `VERIDEX_TRACE_BODY_MAX_PLAINTEXT_SIZE` | `256KB`（约 256 KiB 上限） |
+| `VERIDEX_TRACE_BODY_CLEANUP_INTERVAL` | `1h` |
+| `VERIDEX_TRACE_BODY_CLEANUP_BATCH_SIZE` | `500` |
+| `VERIDEX_TRACE_BODY_FINGERPRINT_KEY` | 空，NONE 模式允许为空 |
+| `VERIDEX_TRACE_BODY_CURRENT_KEY_ID` | 空；ERRORS/ALL 时必填 |
+| `VERIDEX_TRACE_BODY_CURRENT_KEY` | 空；ERRORS/ALL 时必填，32-byte Base64 |
+| `VERIDEX_TRACE_BODY_HISTORICAL_KEYS` | 空；格式 `keyId=Base64Key,...` |
 
 示例：使用不同的 PostgreSQL 地址启动后端：
 
@@ -248,6 +265,38 @@ VERIDEX_DB_PASSWORD='replace-me' \
 ```
 
 本地 OpenSearch 设置了 `DISABLE_SECURITY_PLUGIN=true`，仅适合开发环境。
+
+## Phase 5-b 可观测性
+
+启动本地基础设施和观测栈：
+
+```bash
+docker compose --env-file deploy/compose/.env.example -f deploy/compose/compose.yml up -d
+./scripts/verify-observability.sh
+```
+
+Prometheus 抓取宿主机上的 `http://host.docker.internal:8080/actuator/prometheus` 和 RabbitMQ `15692/metrics`。Grafana 已预置 Prometheus、Tempo 数据源和 `Veridex Observability Overview` dashboard。Collector 接收 `4317` gRPC、`4318` HTTP OTLP，并将 traces 转发给 Tempo。
+
+普通 telemetry 默认不记录 question、prompt、answer、chunk 正文、凭据、原始异常或业务 UUID。Collector/Tempo 停止时 telemetry fail-open，业务请求仍应完成；恢复后重新执行一条请求即可验证链路。
+
+Trace body 默认关闭。启用 `ERRORS` 或 `ALL` 前，必须通过环境变量提供 32-byte Base64 AES key；示例生成命令：
+
+```bash
+export VERIDEX_TRACE_BODY_CURRENT_KEY_ID=pilot-2026
+export VERIDEX_TRACE_BODY_CURRENT_KEY="$(openssl rand -base64 32)"
+export VERIDEX_TRACE_BODY_CAPTURE_POLICY=ERRORS
+```
+
+trace body 仅保留 24 小时，超过 256 KiB 的 UTF-8 envelope 会跳过写入。平台管理员 Session 可在获得业务批准后使用 `GET /api/traces/{runId}/body` 读取，并必须发送 `X-Trace-Access-Reason`；响应设置 `Cache-Control: no-store`，每次允许或拒绝都会审计。trace body retention 不删除 conversation/message、feedback、evaluation、PostgreSQL backup、replica 或 MinIO/OpenSearch 派生数据中的副本。
+
+读取示例：
+
+```bash
+curl --cookie session.txt --header 'X-Trace-Access-Reason: incident review' \
+  http://localhost:8080/api/traces/<run-id>/body
+```
+
+告警规则覆盖 API/QA 错误率、ingestion queue/DLQ/stuck processing、outbox backlog/age、retrieval degradation、model errors 和 indexing errors。queue matcher 固定为 `ingestion.document` 与 `ingestion.document.dlq`。
 
 ## 测试与构建
 
