@@ -33,7 +33,7 @@ class AuthFlowIntegrationTest extends PostgresIntegrationTest {
     @Test
     void anonymousBusinessRequestUsesLoginEntryPoint() throws Exception {
         HttpResponse<Void> response = HttpClient.newHttpClient()
-                .send(post("/api/qa/feedback"), HttpResponse.BodyHandlers.discarding());
+                .send(get("/api/qa/conversations"), HttpResponse.BodyHandlers.discarding());
 
         assertThat(response.statusCode()).isEqualTo(302);
         assertThat(response.headers().firstValue("Location")).hasValue(baseUri() + "/login");

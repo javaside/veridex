@@ -1,3 +1,5 @@
+import { csrfHeaders } from '../../lib/csrf'
+
 export type FeedbackRating = 'UP' | 'DOWN'
 export type FeedbackReasonCode =
   | 'WRONG_ANSWER' | 'HALLUCINATION' | 'MISSING_EVIDENCE'
@@ -30,7 +32,7 @@ export const feedbackApi = {
     fetch(`/api/feedback/${id}/converted`, {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
       body: JSON.stringify({ caseId }),
     }).then((r) => json<FeedbackView>(r)),
 }

@@ -1,3 +1,5 @@
+import { csrfHeaders } from '../../lib/csrf'
+
 export type ApiKeyScope = 'qa' | 'knowledge:read' | 'knowledge:write' | 'configuration' | 'evaluation' | 'feedback'
 
 export const API_KEY_SCOPES: { value: ApiKeyScope; label: string }[] = [
@@ -57,11 +59,11 @@ export const adminApi = {
     fetch('/api/iam/keys', {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
       body: JSON.stringify({ name, scopes, ...(userId ? { userId } : {}) }),
     }).then((response) => json<ApiKeyCreated>(response)),
   revokeKey: (id: string): Promise<void> =>
-    fetch(`/api/iam/keys/${id}`, { method: 'DELETE', credentials: 'include' }).then(async (response) => {
+    fetch(`/api/iam/keys/${id}`, { method: 'DELETE', credentials: 'include', headers: csrfHeaders() }).then(async (response) => {
       if (!response.ok) {
         throw new Error(await errorMessage(response, `吊销失败 (${response.status})`))
       }

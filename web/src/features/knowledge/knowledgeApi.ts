@@ -1,3 +1,5 @@
+import { csrfHeaders } from '../../lib/csrf'
+
 export type KnowledgeBase = { id: string; name: string; description: string | null; slug: string }
 export type DocumentSummary = { id: string; filename: string; contentType: string; sizeBytes: number }
 export type DocumentVersion = {
@@ -36,7 +38,7 @@ export const knowledgeApi = {
     fetch('/api/knowledge-bases', {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
       body: JSON.stringify({ name, description }),
     }).then((response) => json<KnowledgeBase>(response)),
   documents: (kbId: string): Promise<DocumentSummary[]> =>
@@ -49,6 +51,7 @@ export const knowledgeApi = {
     return fetch(`/api/knowledge-bases/${kbId}/documents`, {
       method: 'POST',
       credentials: 'include',
+      headers: csrfHeaders(),
       body: form,
     }).then((response) => json<DocumentVersion>(response))
   },
@@ -65,10 +68,12 @@ export const knowledgeApi = {
     fetch(`/api/knowledge-bases/${kbId}/releases/publish`, {
       method: 'POST',
       credentials: 'include',
+      headers: csrfHeaders(),
     }).then((response) => json<PublishResult>(response)),
   releaseAction: (kbId: string, releaseId: string, action: 'make-current' | 'offline' | 'delete'): Promise<null> =>
     fetch(`/api/knowledge-bases/${kbId}/releases/${releaseId}/${action}`, {
       method: 'POST',
       credentials: 'include',
+      headers: csrfHeaders(),
     }).then((response) => json<null>(response)),
 }

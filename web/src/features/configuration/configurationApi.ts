@@ -1,3 +1,5 @@
+import { csrfHeaders } from '../../lib/csrf'
+
 export type ChunkingConfig = { maxChars: number; overlap: number }
 export type RetrievalConfig = {
   topKPerChannel: number
@@ -63,7 +65,7 @@ const json = async <T>(response: Response): Promise<T> => {
 const send = (method: string, payload: unknown): RequestInit => ({
   method,
   credentials: 'include',
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
   body: JSON.stringify(payload),
 })
 
@@ -77,7 +79,7 @@ export const configurationApi = {
   update: (id: string, name: string, description: string | null, draft: ProfileConfig): Promise<ProfileDetail> =>
     fetch(`/api/configuration/profiles/${id}`, send('PUT', { name, description, draft })).then((r) => json<ProfileDetail>(r)),
   publish: (id: string): Promise<PublishResult> =>
-    fetch(`/api/configuration/profiles/${id}/publish`, { method: 'POST', credentials: 'include' }).then((r) => json<PublishResult>(r)),
+    fetch(`/api/configuration/profiles/${id}/publish`, { method: 'POST', credentials: 'include', headers: csrfHeaders() }).then((r) => json<PublishResult>(r)),
   versions: (id: string): Promise<VersionView[]> =>
     fetch(`/api/configuration/profiles/${id}/versions`, { credentials: 'include' }).then((r) => json<VersionView[]>(r)),
   version: (id: string, versionNo: number): Promise<VersionDetail> =>

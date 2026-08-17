@@ -1,3 +1,5 @@
+import { csrfHeaders } from '../../lib/csrf'
+
 export type EvidenceRef = { documentVersionId: string; chunkIndexes: number[] }
 
 export type DatasetView = {
@@ -122,14 +124,14 @@ const json = async <T>(response: Response): Promise<T> => {
 const post = (payload: unknown): RequestInit => ({
   method: 'POST',
   credentials: 'include',
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
   body: JSON.stringify(payload),
 })
 
 const put = (payload: unknown): RequestInit => ({
   method: 'PUT',
   credentials: 'include',
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
   body: JSON.stringify(payload),
 })
 
@@ -147,9 +149,9 @@ export const evaluationApi = {
   updateCase: (id: string, caseId: string, payload: CaseInput): Promise<CaseView> =>
     fetch(`/api/evaluation/datasets/${id}/cases/${caseId}`, put(payload)).then((r) => json<CaseView>(r)),
   deleteCase: (id: string, caseId: string): Promise<null> =>
-    fetch(`/api/evaluation/datasets/${id}/cases/${caseId}`, { method: 'DELETE', credentials: 'include' }).then((r) => json<null>(r)),
+    fetch(`/api/evaluation/datasets/${id}/cases/${caseId}`, { method: 'DELETE', credentials: 'include', headers: csrfHeaders() }).then((r) => json<null>(r)),
   publish: (id: string): Promise<PublishResult> =>
-    fetch(`/api/evaluation/datasets/${id}/publish`, { method: 'POST', credentials: 'include' }).then((r) => json<PublishResult>(r)),
+    fetch(`/api/evaluation/datasets/${id}/publish`, { method: 'POST', credentials: 'include', headers: csrfHeaders() }).then((r) => json<PublishResult>(r)),
   versions: (id: string): Promise<VersionView[]> =>
     fetch(`/api/evaluation/datasets/${id}/versions`, { credentials: 'include' }).then((r) => json<VersionView[]>(r)),
   version: (id: string, versionNo: number): Promise<VersionDetail> =>

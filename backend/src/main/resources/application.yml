@@ -1,3 +1,11 @@
+server:
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
+        secure: ${VERIDEX_SESSION_COOKIE_SECURE:false}
+
 spring:
   application:
     name: veridex

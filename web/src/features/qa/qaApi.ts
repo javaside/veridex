@@ -1,3 +1,5 @@
+import { csrfHeaders } from '../../lib/csrf'
+
 export type Citation = {
   citationIndex: number
   documentId: string | null
@@ -52,7 +54,7 @@ export const qaApi = {
     const response = await fetch('/api/qa/ask', {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
       body: JSON.stringify({ question, knowledgeBaseIds, conversationId }),
     })
     if (!response.ok) {
@@ -76,7 +78,7 @@ export const qaApi = {
     fetch('/api/feedback', {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
       body: JSON.stringify(payload),
     }).then((response) => {
       if (!response.ok) throw new Error(`提交反馈失败 (${response.status})`)

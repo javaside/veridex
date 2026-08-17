@@ -2,6 +2,10 @@ package io.veridex.iam.infrastructure;
 
 import io.veridex.iam.application.ApiKeyService;
 import io.veridex.iam.domain.PlatformUser;
+import io.veridex.shared.infrastructure.security.SecurityProperties;
+import io.veridex.shared.infrastructure.security.SecurityResponseHeaders;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.List;
 import java.util.Map;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,6 +20,9 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import tools.jackson.databind.json.JsonMapper;
 
 @Configuration
@@ -25,18 +32,26 @@ public class SecurityConfig {
     private final JsonMapper jsonMapper;
     private final ApiKeyService apiKeyService;
     private final ApiKeyScopeAuthorizationManager scopeAuthorizationManager;
+    private final SecurityProperties securityProperties;
 
     public SecurityConfig(JsonMapper jsonMapper, ApiKeyService apiKeyService,
-                          ApiKeyScopeAuthorizationManager scopeAuthorizationManager) {
+                          ApiKeyScopeAuthorizationManager scopeAuthorizationManager,
+                          SecurityProperties securityProperties) {
         this.jsonMapper = jsonMapper;
         this.apiKeyService = apiKeyService;
         this.scopeAuthorizationManager = scopeAuthorizationManager;
+        this.securityProperties = securityProperties;
     }
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        SecurityResponseHeaders.configure(http);
         http
-            .csrf(csrf -> csrf.disable())
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            .csrf(csrf -> csrf
+                .spa()
+                .ignoringRequestMatchers("/api/auth/login", "/api/auth/logout")
+                .ignoringRequestMatchers(this::isBearerApiKeyRequest))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/actuator/**").access(scopeAuthorizationManager::authorizeNonApiKey)
                 .requestMatchers("/api/auth/login", "/api/auth/logout")
@@ -82,6 +97,23 @@ public class SecurityConfig {
                 .logoutUrl("/api/auth/logout")
                 .logoutSuccessHandler((req, res, auth) -> res.setStatus(204)));
         return http.build();
+    }
+
+    private CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(securityProperties.corsAllowedOrigins());
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Content-Type", "X-XSRF-TOKEN", "Authorization", "X-Request-Id"));
+        configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L);
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/api/**", configuration);
+        return source;
+    }
+
+    private boolean isBearerApiKeyRequest(HttpServletRequest request) {
+        String authorization = request.getHeader("Authorization");
+        return authorization != null && authorization.startsWith("Bearer vd_");
     }
 
     @Bean
