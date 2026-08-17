@@ -16,6 +16,14 @@ class ConfigurationSafetyTest {
     Environment environment;
 
     @Test
+    void actuatorUsesSeparateManagementPortAndAllowlist() {
+        assertThat(environment.getProperty("management.server.port")).isEqualTo("8081");
+        assertThat(environment.getProperty("management.server.address")).isEqualTo("127.0.0.1");
+        assertThat(environment.getProperty("management.endpoints.web.exposure.include"))
+                .isEqualTo("health,info,prometheus");
+    }
+
+    @Test
     void observabilityUsesSafeDefaults() {
         assertThat(environment.getProperty("management.tracing.sampling.probability")).isEqualTo("0.1");
         assertThat(environment.getProperty("veridex.trace.body.capture-policy")).isEqualTo("NONE");

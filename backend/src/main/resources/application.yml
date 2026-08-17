@@ -42,6 +42,10 @@ spring:
         log-query-response: false
 
 veridex:
+  security:
+    environment: ${VERIDEX_ENVIRONMENT:local}
+    cors-allowed-origins: ${VERIDEX_CORS_ALLOWED_ORIGINS:http://localhost:5173}
+    session-cookie-secure: ${VERIDEX_SESSION_COOKIE_SECURE:false}
   api:
     rate-limit-per-minute: ${VERIDEX_RATE_LIMIT_PER_MINUTE:600}
   storage:
@@ -79,10 +83,13 @@ springdoc:
   default-support-form-authentication: false
 
 management:
+  server:
+    port: ${VERIDEX_MANAGEMENT_PORT:8081}
+    address: ${VERIDEX_MANAGEMENT_ADDRESS:127.0.0.1}
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info,prometheus
   endpoint:
     health:
       probes:
