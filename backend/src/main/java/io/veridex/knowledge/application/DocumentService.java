@@ -88,6 +88,14 @@ public class DocumentService implements DocumentVersionProcessing {
         return require(versionId);
     }
 
+    /** 授权查找：版本不存在或当前用户无权查看时返回 empty，不泄露资源存在性。 */
+    public Optional<DocumentVersion> findVersionAuthorized(UUID versionId, UUID userId) {
+        return versions.findById(versionId)
+                .flatMap(version -> documents.findById(version.getDocumentId())
+                        .filter(document -> authorization.canView(document.getKnowledgeBaseId(), userId))
+                        .map(document -> version));
+    }
+
     @Override
     public String findVersionStatus(UUID versionId) {
         return require(versionId).getStatus().name();

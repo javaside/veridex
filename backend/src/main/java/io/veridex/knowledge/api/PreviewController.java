@@ -1,11 +1,14 @@
 package io.veridex.knowledge.api;
 
+import io.veridex.iam.api.CurrentActor;
 import io.veridex.knowledge.application.DocumentService;
 import io.veridex.knowledge.domain.DocumentVersion;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,28 +30,37 @@ public class PreviewController {
 
     @GetMapping(value = "/parsed", produces = "text/plain;charset=UTF-8")
     public ResponseEntity<String> parsed(@PathVariable UUID documentId, @PathVariable UUID versionId) {
-        DocumentVersion version = documents.findVersion(versionId);
-        String key = version.getParsedObjectKey();
+        Optional<DocumentVersion> authorized = documents.findVersionAuthorized(versionId, CurrentActor.id());
+        if (authorized.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        String key = authorized.get().getParsedObjectKey();
         if (key == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
         try (var in = storage.get(key)) {
-            return ResponseEntity.ok(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+            return ResponseEntity.ok()
+                    .cacheControl(CacheControl.noStore())
+                    .body(new String(in.readAllBytes(), StandardCharsets.UTF_8));
         } catch (Exception e) {
-            throw new RuntimeException("failed to read parsed preview " + key, e);
+            throw new RuntimeException("failed to read parsed preview", e);
         }
     }
 
     @GetMapping("/chunks")
-    public List<Map<String, Object>> chunks(@PathVariable UUID documentId, @PathVariable UUID versionId) {
-        DocumentVersion version = documents.findVersion(versionId);
-        String key = version.getObjectKey() + ".chunks.json";
+    public ResponseEntity<List<Map<String, Object>>> chunks(@PathVariable UUID documentId, @PathVariable UUID versionId) {
+        Optional<DocumentVersion> authorized = documents.findVersionAuthorized(versionId, CurrentActor.id());
+        if (authorized.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        String key = authorized.get().getObjectKey() + ".chunks.json";
         try (var in = storage.get(key)) {
-            return new tools.jackson.databind.json.JsonMapper()
+            List<Map<String, Object>> body = new tools.jackson.databind.json.JsonMapper()
                     .readValue(in.readAllBytes(), new tools.jackson.core.type.TypeReference<>() {
                     });
+            return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(body);
         } catch (Exception e) {
-            throw new RuntimeException("failed to read chunks preview " + key, e);
+            throw new RuntimeException("failed to read chunks preview", e);
         }
     }
 }
