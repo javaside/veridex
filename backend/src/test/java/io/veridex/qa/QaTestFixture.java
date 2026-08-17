@@ -57,11 +57,13 @@ abstract class QaTestFixture extends PostgresIntegrationTest {
     private final HttpClient http = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(30)).build();
 
+    protected String csrfToken;
+
     protected String base() {
         return "http://localhost:" + port;
     }
 
-    /** 登录并返回 Set-Cookie（会话凭证）。 */
+    /** 登录并返回 JSESSIONID 会话凭证；同时缓存 CSRF token 供写请求使用。 */
     protected String login(String username) throws Exception {
         HttpRequest req = HttpRequest.newBuilder(
                         URI.create(base() + "/api/auth/login?username=" + username + "&password=veridex"))
@@ -69,7 +71,26 @@ abstract class QaTestFixture extends PostgresIntegrationTest {
                 .build();
         HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isLessThan(300);
-        return resp.headers().firstValue("Set-Cookie").orElseThrow();
+        List<String> cookiePairs = resp.headers().allValues("Set-Cookie").stream()
+                .map(c -> c.split(";")[0].trim())
+                .toList();
+        // 会话 Cookie 同时携带 XSRF-TOKEN 与 JSESSIONID，后续请求才能复用同一 CSRF token
+        String session = String.join("; ", cookiePairs);
+        csrfToken = cookiePairs.stream()
+                .filter(c -> c.startsWith("XSRF-TOKEN="))
+                .map(c -> c.substring("XSRF-TOKEN=".length()))
+                .findFirst()
+                .orElse(null);
+        if (csrfToken == null || csrfToken.isEmpty()) {
+            // 认证成功可能清除 CSRF token；重新获取
+            HttpRequest csrfReq = HttpRequest.newBuilder(URI.create(base() + "/api/auth/csrf"))
+                    .header("Cookie", session)
+                    .GET()
+                    .build();
+            HttpResponse<String> csrfResp = http.send(csrfReq, HttpResponse.BodyHandlers.ofString());
+            csrfToken = extractJsonString(csrfResp.body(), "token");
+        }
+        return session;
     }
 
     /** 发起问答，阻塞读取完整 SSE 流（SseEmitter complete 后 EOF）。 */
@@ -90,6 +111,7 @@ abstract class QaTestFixture extends PostgresIntegrationTest {
         HttpRequest req = HttpRequest.newBuilder(URI.create(base() + "/api/qa/ask"))
                 .header("Content-Type", "application/json")
                 .header("Cookie", session)
+                .header("X-XSRF-TOKEN", csrfToken)
                 .POST(HttpRequest.BodyPublishers.ofString(body.toString(), StandardCharsets.UTF_8))
                 .timeout(Duration.ofSeconds(60))
                 .build();
@@ -126,6 +148,7 @@ abstract class QaTestFixture extends PostgresIntegrationTest {
         HttpRequest req = HttpRequest.newBuilder(
                         URI.create(base() + "/api/knowledge-bases/" + kbId + "/releases/publish"))
                 .header("Cookie", session)
+                .header("X-XSRF-TOKEN", csrfToken)
                 .POST(HttpRequest.BodyPublishers.noBody())
                 .build();
         HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());

@@ -18,6 +18,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalManagementPort;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
 @SpringBootTest(classes = VeridexApplication.class,
@@ -28,25 +29,27 @@ class RateLimitIntegrationTest extends PostgresIntegrationTest {
     private static final UUID ADMIN = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     @LocalServerPort int port;
+    @LocalManagementPort int managementPort;
     @Autowired ApiKeyService apiKeys;
 
     @Test
-    void actuatorRequestsBypassExhaustedAnonymousBucketWithoutExemptingBusinessApis() throws Exception {
+    void actuatorIsOnSeparateManagementPortAndNotRateLimitedByBusinessBucket() throws Exception {
         HttpClient client = HttpClient.newHttpClient();
 
-        int prometheusStatus = send(client, "/actuator/prometheus").statusCode();
-        assertThat(prometheusStatus).isNotEqualTo(429);
+        // 业务端口不再暴露 actuator 内容
+        assertThat(send(client, "/actuator/health").statusCode()).isNotEqualTo(200);
+
+        // 管理端口暴露 actuator，且不受业务限流桶影响
         for (int i = 0; i < 5; i++) {
-            assertThat(send(client, "/actuator/health").statusCode()).isEqualTo(200);
-            assertThat(send(client, "/actuator/prometheus").statusCode()).isEqualTo(prometheusStatus);
+            assertThat(managementGet(client, "/actuator/health").statusCode()).isEqualTo(200);
         }
+
+        // 耗尽匿名业务桶后，管理端口仍正常
         for (int i = 0; i < 3; i++) {
             assertThat(send(client, options("/api/iam/keys")).statusCode()).isEqualTo(200);
         }
-
         assertThat(send(client, options("/api/iam/keys")).statusCode()).isEqualTo(429);
-        assertThat(send(client, "/actuator/health").statusCode()).isEqualTo(200);
-        assertThat(send(client, "/actuator/prometheus").statusCode()).isEqualTo(prometheusStatus);
+        assertThat(managementGet(client, "/actuator/health").statusCode()).isEqualTo(200);
     }
 
     @Test
@@ -107,6 +110,13 @@ class RateLimitIntegrationTest extends PostgresIntegrationTest {
 
     private HttpResponse<String> send(HttpClient client, String path) throws IOException, InterruptedException {
         return send(client, get(path));
+    }
+
+    private HttpResponse<String> managementGet(HttpClient client, String path) throws IOException, InterruptedException {
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + managementPort + path))
+                .GET()
+                .build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> send(HttpClient client, HttpRequest request) throws IOException, InterruptedException {

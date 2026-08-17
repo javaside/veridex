@@ -3,29 +3,30 @@ package io.veridex;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.veridex.support.PostgresIntegrationTest;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
-import org.springframework.test.web.servlet.client.RestTestClient;
+import org.springframework.boot.test.web.server.LocalManagementPort;
 
-@AutoConfigureRestTestClient
 class ObservabilityEndpointIntegrationTest extends PostgresIntegrationTest {
 
-    @Autowired
-    RestTestClient rest;
+    @LocalManagementPort int managementPort;
 
     @Test
-    void prometheusEndpointContainsFrameworkMetricsWithoutAiContentMetrics() {
-        String body = rest.get()
-                .uri("/actuator/prometheus")
-                .exchange()
-                .expectStatus().isOk()
-                .expectHeader().contentTypeCompatibleWith("text/plain")
-                .expectBody(String.class)
-                .returnResult()
-                .getResponseBody();
+    void prometheusEndpointContainsFrameworkMetricsWithoutAiContentMetrics() throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://127.0.0.1:" + managementPort + "/actuator/prometheus"))
+                .GET()
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
-        assertThat(body)
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("Content-Type"))
+                .hasValueSatisfying(value -> assertThat(value).startsWith("text/plain"));
+        assertThat(response.body())
                 .contains("jvm_")
                 .contains("process_uptime")
                 .doesNotContain("prompt")
