@@ -1,6 +1,8 @@
 package io.veridex.shared.infrastructure.embedding;
 
 import io.veridex.shared.infrastructure.config.EmbeddingProperties;
+import io.veridex.shared.infrastructure.security.OutboundAccessPolicy;
+import java.net.URI;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.ollama.OllamaEmbeddingModel;
 import org.springframework.ai.ollama.api.OllamaApi;
@@ -14,7 +16,8 @@ import org.springframework.context.annotation.Configuration;
 public class OllamaEmbeddingConfiguration {
 
     @Bean
-    EmbeddingModel ollamaEmbeddingModel(EmbeddingProperties properties) {
+    EmbeddingModel ollamaEmbeddingModel(EmbeddingProperties properties, OutboundAccessPolicy outboundPolicy) {
+        outboundPolicy.validate(URI.create(properties.ollama().baseUrl()));
         var api = OllamaApi.builder()
                 .baseUrl(properties.ollama().baseUrl())
                 .build();
