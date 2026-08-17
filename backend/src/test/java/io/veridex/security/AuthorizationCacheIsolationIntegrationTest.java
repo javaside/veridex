@@ -31,7 +31,7 @@ class AuthorizationCacheIsolationIntegrationTest extends PostgresIntegrationTest
 
     @BeforeEach
     void clearSession() {
-        rest.post().uri("/api/auth/logout").exchange().expectStatus().isNoContent();
+        rest.post().uri("/api/auth/logout").exchange().expectStatus().isNoContent().expectBody().isEmpty();
         csrfToken = null;
     }
 

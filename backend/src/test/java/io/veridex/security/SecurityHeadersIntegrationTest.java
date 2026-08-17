@@ -23,13 +23,14 @@ class SecurityHeadersIntegrationTest extends PostgresIntegrationTest {
 
     @BeforeEach
     void clearSession() {
-        rest.post().uri("/api/auth/logout").exchange().expectStatus().isNoContent();
+        rest.post().uri("/api/auth/logout").exchange().expectStatus().isNoContent().expectBody().isEmpty();
     }
 
     private void login(String username) {
         rest.post().uri("/api/auth/login?username=" + username + "&password=veridex")
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus().isOk()
+                .expectBody().consumeWith(response -> {});
     }
 
     @Test
