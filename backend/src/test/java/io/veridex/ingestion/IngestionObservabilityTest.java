@@ -79,7 +79,7 @@ class IngestionObservabilityTest {
                 mock(org.springframework.beans.factory.ObjectProvider.class));
         return new DocumentIngestionWorker(documents, mock(ObjectStorage.class), mock(DocumentParser.class),
                 mock(StructureChunker.class), mock(AuditRecorder.class), JsonMapper.builder().build(),
-                observability, propagation);
+                observability, propagation, null);
     }
 
     private static String payload(UUID versionId) {

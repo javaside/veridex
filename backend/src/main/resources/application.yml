@@ -59,6 +59,9 @@ veridex:
       max-archive-expanded-bytes: ${VERIDEX_UPLOAD_MAX_ARCHIVE_EXPANDED_BYTES:209715200}
       max-archive-entries: ${VERIDEX_UPLOAD_MAX_ARCHIVE_ENTRIES:10000}
       max-archive-depth: ${VERIDEX_UPLOAD_MAX_ARCHIVE_DEPTH:8}
+    parser:
+      timeout: ${VERIDEX_PARSER_TIMEOUT:30s}
+      temp-root: ${VERIDEX_PARSER_TEMP_ROOT:/tmp/veridex-parser}
   api:
     rate-limit-per-minute: ${VERIDEX_RATE_LIMIT_PER_MINUTE:600}
   storage:

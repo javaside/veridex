@@ -46,18 +46,20 @@ public class DocumentIngestionWorker {
     private final JsonMapper jsonMapper;
     private final VeridexObservability observability;
     private final RabbitContextPropagation propagation;
+    private final ParserExecutionGuard guard;
 
     public DocumentIngestionWorker(DocumentVersionProcessing documents, ObjectStorage storage,
                                    DocumentParser parser, StructureChunker chunker,
                                    AuditRecorder audit, JsonMapper jsonMapper) {
-        this(documents, storage, parser, chunker, audit, jsonMapper, null, null);
+        this(documents, storage, parser, chunker, audit, jsonMapper, null, null, null);
     }
 
     @Autowired
     public DocumentIngestionWorker(DocumentVersionProcessing documents, ObjectStorage storage,
                                    DocumentParser parser, StructureChunker chunker,
                                    AuditRecorder audit, JsonMapper jsonMapper,
-                                   VeridexObservability observability, RabbitContextPropagation propagation) {
+                                   VeridexObservability observability, RabbitContextPropagation propagation,
+                                   ParserExecutionGuard guard) {
         this.documents = documents;
         this.storage = storage;
         this.parser = parser;
@@ -66,6 +68,7 @@ public class DocumentIngestionWorker {
         this.jsonMapper = jsonMapper;
         this.observability = observability;
         this.propagation = propagation;
+        this.guard = guard;
     }
 
     @RabbitListener(queues = io.veridex.shared.infrastructure.messaging.RabbitTopology.INGESTION_QUEUE)
@@ -105,10 +108,9 @@ public class DocumentIngestionWorker {
             }
             documents.markProcessing(versionId);
 
-            ParsedDocument parsed;
-            try (var in = storage.get(objectKey)) {
-                parsed = parser.parse(in, filename, contentType);
-            }
+            ParsedDocument parsed = guard != null
+                    ? guard.execute(versionId, taskDir -> parseDocument(objectKey, filename, contentType))
+                    : parseDocument(objectKey, filename, contentType);
             List<Chunk> chunks = chunker.chunk(parsed);
             List<Map<String, Object>> records = chunks.stream()
                     .map(c -> Map.<String, Object>of(
@@ -149,6 +151,12 @@ public class DocumentIngestionWorker {
             }
         } finally {
             MDC.remove("requestId");
+        }
+    }
+
+    private ParsedDocument parseDocument(String objectKey, String filename, String contentType) throws java.io.IOException {
+        try (var in = storage.get(objectKey)) {
+            return parser.parse(in, filename, contentType);
         }
     }
 
