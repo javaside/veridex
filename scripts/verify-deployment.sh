@@ -76,10 +76,75 @@ stage3() {
   echo "verify-deployment stage 3 (compose stack) passed."
 }
 
+have_helm() { command -v helm >/dev/null 2>&1; }
+
+stage4() {
+  echo "==> [deploy-4] Helm lint/template 矩阵 + kind 集群验收"
+  if have_helm; then
+    helm lint "${ROOT_DIR}/deploy/helm/veridex"
+    local out; out="$(mktemp -d)"
+    helm template verify "${ROOT_DIR}/deploy/helm/veridex" > "${out}/default.yaml"
+    # 默认：2 NetworkPolicy、2 PDB、无 Ingress/HPA/ServiceMonitor
+    test "$(grep -c 'kind: NetworkPolicy' "${out}/default.yaml")" = "2"
+    test "$(grep -c 'kind: PodDisruptionBudget' "${out}/default.yaml")" = "2"
+    ! grep -q 'kind: Ingress' "${out}/default.yaml"
+    ! grep -q 'kind: HorizontalPodAutoscaler' "${out}/default.yaml"
+    ! grep -q 'kind: ServiceMonitor' "${out}/default.yaml"
+    ! grep -q '0.0.0.0/0' "${out}/default.yaml"
+    ! grep -q 'tag: latest' "${out}/default.yaml"
+    ! grep -q ':latest' "${out}/default.yaml"
+    # ingress+TLS：只指向 web Service
+    helm template verify "${ROOT_DIR}/deploy/helm/veridex" -f "${ROOT_DIR}/deploy/helm/veridex/ci/ingress-values.yaml" > "${out}/ingress.yaml"
+    grep -q 'kind: Ingress' "${out}/ingress.yaml"
+    grep -q 'secretName: veridex-tls-test' "${out}/ingress.yaml"
+    ! grep -A200 'kind: Ingress' "${out}/ingress.yaml" | grep -q '\-management'
+    # HPA：渲染 HPA 且 Deployment 不再固定 replicas
+    helm template verify "${ROOT_DIR}/deploy/helm/veridex" --set autoscaling.enabled=true > "${out}/hpa.yaml"
+    grep -q 'kind: HorizontalPodAutoscaler' "${out}/hpa.yaml"
+    ! grep -q 'replicas: 2' "${out}/hpa.yaml"
+    # ServiceMonitor：只抓管理 Service 的命名端口
+    helm template verify "${ROOT_DIR}/deploy/helm/veridex" --set serviceMonitor.enabled=true > "${out}/sm.yaml"
+    grep -q 'kind: ServiceMonitor' "${out}/sm.yaml"
+    grep -q 'port: management' "${out}/sm.yaml"
+    grep -q 'veridex.io/management: "true"' "${out}/sm.yaml"
+    # NetworkPolicy 关闭
+    ! helm template verify "${ROOT_DIR}/deploy/helm/veridex" --set networkPolicy.enabled=false | grep -q 'kind: NetworkPolicy'
+    # registry 重写与 digest 锁定
+    helm template verify "${ROOT_DIR}/deploy/helm/veridex" --set global.imageRegistry=registry.corp.example \
+      | grep -q 'registry.corp.example/veridex/backend:0.1.0'
+    helm template verify "${ROOT_DIR}/deploy/helm/veridex" \
+      --set backend.image.digest="sha256:$(printf 'a%.0s' $(seq 1 64))" \
+      | grep -q 'veridex/backend@sha256:'
+    # schema 负例：latest tag / 空 TLS secretName / 非法 egress type 必须渲染失败
+    if helm template verify "${ROOT_DIR}/deploy/helm/veridex" --set backend.image.tag=latest >/dev/null 2>&1; then
+      echo "values.schema must reject tag=latest" >&2; exit 1
+    fi
+    if helm template verify "${ROOT_DIR}/deploy/helm/veridex" \
+        --set ingress.enabled=true --set ingress.tls.enabled=true --set ingress.tls.secretName= >/dev/null 2>&1; then
+      echo "values.schema/required must reject empty tls.secretName" >&2; exit 1
+    fi
+    if helm template verify "${ROOT_DIR}/deploy/helm/veridex" \
+        --set 'networkPolicy.externalEgress[0].type=bogus' >/dev/null 2>&1; then
+      echo "networkpolicy template must reject unknown egress type" >&2; exit 1
+    fi
+    rm -rf "${out}"
+  else
+    echo "helm unavailable; lint/template matrix skipped (host-only mode)."
+  fi
+  # kind 集群验收（工具齐备时执行；ENFORCE_NETWORKPOLICY 可选）
+  if have_docker && command -v kind >/dev/null 2>&1 && command -v kubectl >/dev/null 2>&1 && have_helm; then
+    "${ROOT_DIR}/deploy/kind/run-acceptance.sh"
+  else
+    echo "kind/kubectl unavailable; cluster acceptance skipped (host-only mode)."
+  fi
+  echo "verify-deployment stage 4 (helm + cluster) passed."
+}
+
 case "${STAGE}" in
   1) stage1 ;;
   2) stage2 ;;
   3) stage3 ;;
-  all) stage1; stage2; stage3; echo "verify-deployment: later stages not yet implemented in this task." ;;
+  4) stage4 ;;
+  all) stage1; stage2; stage3; stage4; echo "verify-deployment: later stages not yet implemented in this task." ;;
   *) echo "unknown or not-yet-implemented stage: ${STAGE}" >&2; exit 2 ;;
 esac

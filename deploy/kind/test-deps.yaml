@@ -1,0 +1,89 @@
+# kind 验收依赖：单 Pod 多容器模拟外部基础设施（PostgreSQL/RabbitMQ/MinIO/OpenSearch）。
+# OTLP endpoint 指向本 Pod 的 4318（无监听）——5-b 的 exporter fail-open 语义下业务不受影响。
+apiVersion: v1
+kind: Secret
+metadata:
+  name: veridex-secret
+  labels: { app: deps }
+stringData:
+  db-username: veridex
+  db-password: veridex-test
+  rabbitmq-username: veridex
+  rabbitmq-password: veridex-test
+  minio-access-key: veridex
+  minio-secret-key: veridex-test-secret
+  session-secret: veridex-test-session-secret
+---
+# headless Service：让依赖 Pod 可通过短名 veridex-test-deps 被 DNS 解析
+# （K8s 中裸 Pod 主机名默认不可解析，必须有 Service）。
+apiVersion: v1
+kind: Service
+metadata:
+  name: veridex-test-deps
+  labels: { app: deps }
+spec:
+  clusterIP: None
+  selector: { app: deps }
+  ports:
+    - { name: postgres, port: 5432 }
+    - { name: rabbitmq, port: 5672 }
+    - { name: minio, port: 9000 }
+    - { name: opensearch, port: 9200 }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: veridex-test-deps
+  labels: { app: deps }
+spec:
+  containers:
+    - name: postgres
+      image: postgres:17-alpine
+      env:
+        - { name: POSTGRES_DB, value: veridex }
+        - { name: POSTGRES_USER, value: veridex }
+        - { name: POSTGRES_PASSWORD, value: veridex-test }
+      ports: [{ containerPort: 5432 }]
+      readinessProbe:
+        exec: { command: ["pg_isready", "-U", "veridex", "-d", "veridex"] }
+        periodSeconds: 5
+        timeoutSeconds: 3
+        failureThreshold: 30
+    - name: rabbitmq
+      image: rabbitmq:4-alpine
+      env:
+        - { name: RABBITMQ_DEFAULT_USER, value: veridex }
+        - { name: RABBITMQ_DEFAULT_PASS, value: veridex-test }
+      ports: [{ containerPort: 5672 }]
+      readinessProbe:
+        exec: { command: ["rabbitmq-diagnostics", "-q", "ping"] }
+        periodSeconds: 5
+        timeoutSeconds: 5
+        failureThreshold: 30
+    - name: minio
+      image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+      # K8s 的 command 覆盖 ENTRYPOINT（会绕过 docker-entrypoint.sh），因此用 args 追加参数
+      args: ["server", "/data"]
+      env:
+        - { name: MINIO_ROOT_USER, value: veridex }
+        - { name: MINIO_ROOT_PASSWORD, value: veridex-test-secret }
+      ports: [{ containerPort: 9000 }]
+      readinessProbe:
+        exec: { command: ["curl", "-fsS", "http://localhost:9000/minio/health/live"] }
+        periodSeconds: 5
+        timeoutSeconds: 3
+        failureThreshold: 30
+    - name: opensearch
+      image: opensearchproject/opensearch:3.2.0
+      env:
+        - { name: discovery.type, value: single-node }
+        - { name: DISABLE_SECURITY_PLUGIN, value: "true" }
+        - { name: OPENSEARCH_JAVA_OPTS, value: -Xms512m -Xmx512m }
+      ports: [{ containerPort: 9200 }]
+      readinessProbe:
+        exec:
+          command: ["sh", "-c", "curl -fsS http://localhost:9200/_cluster/health >/dev/null"]
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 30
+  restartPolicy: Never

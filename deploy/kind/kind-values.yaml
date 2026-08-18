@@ -1,0 +1,27 @@
+# kind 验收覆盖：依赖全部指向同 namespace 的 veridex-test-deps Pod。
+# NetworkPolicy externalEgress 用 selector 表达（依赖 Pod label app=deps）。
+# 镜像用 kind load 导入的本地名（veridex-backend / veridex-web，属于 docker.io/library
+# 命名空间），与 chart 默认的 veridex/backend（带 registry 前缀语义）不同。
+# backend 为内存 Session（未接 Spring Session）：多副本下 login//me 轮询到不同副本会失败，
+# 验收用单副本；滚动升级依赖 maxSurge 无 downtime，仍被滚动探活覆盖。
+backend:
+  replicaCount: 1
+  image:
+    repository: veridex-backend
+  env:
+    VERIDEX_ENVIRONMENT: local
+    VERIDEX_DB_URL: jdbc:postgresql://veridex-test-deps:5432/veridex
+    VERIDEX_RABBITMQ_HOST: veridex-test-deps
+    VERIDEX_MINIO_ENDPOINT: http://veridex-test-deps:9000
+    VERIDEX_OPENSEARCH_URIS: http://veridex-test-deps:9200
+    VERIDEX_OTLP_ENDPOINT: http://veridex-test-deps:4318/v1/traces
+web:
+  image:
+    repository: veridex-web
+networkPolicy:
+  externalEgress:
+    - { type: selector, namespace: veridex-test, podSelector: { app: deps }, port: 5432 }
+    - { type: selector, namespace: veridex-test, podSelector: { app: deps }, port: 5672 }
+    - { type: selector, namespace: veridex-test, podSelector: { app: deps }, port: 9000 }
+    - { type: selector, namespace: veridex-test, podSelector: { app: deps }, port: 9200 }
+    - { type: selector, namespace: veridex-test, podSelector: { app: deps }, port: 4318 }
