@@ -1,0 +1,53 @@
+# 渲染变量：VERIDEX_BACKEND_UPSTREAM（默认 veridex-backend:8080，由编排层覆盖）。
+upstream veridex_backend {
+  server ${VERIDEX_BACKEND_UPSTREAM};
+}
+
+server {
+  listen 8080;
+  server_name _;
+  root /usr/share/nginx/html;
+  index index.html;
+
+  # 与后端 spring.servlet.multipart max-request-size=55MB 对齐
+  client_max_body_size 55m;
+
+  # 本地存活检查（K8s readiness/liveness 与 Compose healthcheck 使用）
+  location = /healthz {
+    access_log off;
+    return 200 "ok\n";
+  }
+
+  # SSE 流式问答：关闭缓冲、放宽读超时
+  location /api/ {
+    proxy_pass http://veridex_backend;
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+  }
+
+  location = /v3/api-docs {
+    proxy_pass http://veridex_backend/v3/api-docs;
+  }
+  location /v3/api-docs/ {
+    proxy_pass http://veridex_backend;
+  }
+
+  # upstream 故障只回固定错误页，不暴露 backend 地址或内部细节
+  error_page 502 503 504 /error_page.html;
+  location = /error_page.html {
+    internal;
+  }
+
+  # SPA fallback 与缓存策略
+  location = /index.html {
+    add_header Cache-Control "no-cache";
+  }
+  location ~* \.(?:js|css|png|jpg|jpeg|gif|svg|ico|woff2?)$ {
+    add_header Cache-Control "public, max-age=31536000, immutable";
+  }
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+}
