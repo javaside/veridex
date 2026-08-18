@@ -34,12 +34,19 @@ curl -fsS -b "${JAR}" -H "X-XSRF-TOKEN: ${XSRF}" -X POST "${WEB}/api/auth/logout
 code=$(curl -s -o /dev/null -w '%{http_code}' "${WEB}/actuator/health")
 test "${code}" = "404" || fail "web must not proxy /actuator (got ${code})"
 
-# 6. Prometheus 抓取容器化 backend 管理端口（可选）
+# 6. Prometheus 抓取容器化 backend 管理端口（可选）。
+#    抓取按 scrape_interval 周期发生，等待目标出现并变为 up（最多 ~60s）。
 if [ -n "${PROM}" ]; then
-  curl -fsS --max-time 10 "${PROM}/api/v1/query?query=up" | grep -q 'backend:8081' \
-    || fail "Prometheus has no backend:8081 target"
-  curl -fsS --max-time 10 "${PROM}/api/v1/query?query=up%7Bjob%3D%22veridex%22%7D" | grep -q '"1"' \
-    || fail "veridex prometheus target is not up"
+  up=""
+  for _ in $(seq 1 30); do
+    if curl -fsS --max-time 10 "${PROM}/api/v1/query?query=up" | grep -q 'backend:8081' \
+       && up=$(curl -fsS --max-time 10 "${PROM}/api/v1/query?query=up%7Bjob%3D%22veridex%22%7D" \
+               | grep -o '"value":\[[^]]*,"1"\]'); then
+      break
+    fi
+    sleep 2
+  done
+  test -n "${up}" || fail "veridex prometheus target is not up"
 fi
 
 echo "compose smoke: all checks passed."

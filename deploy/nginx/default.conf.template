@@ -1,7 +1,10 @@
-# 渲染变量：VERIDEX_BACKEND_UPSTREAM（默认 veridex-backend:8080，由编排层覆盖）。
-upstream veridex_backend {
-  server ${VERIDEX_BACKEND_UPSTREAM};
-}
+# 渲染变量：
+#   VERIDEX_BACKEND_UPSTREAM — 默认 veridex-backend:8080，由编排层覆盖
+#   NGINX_LOCAL_RESOLVERS    — 官方镜像 15-local-resolvers.envsh 从 /etc/resolv.conf 推导
+#                              （K8s=kube-dns ClusterIP；Compose=127.0.0.11）
+# 上游通过 resolver + 变量 proxy_pass 在请求时解析：backend 未就绪/DNS 未就绪时
+# nginx 仍能正常启动（不 crash-loop），失败请求落到固定 502 错误页。
+resolver ${NGINX_LOCAL_RESOLVERS} valid=10s ipv6=off;
 
 server {
   listen 8080;
@@ -20,7 +23,8 @@ server {
 
   # SSE 流式问答：关闭缓冲、放宽读超时
   location /api/ {
-    proxy_pass http://veridex_backend;
+    set $backend_upstream "${VERIDEX_BACKEND_UPSTREAM}";
+    proxy_pass http://$backend_upstream;
     proxy_buffering off;
     proxy_cache off;
     proxy_read_timeout 3600s;
@@ -28,16 +32,23 @@ server {
   }
 
   location = /v3/api-docs {
-    proxy_pass http://veridex_backend/v3/api-docs;
+    set $backend_upstream "${VERIDEX_BACKEND_UPSTREAM}";
+    proxy_pass http://$backend_upstream/v3/api-docs;
   }
   location /v3/api-docs/ {
-    proxy_pass http://veridex_backend;
+    set $backend_upstream "${VERIDEX_BACKEND_UPSTREAM}";
+    proxy_pass http://$backend_upstream;
   }
 
   # upstream 故障只回固定错误页，不暴露 backend 地址或内部细节
   error_page 502 503 504 /error_page.html;
   location = /error_page.html {
     internal;
+  }
+
+  # 管理端点（/actuator）绝不经 web 暴露：显式 404，不走 SPA fallback
+  location /actuator/ {
+    return 404;
   }
 
   # SPA fallback 与缓存策略

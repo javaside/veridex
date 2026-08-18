@@ -58,7 +58,8 @@ spec:
               containerPort: 8080
           env:
             - name: VERIDEX_BACKEND_UPSTREAM
-              value: {{ include "veridex.fullname" . }}-backend:8080
+              # nginx 内置 resolver 不做 resolv.conf search 域补全，必须给 FQDN
+              value: {{ include "veridex.fullname" . }}-backend.{{ .Release.Namespace }}.svc.cluster.local:8080
           readinessProbe:
             httpGet: { path: /healthz, port: http }
             periodSeconds: 10

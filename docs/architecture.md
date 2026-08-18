@@ -199,6 +199,16 @@ Feedback（rating=DOWN + reasonCode + evidence）
 - 安全配置错误 fail-fast；运行时安全检查 fail-closed；错误响应与 telemetry 不泄露正文、凭据、原始异常、磁盘路径或完整 query string。
 - 校验入口为 `scripts/verify-security.sh`（随 `scripts/verify.sh` 执行）。
 
-## 7. 与历史设计文档的关系
+## 7. 部署拓扑（Phase 5-d）
+
+- backend 双端口：`8080` 业务 API 与 `8081` 管理端口（liveness/readiness/prometheus）。管理端口只由独立 Service（带 `veridex.io/management: "true"` 标签）暴露，从不进入 Ingress 或 web 代理。
+- web 为 Nginx 静态容器（`8080`）：同源代理 `/api` 与 `/v3/api-docs` 至 backend，转发 `X-Request-Id` 并支持 SSE；`/healthz` 供存活探针，SPA fallback 兜底前端路由，不代理 `/actuator`。
+- 镜像安全基线：非 root（backend 10001、web 101）、只读根文件系统、drop ALL capabilities、`seccompProfile: RuntimeDefault`、`allowPrivilegeEscalation: false`、`automountServiceAccountToken: false`；解析临时目录为 emptyDir（2Gi，sizeLimit 约束）。
+- chart 只管理应用工作负载；基础设施凭据一律来自 existing Secret（固定 key：`db-username`、`db-password`、`rabbitmq-username`、`rabbitmq-password`、`minio-access-key`、`minio-secret-key`、`session-secret`；trace body 开启时另需 `trace-fingerprint-key` / `trace-current-key-id` / `trace-current-key`），chart 不创建、不落明文。
+- NetworkPolicy 默认 deny：web 仅接受 Ingress 流量并只允许 DNS + backend:8080 出站；backend 仅接受 web（8080）与监控（8081）入口，出站限 DNS 与 `networkPolicy.externalEgress` 显式声明的 selector 或 CIDR（禁止 `0.0.0.0/0`）。
+- ServiceMonitor（可选）只抓带 management 标签的 Service 的 `management` 命名端口（`/actuator/prometheus`）。
+- 部署校验入口：`scripts/verify-deployment.sh`（镜像、Compose 栈、Helm lint/template 矩阵、kind 集群验收、离线包；随 `scripts/verify.sh` 执行）。已知限制：backend 为内存 Session，多副本需粘性或后续引入 Spring Session；备份恢复与多架构镜像门禁留给 Phase 5-e。
+
+## 8. 与历史设计文档的关系
 
 `docs/superpowers/specs/` 与 `docs/superpowers/plans/` 下是按日期归档的设计与实施快照（Phase 1–4），保留原始决策过程，不再随代码演进更新。本文档与 [RAG 配置参数语义](rag-configuration-parameters.md) 是随代码更新的「当前态」说明，如两者冲突以代码和本文档为准。

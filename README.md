@@ -2,7 +2,7 @@
 
 Veridex 是面向企业私有化部署的 RAG（Retrieval-Augmented Generation，检索增强生成）平台。目前项目已经完成 **Phase 4：质量评测与运营闭环**，支持创建知识库、上传文档、异步解析和分块、发布到 OpenSearch、授权员工流式问答并校验引用，以及版本化评测集、不可变 RAG 配置版本、评测运行、版本对比门禁和反馈转坏例闭环。
 
-> 当前仓库以本地开发和集成验证为目标，尚未提供应用容器镜像或生产部署编排。
+> 应用已提供 backend/web 双容器镜像、Compose 完整应用栈、原生 Helm chart 与受限网络离线交付；详见下文「容器化与部署」。
 
 ## 当前状态
 
@@ -45,7 +45,7 @@ Veridex 是面向企业私有化部署的 RAG（Retrieval-Augmented Generation�
 - 配置版本（Profile）已驱动评测运行的检索/生成参数与 prompt 模板；在线问答（`/api/qa/ask`）仍使用各自服务内的硬编码默认值，尚未切换为读取 Profile。
 - PDF / DOCX 的结构识别较基础；没有 Markdown 标题时主要按文本长度分块。
 - 失败消息进入 DLQ；自动重试、退避以及 Outbox 定时恢复仍待增强。
-- `deploy/compose/compose.yml` 只启动开发基础设施，不启动 Spring Boot 后端或 React 前端。
+- `deploy/compose/compose.yml` 可启动完整应用栈（基础设施 + backend + web）：`docker compose -f deploy/compose/compose.yml up -d --build backend web`；Prometheus 从 `backend:8081` 抓取，冒烟验收执行 `deploy/compose/smoke.sh`。
 
 ## 技术栈
 
@@ -169,6 +169,13 @@ npm --prefix web run dev
 8. 可验证 Release 的回滚、离线和删除操作。
 
 处理失败时版本会变为 `FAILED`，消息会进入 RabbitMQ 死信队列 `ingestion.document.dlq`。
+
+### 5. 容器化与部署（Phase 5-d）
+
+- 完整应用栈（本地验收）：`./scripts/verify-deployment.sh 3`
+- 镜像构建与运行时检查：`./scripts/verify-deployment.sh 1` / `2`
+- Helm chart 校验与 kind 集群验收：`./scripts/verify-deployment.sh 4`（chart 位于 `deploy/helm/veridex`，凭据必须使用 existing Secret）
+- 受限网络离线交付：`./scripts/verify-deployment.sh 5` 与 `deploy/offline/veridex-offline/INSTALL.txt`
 
 ## 服务地址与默认账号
 

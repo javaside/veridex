@@ -60,7 +60,8 @@ class HelmChartStaticContractTest {
         assertThat(backend).doesNotContain("VERIDEX_BACKEND_UPSTREAM");
         // web：本地静态健康路径、代理上游为 backend Service
         assertThat(web).contains("/healthz");
-        assertThat(web).contains("{{ include \"veridex.fullname\" . }}-backend:8080");
+        // upstream 用 FQDN：nginx 内置 resolver 不做 search 域补全
+        assertThat(web).contains("{{ include \"veridex.fullname\" . }}-backend.{{ .Release.Namespace }}.svc.cluster.local:8080");
         // 管理端口独立 Service 且 web Service 不引用它
         String management = read("templates/backend-management-service.yaml");
         assertThat(management).contains("name: management").contains("port: 8081");

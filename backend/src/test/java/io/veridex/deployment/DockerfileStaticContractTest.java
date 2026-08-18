@@ -57,6 +57,10 @@ class DockerfileStaticContractTest {
         assertThat(dockerfile).contains("deploy/nginx/nginx.conf");
         assertThat(dockerfile).contains("deploy/nginx/default.conf.template");
         assertThat(dockerfile).contains("VERIDEX_BACKEND_UPSTREAM=veridex-backend:8080");
+        // resolver 用 nginx 官方镜像的 local-resolvers 机制（15-local-resolvers.envsh source 后
+        // export NGINX_LOCAL_RESOLVERS，从 /etc/resolv.conf 推导：K8s=kube-dns，Compose=127.0.0.11）
+        assertThat(dockerfile).contains("NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1");
+        assertThat(dockerfile).doesNotContain("20-resolver.sh");
         assertThat(dockerfile).contains("USER 101:101");
         assertThat(dockerfile).contains("EXPOSE 8080");
     }
@@ -82,6 +86,13 @@ class DockerfileStaticContractTest {
         assertThat(actuatorBlock).doesNotContain("proxy_pass");
         // upstream 由环境变量注入，不写死编排层服务名
         assertThat(server).contains("${VERIDEX_BACKEND_UPSTREAM}");
+        // 上游在请求时解析：resolver + 变量 proxy_pass，启动期不依赖 upstream DNS（backend 未就绪时不 crash-loop）
+        // nginx 官方镜像 envsubst 只替换已定义的 ${VERIDEX_*} 变量，nginx 自身 $ 变量原样保留
+        assertThat(server).containsPattern("resolver .* valid=");
+        assertThat(server).contains("set $backend_upstream");
+        assertThat(server).contains("proxy_pass http://$backend_upstream");
+        // 静态 upstream 块会在配置加载期解析主机名，禁止回归
+        assertThat(server).doesNotContain("upstream veridex_backend");
         // SPA fallback 与缓存策略
         assertThat(server).contains("try_files $uri $uri/ /index.html");
         assertThat(server).contains("no-cache");

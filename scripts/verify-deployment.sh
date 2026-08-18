@@ -151,6 +151,9 @@ stage5() {
     grep -Fq 'set -euo pipefail' "${ROOT_DIR}/deploy/offline/scripts/${script}"
     test -x "${ROOT_DIR}/deploy/offline/scripts/${script}"
     bash -n "${ROOT_DIR}/deploy/offline/scripts/${script}"
+    # 离线包内副本不得与仓库脚本漂移
+    diff -q "${ROOT_DIR}/deploy/offline/scripts/${script}" "${off}/scripts/${script}" >/dev/null \
+      || { echo "offline bundle script drifted: ${script}" >&2; exit 1; }
   done
   grep -Fq 'veridex-backend:' "${off}/images.txt"
   grep -Fq 'veridex-web:' "${off}/images.txt"

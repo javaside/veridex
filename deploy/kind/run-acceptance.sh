@@ -62,10 +62,12 @@ kubectl -n "${NS}" rollout status "deploy/${FULLNAME}-web" --timeout=300s
 echo "==> [kind] smoke via port-forward"
 kubectl -n "${NS}" port-forward "svc/${FULLNAME}-web" "${WEB_PORT}:80" >/dev/null 2>&1 &
 PF_PID=$!
+WEB_READY=0
 for attempt in $(seq 1 30); do
-  curl -fsS "http://127.0.0.1:${WEB_PORT}/healthz" >/dev/null 2>&1 && break
+  if curl -fsS "http://127.0.0.1:${WEB_PORT}/healthz" >/dev/null 2>&1; then WEB_READY=1; break; fi
   sleep 1
 done
+test "${WEB_READY}" = "1" || { echo "run-acceptance: web port-forward not ready" >&2; exit 1; }
 VERIDEX_WEB_URL="http://127.0.0.1:${WEB_PORT}" "${ROOT_DIR}/deploy/compose/smoke.sh"
 
 echo "==> [kind] pod deletion recovery"
