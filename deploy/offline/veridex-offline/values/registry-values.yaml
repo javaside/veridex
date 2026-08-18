@@ -1,0 +1,4 @@
+# 受限网络安装：把应用镜像重写到企业私有 registry。
+# 安装时替换 imageRegistry（不要把真实 registry 提交回仓库）。
+global:
+  imageRegistry: ""   # 例: registry.corp.example:5000

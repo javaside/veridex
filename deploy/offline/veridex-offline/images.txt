@@ -1,0 +1,3 @@
+# Veridex 离线镜像清单（受限网络安装的基础镜像由企业提供；本清单只含应用镜像）
+veridex-backend:0.1.0
+veridex-web:0.1.0

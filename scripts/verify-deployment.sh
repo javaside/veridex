@@ -140,11 +140,40 @@ stage4() {
   echo "verify-deployment stage 4 (helm + cluster) passed."
 }
 
+stage5() {
+  echo "==> [deploy-5] 离线交付包校验"
+  local off="${ROOT_DIR}/deploy/offline/veridex-offline"
+  for file in images.txt images.sha256 values/registry-values.yaml INSTALL.txt \
+              ../scripts/export-images.sh ../scripts/import-images.sh ../scripts/push-images.sh; do
+    test -f "${off}/${file}" || { echo "missing offline artifact: ${off}/${file}" >&2; exit 1; }
+  done
+  for script in export-images.sh import-images.sh push-images.sh; do
+    grep -Fq 'set -euo pipefail' "${ROOT_DIR}/deploy/offline/scripts/${script}"
+    test -x "${ROOT_DIR}/deploy/offline/scripts/${script}"
+    bash -n "${ROOT_DIR}/deploy/offline/scripts/${script}"
+  done
+  grep -Fq 'veridex-backend:' "${off}/images.txt"
+  grep -Fq 'veridex-web:' "${off}/images.txt"
+  # 有镜像时的 export→import 往返验收
+  if have_docker && have_helm \
+     && docker image inspect "${BACKEND_IMAGE}" >/dev/null 2>&1 \
+     && docker image inspect "${WEB_IMAGE}" >/dev/null 2>&1; then
+    local tmp; tmp="$(mktemp -d)"
+    OFFLINE_DIR="${tmp}" "${ROOT_DIR}/deploy/offline/scripts/export-images.sh" >/dev/null
+    OFFLINE_DIR="${tmp}" "${ROOT_DIR}/deploy/offline/scripts/import-images.sh" >/dev/null
+    rm -rf "${tmp}"
+  else
+    echo "offline roundtrip skipped (images/helm unavailable)."
+  fi
+  echo "verify-deployment stage 5 (offline bundle) passed."
+}
+
 case "${STAGE}" in
   1) stage1 ;;
   2) stage2 ;;
   3) stage3 ;;
   4) stage4 ;;
-  all) stage1; stage2; stage3; stage4; echo "verify-deployment: later stages not yet implemented in this task." ;;
-  *) echo "unknown or not-yet-implemented stage: ${STAGE}" >&2; exit 2 ;;
+  5) stage5 ;;
+  all) stage1; stage2; stage3; stage4; stage5; echo "verify-deployment: all stages passed." ;;
+  *) echo "unknown stage: ${STAGE}" >&2; exit 2 ;;
 esac

@@ -1,0 +1,47 @@
+Veridex 受限网络安装指南
+========================
+
+前置：目标环境已有 Kubernetes 1.28+、Helm 3.13+、docker（或 nerdctl/containerd 工具链）、
+PostgreSQL 17 / RabbitMQ 4 / MinIO / OpenSearch 3.2 /（可选）OTel Collector，以及企业镜像仓库。
+
+1. 生成离线包（联网机器，仓库根目录）：
+     ./scripts/verify-deployment.sh 1          # 构建应用镜像
+     OFFLINE_DIR=/path/to/veridex-offline deploy/offline/scripts/export-images.sh
+   多架构发布镜像（amd64/arm64 manifest，可选但验收标准要求该路径可用）：
+     docker buildx build --platform linux/amd64,linux/arm64 \
+       -f backend/Dockerfile -t <REGISTRY>/veridex-backend:0.1.0 --push .
+     docker buildx build --platform linux/amd64,linux/arm64 \
+       -f web/Dockerfile -t <REGISTRY>/veridex-web:0.1.0 --push .
+
+2. 转移 veridex-offline/ 目录到目标环境。
+
+3. 导入镜像（二选一）：
+   a. docker load：deploy/offline/scripts/import-images.sh
+   b. 推送到私有 registry：
+        REGISTRY=registry.corp.example:5000 deploy/offline/scripts/push-images.sh
+
+4. 准备 existing Secret（chart 不创建，禁止明文入库）：
+     kubectl create namespace veridex
+     kubectl -n veridex create secret generic veridex-secret \
+       --from-literal=db-username=... \
+       --from-literal=db-password=... \
+       --from-literal=rabbitmq-username=... \
+       --from-literal=rabbitmq-password=... \
+       --from-literal=minio-access-key=... \
+       --from-literal=minio-secret-key=... \
+       --from-literal=session-secret=...
+   若启用 trace body capture（ERRORS/ALL），还需追加 trace-fingerprint-key /
+   trace-current-key-id / trace-current-key（以及可选 trace-historical-keys）。
+
+5. 编写 values（endpoint 指向企业基础设施；出口依赖用 selector 或 CIDR 显式声明，
+   参见 deploy/helm/veridex/values.yaml 注释），并合并 registry 覆盖：
+     helm upgrade --install veridex deploy/offline/veridex-offline/charts/veridex-<version>.tgz \
+       -n veridex -f my-values.yaml -f veridex-offline/values/registry-values.yaml
+
+6. 等待 rollout 并冒烟：
+     kubectl -n veridex rollout status deploy/veridex-veridex-backend
+     kubectl -n veridex port-forward svc/veridex-veridex-web 8080:80
+     VERIDEX_WEB_URL=http://127.0.0.1:8080 deploy/compose/smoke.sh
+
+排障：Secret 缺 key 或 backend 安全配置非法时 Pod 不 ready，日志只输出固定配置错误码；
+Secret 值原地变更后执行 kubectl -n veridex rollout restart deploy/veridex-veridex-backend。
