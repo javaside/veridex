@@ -53,7 +53,6 @@ services:
 
   prometheus:
     image: prom/prometheus:v3.13.2
-    extra_hosts: ["host.docker.internal:host-gateway"]
     ports: ["9090:9090"]
     volumes:
       - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
@@ -111,6 +110,70 @@ services:
       interval: 10s
       timeout: 5s
       retries: 30
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+    image: veridex-backend:0.1.0
+    environment:
+      VERIDEX_ENVIRONMENT: local
+      VERIDEX_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-veridex}
+      VERIDEX_DB_USERNAME: ${POSTGRES_USER:-veridex}
+      VERIDEX_DB_PASSWORD: ${POSTGRES_PASSWORD:-veridex-local}
+      VERIDEX_RABBITMQ_HOST: rabbitmq
+      VERIDEX_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER:-veridex}
+      VERIDEX_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS:-veridex-local}
+      VERIDEX_MINIO_ENDPOINT: http://minio:9000
+      VERIDEX_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-veridex}
+      VERIDEX_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-veridex-local-secret}
+      VERIDEX_MINIO_BUCKET: veridex-documents
+      VERIDEX_OPENSEARCH_URIS: http://opensearch:9200
+      VERIDEX_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      # 容器内必须监听全部接口，否则同网 Prometheus 抓不到管理端口
+      VERIDEX_MANAGEMENT_ADDRESS: 0.0.0.0
+      VERIDEX_CORS_ALLOWED_ORIGINS: http://localhost:8090
+    read_only: true
+    tmpfs:
+      # /tmp 本身也要可写：只读根文件系统下 Tomcat 需在 java.io.tmpdir 创建工作目录
+      - /tmp:rw,noexec,nosuid,size=64m,uid=10001,gid=10001
+      - /tmp/veridex-parser:size=2g,uid=10001,gid=10001
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      minio: { condition: service_healthy }
+      opensearch: { condition: service_healthy }
+      otel-collector: { condition: service_started }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081/actuator/health/readiness >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../..
+      dockerfile: web/Dockerfile
+    image: veridex-web:0.1.0
+    environment:
+      NGINX_ENTRYPOINT_QUIET_LOGS: "1"
+      VERIDEX_BACKEND_UPSTREAM: backend:8080
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /etc/nginx/conf.d:rw,noexec,nosuid,size=1m,uid=101,gid=101
+    ports:
+      - "127.0.0.1:${VERIDEX_WEB_PORT:-8090}:8080"
+    depends_on:
+      backend: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
 
 volumes:
   postgres-data:

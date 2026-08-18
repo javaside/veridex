@@ -73,11 +73,13 @@ class DockerfileStaticContractTest {
         assertThat(main).contains("uwsgi_temp_path /tmp/uwsgi_temp");
         assertThat(main).contains("scgi_temp_path /tmp/scgi_temp");
         assertThat(main).contains("include /etc/nginx/conf.d/*.conf;");
-        // server 模板：只代理 /api 与 /v3/api-docs，绝不代理 /actuator
+        // server 模板：只代理 /api 与 /v3/api-docs；/actuator 显式 404，绝不代理
         assertThat(server).contains("listen 8080");
         assertThat(server).contains("location /api/");
         assertThat(server).contains("/v3/api-docs");
-        assertThat(server).doesNotContain("location /actuator");
+        assertThat(server).containsPattern("location /actuator/ \\{\\s*\\n\\s*return 404;");
+        String actuatorBlock = server.replaceAll("(?s).*?(location /actuator/ \\{.*?\\}).*", "$1");
+        assertThat(actuatorBlock).doesNotContain("proxy_pass");
         // upstream 由环境变量注入，不写死编排层服务名
         assertThat(server).contains("${VERIDEX_BACKEND_UPSTREAM}");
         // SPA fallback 与缓存策略
@@ -94,5 +96,23 @@ class DockerfileStaticContractTest {
         // upstream 故障只回固定错误页
         assertThat(server).contains("error_page 502 503 504");
         assertThat(server).contains("internal");
+    }
+
+    @Test
+    void composeRunsFullStackWithManagedPrometheusTarget() throws IOException {
+        String compose = read(Path.of("deploy/compose/compose.yml"));
+        assertThat(compose).contains("backend:");
+        assertThat(compose).contains("web:");
+        // backend 容器管理端口绑 0.0.0.0 供 Prometheus 抓取，解析目录用 tmpfs 限额
+        assertThat(compose).containsPattern("VERIDEX_MANAGEMENT_ADDRESS: *0\\.0\\.0\\.0");
+        assertThat(compose).contains("/tmp/veridex-parser");
+        // web upstream 指向 compose 服务名 backend
+        assertThat(compose).containsPattern("VERIDEX_BACKEND_UPSTREAM: *backend:8080");
+        // 只读根文件系统
+        assertThat(compose).containsPattern("read_only: *true");
+        // Prometheus 不再假设应用在宿主机
+        assertThat(compose).doesNotContain("host.docker.internal:8081");
+        String prometheus = read(Path.of("deploy/compose/observability/prometheus/prometheus.yml"));
+        assertThat(prometheus).contains("backend:8081");
     }
 }

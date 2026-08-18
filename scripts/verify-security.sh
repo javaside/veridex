@@ -22,9 +22,9 @@ if grep -Eq 'include:.*\b(env|heapdump|beans|configprops|mappings|loggers)\b' "$
   exit 1
 fi
 
-# Prometheus 从管理端口抓取
-grep -Fq 'host.docker.internal:8081' "${ROOT_DIR}/deploy/compose/observability/prometheus/prometheus.yml" \
-  || { echo "Prometheus must scrape the management port 8081" >&2; exit 1; }
+# Prometheus 从管理端口抓取（容器化 backend 服务名）
+grep -Fq 'backend:8081' "${ROOT_DIR}/deploy/compose/observability/prometheus/prometheus.yml" \
+  || { echo "Prometheus must scrape the containerized backend management port" >&2; exit 1; }
 
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   "${COMPOSE[@]}" config --quiet

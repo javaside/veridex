@@ -51,9 +51,35 @@ stage2() {
   echo "verify-deployment stage 2 (web image + runtime) passed."
 }
 
+stage3() {
+  echo "==> [deploy-3] Compose 完整应用栈验收"
+  have_docker || { echo "Docker unavailable; compose acceptance skipped (host-only mode)."; return 0; }
+  "${COMPOSE[@]}" up -d --build backend web prometheus
+  for attempt in $(seq 1 60); do
+    if curl -fsS http://127.0.0.1:8090/healthz >/dev/null 2>&1; then break; fi
+    sleep 5
+  done
+  # Prometheus 检查地址：127.0.0.1:9090 可能被本机其他进程（如 ClashX）占用，
+  # 依次探测 IPv6 回环与 IPv4，取可达者。
+  PROM_URL=""
+  for candidate in "http://[::1]:9090" "http://127.0.0.1:9090"; do
+    if curl -fsS --max-time 5 "${candidate}/-/ready" >/dev/null 2>&1; then PROM_URL="${candidate}"; break; fi
+  done
+  if [ -n "${PROM_URL}" ]; then
+    VERIDEX_WEB_URL=http://127.0.0.1:8090 VERIDEX_PROMETHEUS_URL="${PROM_URL}" \
+      "${ROOT_DIR}/deploy/compose/smoke.sh"
+  else
+    echo "warn: local Prometheus unreachable on :9090; running smoke without metrics checks." >&2
+    VERIDEX_WEB_URL=http://127.0.0.1:8090 "${ROOT_DIR}/deploy/compose/smoke.sh"
+  fi
+  "${COMPOSE[@]}" stop backend web >/dev/null
+  echo "verify-deployment stage 3 (compose stack) passed."
+}
+
 case "${STAGE}" in
   1) stage1 ;;
   2) stage2 ;;
-  all) stage1; stage2; echo "verify-deployment: later stages not yet implemented in this task." ;;
+  3) stage3 ;;
+  all) stage1; stage2; stage3; echo "verify-deployment: later stages not yet implemented in this task." ;;
   *) echo "unknown or not-yet-implemented stage: ${STAGE}" >&2; exit 2 ;;
 esac
