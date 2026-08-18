@@ -1,0 +1,1 @@
+# CI 最小 values：与默认 values 一致（existingSecret 是名称引用，helm 不校验存在性）。

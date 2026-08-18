@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "veridex.fullname" . }}-web
+  labels:
+    {{- include "veridex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.web.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  selector:
+    matchLabels:
+      {{- include "veridex.webSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "veridex.webSelectorLabels" . | nindent 8 }}
+      annotations:
+        {{- with .Values.web.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "veridex.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: {{ .Values.web.terminationGracePeriodSeconds }}
+      securityContext:
+        runAsNonRoot: {{ .Values.webSecurityContext.runAsNonRoot }}
+        runAsUser: {{ .Values.webSecurityContext.runAsUser }}
+        runAsGroup: {{ .Values.webSecurityContext.runAsGroup }}
+        seccompProfile:
+          type: {{ .Values.webSecurityContext.seccompProfile.type }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    {{- include "veridex.webSelectorLabels" . | nindent 20 }}
+      containers:
+        - name: web
+          image: {{ include "veridex.image" (dict "global" .Values.global "image" .Values.web.image) }}
+          imagePullPolicy: {{ .Values.web.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: {{ .Values.containerSecurityContext.allowPrivilegeEscalation }}
+            readOnlyRootFilesystem: {{ .Values.containerSecurityContext.readOnlyRootFilesystem }}
+            capabilities:
+              drop:
+                {{- toYaml .Values.containerSecurityContext.capabilities.drop | nindent 16 }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: VERIDEX_BACKEND_UPSTREAM
+              value: {{ include "veridex.fullname" . }}-backend:8080
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+            failureThreshold: 6
+          lifecycle:
+            preStop:
+              exec: { command: ["/bin/sh", "-c", "sleep 5"] }
+          volumeMounts:
+            - name: nginx-temp
+              mountPath: /tmp
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d
+          resources:
+            {{- toYaml .Values.web.resources | nindent 12 }}
+      volumes:
+        - name: nginx-temp
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: nginx-conf
+          emptyDir:
+            sizeLimit: 1Mi
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

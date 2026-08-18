@@ -1,0 +1,113 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "veridex.fullname" . }}-backend
+  labels:
+    {{- include "veridex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.backend.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  selector:
+    matchLabels:
+      {{- include "veridex.backendSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "veridex.backendSelectorLabels" . | nindent 8 }}
+      annotations:
+        {{- include "veridex.checksum/backendConfig" . | nindent 8 }}
+        {{- with .Values.backend.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "veridex.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: {{ .Values.backend.terminationGracePeriodSeconds }}
+      securityContext:
+        runAsNonRoot: {{ .Values.podSecurityContext.runAsNonRoot }}
+        runAsUser: {{ .Values.podSecurityContext.runAsUser }}
+        runAsGroup: {{ .Values.podSecurityContext.runAsGroup }}
+        seccompProfile:
+          type: {{ .Values.podSecurityContext.seccompProfile.type }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    {{- include "veridex.backendSelectorLabels" . | nindent 20 }}
+      containers:
+        - name: backend
+          image: {{ include "veridex.image" (dict "global" .Values.global "image" .Values.backend.image) }}
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: {{ .Values.containerSecurityContext.allowPrivilegeEscalation }}
+            readOnlyRootFilesystem: {{ .Values.containerSecurityContext.readOnlyRootFilesystem }}
+            capabilities:
+              drop:
+                {{- toYaml .Values.containerSecurityContext.capabilities.drop | nindent 16 }}
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 8081
+          envFrom:
+            - configMapRef:
+                name: {{ include "veridex.fullname" . }}-backend-config
+          env:
+            - name: VERIDEX_DB_USERNAME
+              valueFrom: { secretKeyRef: { name: {{ .Values.backend.existingSecret }}, key: db-username } }
+            - name: VERIDEX_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Values.backend.existingSecret }}, key: db-password } }
+            - name: VERIDEX_RABBITMQ_USERNAME
+              valueFrom: { secretKeyRef: { name: {{ .Values.backend.existingSecret }}, key: rabbitmq-username } }
+            - name: VERIDEX_RABBITMQ_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Values.backend.existingSecret }}, key: rabbitmq-password } }
+            - name: VERIDEX_MINIO_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: {{ .Values.backend.existingSecret }}, key: minio-access-key } }
+            - name: VERIDEX_MINIO_SECRET_KEY
+              valueFrom: { secretKeyRef: { name: {{ .Values.backend.existingSecret }}, key: minio-secret-key } }
+            - name: VERIDEX_SESSION_SECRET
+              valueFrom: { secretKeyRef: { name: {{ .Values.backend.existingSecret }}, key: session-secret } }
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: management }
+            periodSeconds: {{ .Values.backend.startupProbe.periodSeconds }}
+            failureThreshold: {{ .Values.backend.startupProbe.failureThreshold }}
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: management }
+            periodSeconds: {{ .Values.backend.readinessProbe.periodSeconds }}
+            failureThreshold: {{ .Values.backend.readinessProbe.failureThreshold }}
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: management }
+            periodSeconds: {{ .Values.backend.livenessProbe.periodSeconds }}
+            failureThreshold: {{ .Values.backend.livenessProbe.failureThreshold }}
+          lifecycle:
+            preStop:
+              exec: { command: ["sleep", "10"] }
+          volumeMounts:
+            # 只读根文件系统下 Tomcat 需在 java.io.tmpdir 创建工作目录（Task 3 compose 实测）
+            - name: tmp
+              mountPath: /tmp
+            - name: parser-temp
+              mountPath: /tmp/veridex-parser
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: parser-temp
+          emptyDir:
+            sizeLimit: {{ .Values.backend.parserTemp.sizeLimit }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

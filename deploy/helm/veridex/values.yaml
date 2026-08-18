@@ -1,0 +1,93 @@
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+
+backend:
+  replicaCount: 2
+  image:
+    repository: veridex/backend
+    tag: "0.1.0"
+    digest: ""
+    pullPolicy: IfNotPresent
+  existingSecret: veridex-secret
+  podAnnotations: {}
+  resources:
+    requests: { cpu: 500m, memory: 1Gi }
+    limits: { cpu: "2", memory: 2Gi }
+  parserTemp:
+    sizeLimit: 2Gi
+  terminationGracePeriodSeconds: 45
+  startupProbe: { periodSeconds: 5, failureThreshold: 40 }
+  readinessProbe: { periodSeconds: 10, failureThreshold: 3 }
+  livenessProbe: { periodSeconds: 10, failureThreshold: 6 }
+  env:
+    VERIDEX_ENVIRONMENT: pilot
+    VERIDEX_DB_URL: jdbc:postgresql://postgres:5432/veridex
+    VERIDEX_RABBITMQ_HOST: rabbitmq
+    VERIDEX_MINIO_ENDPOINT: http://minio:9000
+    VERIDEX_MINIO_BUCKET: veridex-documents
+    VERIDEX_OPENSEARCH_URIS: http://opensearch:9200
+    VERIDEX_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+    VERIDEX_MANAGEMENT_ADDRESS: 0.0.0.0
+
+web:
+  replicaCount: 2
+  image:
+    repository: veridex/web
+    tag: "0.1.0"
+    digest: ""
+    pullPolicy: IfNotPresent
+  podAnnotations: {}
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+  terminationGracePeriodSeconds: 30
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  seccompProfile: { type: RuntimeDefault }
+
+webSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 101
+  runAsGroup: 101
+  seccompProfile: { type: RuntimeDefault }
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: { drop: ["ALL"] }
+
+serviceAccount: { create: true, name: "" }
+
+ingress:
+  enabled: false
+  className: nginx
+  hostname: veridex.example.local
+  annotations: {}
+  tls: { enabled: false, secretName: veridex-tls }
+
+podDisruptionBudget: { enabled: true, minAvailable: 1 }
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 80
+
+networkPolicy:
+  enabled: true
+  ingressNamespaceSelector: { kubernetes.io/metadata.name: ingress-nginx }
+  monitoringSelector: { app.kubernetes.io/name: prometheus }
+  # externalEgress：显式放行外部依赖（Postgres/RabbitMQ/MinIO/OpenSearch/OTLP），为空则默认拒绝。
+  # 每项二选一形态（type 必须是 selector 或 cidr）：
+  # - { type: selector, namespace: <ns>, podSelector: {...}, port: 5432 }
+  # - { type: cidr, cidr: 10.0.0.0/16, port: 5432 }
+  externalEgress: []
+
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s

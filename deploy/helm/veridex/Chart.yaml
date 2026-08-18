@@ -1,0 +1,6 @@
+apiVersion: v2
+name: veridex
+description: Veridex enterprise RAG platform (backend + web). Stateful dependencies are external.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

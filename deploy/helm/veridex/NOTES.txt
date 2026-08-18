@@ -1,0 +1,16 @@
+Veridex {{ .Chart.AppVersion }} 已部署为 {{ include "veridex.fullname" . }}。
+
+应用资源（本 chart 只管理以下内容）：
+  - Deployment/Service {{ include "veridex.fullname" . }}-backend（业务 8080）
+  - Service {{ include "veridex.fullname" . }}-backend-management（管理 8081，仅集群内部）
+  - Deployment/Service {{ include "veridex.fullname" . }}-web（80）
+
+凭据来自预先存在的 Secret "{{ .Values.backend.existingSecret }}"（本 chart 不创建、不回显其内容）。
+Secret 值原地变更后请执行：
+  kubectl rollout restart deploy/{{ include "veridex.fullname" . }}-backend
+
+{{- if .Values.ingress.enabled }}
+入口：{{ .Values.ingress.hostname }}（Ingress 只指向 web Service）
+{{- else }}
+Ingress 未启用；请通过 web Service（ClusterIP）接入企业入口。
+{{- end }}

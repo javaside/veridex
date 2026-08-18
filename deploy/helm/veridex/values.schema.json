@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["global", "backend", "web", "podSecurityContext", "webSecurityContext", "containerSecurityContext"],
+  "properties": {
+    "global": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "imageRegistry": { "type": "string" },
+        "imagePullSecrets": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "backend": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image", "existingSecret", "resources", "env"],
+      "properties": {
+        "replicaCount": { "type": "integer", "minimum": 1 },
+        "image": { "$ref": "#/definitions/image" },
+        "existingSecret": { "type": "string", "minLength": 1 },
+        "podAnnotations": { "type": "object" },
+        "resources": { "$ref": "#/definitions/resources" },
+        "parserTemp": {
+          "type": "object", "additionalProperties": false,
+          "required": ["sizeLimit"],
+          "properties": { "sizeLimit": { "type": "string", "pattern": "^[0-9]+(Ki|Mi|Gi)$" } }
+        },
+        "terminationGracePeriodSeconds": { "type": "integer", "minimum": 30 },
+        "startupProbe": { "$ref": "#/definitions/probe" },
+        "readinessProbe": { "$ref": "#/definitions/probe" },
+        "livenessProbe": { "$ref": "#/definitions/probe" },
+        "env": {
+          "type": "object",
+          "required": ["VERIDEX_ENVIRONMENT", "VERIDEX_DB_URL", "VERIDEX_RABBITMQ_HOST",
+                        "VERIDEX_MINIO_ENDPOINT", "VERIDEX_OPENSEARCH_URIS", "VERIDEX_OTLP_ENDPOINT",
+                        "VERIDEX_MANAGEMENT_ADDRESS"],
+          "minProperties": 7,
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "web": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image", "resources"],
+      "properties": {
+        "replicaCount": { "type": "integer", "minimum": 1 },
+        "image": { "$ref": "#/definitions/image" },
+        "podAnnotations": { "type": "object" },
+        "resources": { "$ref": "#/definitions/resources" },
+        "terminationGracePeriodSeconds": { "type": "integer", "minimum": 10 }
+      }
+    },
+    "podSecurityContext": { "$ref": "#/definitions/securityContextLike" },
+    "webSecurityContext": { "$ref": "#/definitions/securityContextLike" },
+    "containerSecurityContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowPrivilegeEscalation", "readOnlyRootFilesystem", "capabilities"],
+      "properties": {
+        "allowPrivilegeEscalation": { "const": false },
+        "readOnlyRootFilesystem": { "const": true },
+        "capabilities": {
+          "type": "object",
+          "required": ["drop"],
+          "properties": { "drop": { "type": "array", "contains": { "const": "ALL" } } }
+        }
+      }
+    },
+    "serviceAccount": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "create": { "type": "boolean" }, "name": { "type": "string" } }
+    },
+    "ingress": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "className": { "type": "string" },
+        "hostname": { "type": "string" },
+        "annotations": { "type": "object" },
+        "tls": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "secretName": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "podDisruptionBudget": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "minAvailable": { "type": ["integer", "string"] }
+      }
+    },
+    "autoscaling": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "minReplicas": { "type": "integer", "minimum": 1 },
+        "maxReplicas": { "type": "integer", "minimum": 1 },
+        "targetCPUUtilizationPercentage": { "type": "integer", "minimum": 1, "maximum": 100 }
+      }
+    },
+    "networkPolicy": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "ingressNamespaceSelector": { "type": "object" },
+        "monitoringSelector": { "type": "object" },
+        "externalEgress": { "type": "array" }
+      }
+    },
+    "serviceMonitor": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "interval": { "type": "string" },
+        "scrapeTimeout": { "type": "string" }
+      }
+    }
+  },
+  "definitions": {
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "tag", "digest", "pullPolicy"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string", "not": { "enum": ["latest"] }, "pattern": "^[0-9][0-9A-Za-z.-]*$" },
+        "digest": { "type": "string", "pattern": "^(sha256:[0-9a-f]{64})?$" },
+        "pullPolicy": { "enum": ["Always", "IfNotPresent", "Never"] }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "required": ["requests", "limits"],
+      "properties": {
+        "requests": { "type": "object", "required": ["cpu", "memory"] },
+        "limits": { "type": "object", "required": ["cpu", "memory"] }
+      }
+    },
+    "probe": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "periodSeconds": { "type": "integer", "minimum": 1 },
+        "failureThreshold": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "securityContextLike": {
+      "type": "object",
+      "required": ["runAsNonRoot", "runAsUser", "runAsGroup", "seccompProfile"],
+      "properties": {
+        "runAsNonRoot": { "const": true },
+        "runAsUser": { "type": "integer", "minimum": 1 },
+        "runAsGroup": { "type": "integer", "minimum": 1 },
+        "seccompProfile": {
+          "type": "object", "required": ["type"],
+          "properties": { "type": { "const": "RuntimeDefault" } }
+        }
+      }
+    }
+  }
+}
