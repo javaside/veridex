@@ -1,0 +1,108 @@
+{{- if .Values.networkPolicy.enabled }}
+# web：入口只允许企业 Ingress Controller namespace；出口只允许 DNS 与 backend 业务端口
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "veridex.fullname" . }}-web
+  labels:
+    {{- include "veridex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "veridex.webSelectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.ingressNamespaceSelector | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # DNS（kube-system 内 CoreDNS）
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # backend 业务端口
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "veridex.backendSelectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# backend：业务端口只允许 web；管理端口只允许监控 selector；出口允许 DNS 与显式外部依赖
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "veridex.fullname" . }}-backend
+  labels:
+    {{- include "veridex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "veridex.backendSelectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "veridex.webSelectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 8080
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.monitoringSelector | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 8081
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # 外部依赖：安装者必须用 selector 或 CIDR 显式表达，chart 不静默开放全部出站
+{{- range $target := .Values.networkPolicy.externalEgress }}
+    - to:
+        {{- if eq $target.type "selector" }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $target.namespace }}
+          {{- with $target.podSelector }}
+          podSelector:
+            matchLabels:
+              {{- toYaml . | nindent 14 }}
+          {{- end }}
+        {{- else if eq $target.type "cidr" }}
+        - ipBlock:
+            cidr: {{ $target.cidr }}
+        {{- else }}
+        {{- fail "networkPolicy.externalEgress[*].type must be selector or cidr" }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ $target.port }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,29 @@
+{{- if and .Values.podDisruptionBudget.enabled (gt (int .Values.backend.replicaCount) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "veridex.fullname" . }}-backend
+  labels:
+    {{- include "veridex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "veridex.backendSelectorLabels" . | nindent 6 }}
+{{- end }}
+{{- if and .Values.podDisruptionBudget.enabled (gt (int .Values.web.replicaCount) 1) }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "veridex.fullname" . }}-web
+  labels:
+    {{- include "veridex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "veridex.webSelectorLabels" . | nindent 6 }}
+{{- end }}

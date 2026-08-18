@@ -84,4 +84,45 @@ class HelmChartStaticContractTest {
         assertThat(schema).contains("\"digest\"");
         assertThat(schema).contains("sha256:");
     }
+
+    @Test
+    void optionalComponentsAreGatedAndMinimal() throws IOException {
+        String ingress = read("templates/ingress.yaml");
+        assertThat(ingress).contains("{{- if .Values.ingress.enabled }}");
+        assertThat(ingress).contains("networking.k8s.io/v1");
+        // Ingress 只指向 web Service，绝不引用管理 Service
+        assertThat(ingress).contains("{{ include \"veridex.fullname\" . }}-web");
+        assertThat(ingress).doesNotContain("-management");
+        assertThat(ingress).contains("secretName");
+        String pdb = read("templates/poddisruptionbudget.yaml");
+        assertThat(pdb).contains("podDisruptionBudget.enabled");
+        assertThat(pdb).contains("minAvailable");
+        String hpa = read("templates/hpa.yaml");
+        assertThat(hpa).contains("autoscaling/v2");
+        assertThat(hpa).contains("{{- if .Values.autoscaling.enabled }}");
+        assertThat(hpa).contains("kind: Deployment");
+        String sm = read("templates/servicemonitor.yaml");
+        assertThat(sm).contains("{{- if .Values.serviceMonitor.enabled }}");
+        assertThat(sm).contains("path: /actuator/prometheus");
+        assertThat(sm).contains("port: management");
+        assertThat(sm).contains("veridex.io/management");
+    }
+
+    @Test
+    void networkPolicyDefaultsToDenyWithExplicitTargets() throws IOException {
+        String np = read("templates/networkpolicy.yaml");
+        assertThat(np).contains("{{- if .Values.networkPolicy.enabled }}");
+        assertThat(np).contains("policyTypes");
+        assertThat(np).contains("Ingress");
+        assertThat(np).contains("Egress");
+        // 不允许全放开出口
+        assertThat(np).doesNotContain("0.0.0.0/0");
+        // DNS 与显式外部依赖
+        assertThat(np).contains("externalEgress");
+        assertThat(np).contains("port: 53");
+        assertThat(np).contains("port: 8080");
+        assertThat(np).contains("port: 8081");
+        // selector / cidr 二选一，非法类型直接 fail
+        assertThat(np).contains("fail \"networkPolicy.externalEgress");
+    }
 }
