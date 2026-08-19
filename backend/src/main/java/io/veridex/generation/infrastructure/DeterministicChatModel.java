@@ -15,6 +15,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
@@ -24,6 +25,7 @@ import reactor.core.publisher.Flux;
  * 用于验证检索→生成→引用校验链路；真实模型 = 新增 provider 实现切换配置。
  */
 @Component
+@ConditionalOnProperty(name = "veridex.chat.provider", havingValue = "deterministic", matchIfMissing = true)
 public class DeterministicChatModel implements ChatModel {
 
     private static final Pattern EVIDENCE = Pattern.compile("\\[EVIDENCE (\\d+)\\|([^|]+)\\|([^\\]]+)\\]");

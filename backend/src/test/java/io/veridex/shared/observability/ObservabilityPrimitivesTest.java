@@ -26,6 +26,17 @@ class ObservabilityPrimitivesTest {
     }
 
     @Test
+    void providerIsBoundedAndModelNameIsNormalized() {
+        BoundedModelTags tags = new BoundedModelTags(Set.of("deterministic", "ollama"));
+
+        assertThat(tags.resolve("ollama", "qwen3:8b").model()).isEqualTo("qwen3:8b");
+        assertThat(tags.resolve("ollama", "qwen3:8b").tags()[0].value()).isEqualTo("ollama");
+        assertThat(tags.resolve("ollama", "http://evil.example/x?q=1").model()).isEqualTo("unknown");
+        assertThat(tags.resolve("gpt-4", "qwen3:8b").tags()[0].value()).isEqualTo("unknown");
+        assertThat(tags.resolve("ollama", " qwen3:8b ").model()).isEqualTo("unknown");
+    }
+
+    @Test
     void telemetryTagDoesNotExposeArbitraryPublicConstruction() {
         assertThat(TelemetryTag.class.getConstructors()).isEmpty();
         assertThat(TelemetryTag.class.getDeclaredConstructors())
