@@ -141,7 +141,7 @@ class QuestionAnsweringServiceTest {
                 .thenReturn(new HybridSearchResult(evidence, List.of(), List.of()));
         // 引用终检在 GenerationServiceImpl 内完成；编排层收到的是终检异常
         when(generation.stream(eq("请假"), eq(evidence), any())).thenReturn(Flux.error(
-                new io.veridex.generation.application.InvalidCitationException("invalid")));
+                new io.veridex.generation.api.InvalidCitationException("invalid")));
 
         StepVerifier.create(service.ask(USER, new AskRequest("请假", List.of(KB), CONV)))
                 .expectNextMatches(e -> e instanceof QaEvent.RunStarted)
@@ -161,7 +161,7 @@ class QuestionAnsweringServiceTest {
         when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假"))
                 .thenReturn(new HybridSearchResult(List.of(evidence()), List.of(), List.of()));
         when(generation.stream(any(), any(), any()))
-                .thenReturn(Flux.error(new io.veridex.generation.application.ModelTimeoutException("t")));
+                .thenReturn(Flux.error(new io.veridex.generation.api.ModelTimeoutException("t")));
 
         StepVerifier.create(service.ask(USER, new AskRequest("请假", List.of(KB), CONV)))
                 .expectNextMatches(e -> e instanceof QaEvent.RunStarted)
