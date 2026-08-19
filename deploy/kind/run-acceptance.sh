@@ -30,12 +30,19 @@ cleanup() {
 trap cleanup EXIT
 
 echo "==> [kind] create cluster"
-CLUSTER_CONFIG="
+CLUSTER_CONFIG=$(cat <<YAML
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 networking:
-  disableDefaultCNI: $([ "${ENFORCE_NETWORKPOLICY:-0}" = "1" ] && echo true || echo false)
-"
+  disableDefaultCNI: $( [ "${ENFORCE_NETWORKPOLICY:-0}" = "1" ] && echo true || echo false )
+# 本机 DNS 污染（registry-1.docker.io 被解析到假 IP）：kind 节点内 containerd
+# 不走 docker daemon mirror，需在此显式声明镜像站；干净环境同样适用（仅添加镜像源）。
+containerdConfigPatches:
+- |-
+  [plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
+    endpoint = ["https://docker.m.daocloud.io"]
+YAML
+)
 kind create cluster --name "${CLUSTER}" --config - <<<"${CLUSTER_CONFIG}"
 
 if [ "${ENFORCE_NETWORKPOLICY:-0}" = "1" ]; then
@@ -48,6 +55,24 @@ echo "==> [kind] load images"
 kind load docker-image veridex-backend:0.1.0 veridex-web:0.1.0 --name "${CLUSTER}"
 
 echo "==> [kind] deploy test dependencies"
+echo "==> [kind] pre-pull dependency images via host docker + ctr import"
+# 依赖镜像先经宿主机 docker daemon（已配置 mirror）拉取，再 docker save 管道导入节点：
+# 1) 本机 DNS 污染下节点内 containerd 直连不可靠；
+# 2) kind load 用 --all-platforms 需宿主机具备全平台 blob（本机仅 arm64 单平台会 digest 缺失），
+#    docker save 导出单平台 tar，ctr import 接受。
+NODE_IMAGES=(
+  postgres:17-alpine
+  rabbitmq:4-alpine
+  minio/minio:RELEASE.2025-07-23T15-54-02Z
+  opensearchproject/opensearch:3.2.0
+)
+for image in "${NODE_IMAGES[@]}"; do
+  echo "    pulling docker.io/${image} (host) ..."
+  docker pull "${image}" || { echo "run-acceptance: host pull failed for ${image}" >&2; exit 1; }
+  docker save "${image}" | docker exec -i "${CLUSTER}-control-plane" \
+    ctr --namespace=k8s.io images import - \
+    || { echo "run-acceptance: node import failed for ${image}" >&2; exit 1; }
+done
 kubectl create namespace "${NS}"
 kubectl -n "${NS}" apply -f "${ROOT_DIR}/deploy/kind/test-deps.yaml"
 kubectl -n "${NS}" wait pod/veridex-test-deps --for=condition=Ready --timeout=600s

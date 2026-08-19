@@ -51,6 +51,11 @@ spec:
         failureThreshold: 30
     - name: rabbitmq
       image: rabbitmq:4-alpine
+      # kind 节点上以 root 运行入口会生成 root 属主的 .erlang.cookie（0600），
+      # 预启动降权到 rabbitmq 用户(999)读取时报 eacces；显式以 999 运行。
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
       env:
         - { name: RABBITMQ_DEFAULT_USER, value: veridex }
         - { name: RABBITMQ_DEFAULT_PASS, value: veridex-test }
