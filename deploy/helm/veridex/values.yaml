@@ -29,6 +29,11 @@ backend:
     VERIDEX_OPENSEARCH_URIS: http://opensearch:9200
     VERIDEX_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
     VERIDEX_MANAGEMENT_ADDRESS: 0.0.0.0
+    # Chat provider（deterministic 为测试占位；ollama 需外部预置 Ollama 并显式放行 egress）
+    VERIDEX_CHAT_PROVIDER: deterministic
+    VERIDEX_CHAT_TIMEOUT: 60s
+    VERIDEX_OLLAMA_BASE_URL: http://ollama.internal:11434
+    VERIDEX_OLLAMA_CHAT_MODEL: qwen3:8b
 
 web:
   replicaCount: 2
@@ -81,10 +86,12 @@ networkPolicy:
   enabled: true
   ingressNamespaceSelector: { kubernetes.io/metadata.name: ingress-nginx }
   monitoringSelector: { app.kubernetes.io/name: prometheus }
-  # externalEgress：显式放行外部依赖（Postgres/RabbitMQ/MinIO/OpenSearch/OTLP），为空则默认拒绝。
+  # externalEgress：显式放行外部依赖（Postgres/RabbitMQ/MinIO/OpenSearch/OTLP/Ollama），为空则默认拒绝。
   # 每项二选一形态（type 必须是 selector 或 cidr）：
   # - { type: selector, namespace: <ns>, podSelector: {...}, port: 5432 }
   # - { type: cidr, cidr: 10.0.0.0/16, port: 5432 }
+  # Ollama 示例（VERIDEX_CHAT_PROVIDER=ollama 时）：
+  # - { type: selector, namespace: ollama, podSelector: { app.kubernetes.io/name: ollama }, port: 11434 }
   externalEgress: []
 
 serviceMonitor:

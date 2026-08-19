@@ -133,6 +133,16 @@ services:
       # 容器内必须监听全部接口，否则同网 Prometheus 抓不到管理端口
       VERIDEX_MANAGEMENT_ADDRESS: 0.0.0.0
       VERIDEX_CORS_ALLOWED_ORIGINS: http://localhost:8090
+      # --- Ollama Chat（可选，默认 deterministic 无需配置）---
+      # 指向宿主机 Ollama 时用 host.docker.internal，不要用 localhost（容器内）。
+      # VERIDEX_CHAT_PROVIDER: ollama
+      # VERIDEX_OLLAMA_BASE_URL: http://host.docker.internal:11434
+      # VERIDEX_OLLAMA_CHAT_MODEL: qwen3:8b
+      # VERIDEX_CHAT_TIMEOUT: 60s
+      # VERIDEX_OUTBOUND_ALLOWED_HOSTS: host.docker.internal
+      # VERIDEX_OUTBOUND_ALLOWED_PORTS: "11434"
+      # VERIDEX_OUTBOUND_ALLOW_INSECURE_HTTP: "true"
+      # 提示：compose 栈未打包 Ollama 服务，需自行提供（设计 §8.1）。
     read_only: true
     tmpfs:
       # /tmp 本身也要可写：只读根文件系统下 Tomcat 需在 java.io.tmpdir 创建工作目录
