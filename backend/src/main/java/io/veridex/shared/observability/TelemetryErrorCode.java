@@ -35,15 +35,6 @@ public enum TelemetryErrorCode {
     }
 
     public static TelemetryErrorCode classify(Throwable exception) {
-        if (exception instanceof io.veridex.generation.application.ModelTimeoutException) {
-            return MODEL_TIMEOUT;
-        }
-        if (exception instanceof io.veridex.generation.application.InvalidCitationException) {
-            return INVALID_CITATION;
-        }
-        if (exception instanceof io.veridex.generation.application.GenerationModelException) {
-            return MODEL_ERROR;
-        }
         if (exception instanceof TimeoutException) {
             return OPENSEARCH_TIMEOUT;
         }

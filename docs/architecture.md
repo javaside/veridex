@@ -62,7 +62,7 @@ Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V12�
 
 ## 4. 可观测性边界
 
-`shared::observability` 提供固定 observation/metric 名称、低基数 outcome/stage/error tags、Rabbit propagation 和 fail-open meter 写入。QA、retrieval、generation、outbox、ingestion、indexing 只在稳定业务边界使用这些原语。metrics、span attributes/events 和普通日志禁止保存 question、prompt、answer、chunk/evidence 文本、凭据、原始异常消息或业务 UUID；run ID 只能作为 span/log correlation，不能作为 metric label。
+`shared::observability` 提供固定 observation/metric 名称、低基数 outcome/stage/error tags、Rabbit propagation 和 fail-open meter 写入。QA、retrieval、generation、outbox、ingestion、indexing 只在稳定业务边界使用这些原语。generation 指标：`veridex.generation.model`（duration）、`veridex.generation.first_token`（首 token 时延）、`veridex.generation.outcome`（success/refused/failed/cancelled），provider 标签只允许 `deterministic`/`ollama`（`BoundedModelTags` 收敛），错误码含 `MODEL_ERROR`/`MODEL_TIMEOUT`/`INVALID_CITATION`；usage 缺失时按字符估算并内部标记 estimated，不伪装为 provider 精确值。metrics、span attributes/events 和普通日志禁止保存 question、prompt、answer、chunk/evidence 文本、凭据、原始异常消息或业务 UUID；run ID 只能作为 span/log correlation，不能作为 metric label。
 
 本地观测栈由 Prometheus、Grafana、OTel Collector 和 Tempo 组成，配置位于 `deploy/compose/observability`，固定镜像版本和校验入口为 `scripts/verify-observability.sh`。应用仍在宿主机运行，Prometheus 从宿主机管理端口 `host.docker.internal:8081/actuator/prometheus` 抓取，RabbitMQ metrics 从 `15692` 抓取。
 
@@ -112,8 +112,16 @@ Trace body 默认 `NONE`。启用 `ERRORS`/`ALL` 时使用环境变量 key ring 
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | `/api/qa/ask` | SSE 流式问答 |
+| POST | `/api/qa/ask` | SSE 流式问答（真实 token 流） |
 | GET | `/api/qa/conversations` | 当前用户会话列表 |
+
+`/api/qa/ask` 由 Controller 返回 `Flux<ServerSentEvent<QaEvent>>`，事件协议：
+`run.started` → `retrieval.completed` → `answer.delta`* → `citation.available` → `answer.completed` / `answer.refused` / `run.failed`。
+`answer.delta` 是 **provisional**（真实模型增量，不在服务端缓存）；只有 `answer.completed` 表示完整文本已通过
+**引用终检**并持久化（assistant 消息 + Citation + GenerationRun）。引用失败发 `run.failed`
+（稳定码 `INVALID_CITATION`），不保存不完整回答；模型故障/超时（`MODEL_ERROR`/`MODEL_TIMEOUT`）不回退
+deterministic；客户端断开会取消上游 `ChatModel.stream()` 订阅，QueryRun 与 trace 落 `CANCELLED`，
+取消收尾幂等。SSE 层 async timeout 固定 120s（≥ `veridex.chat.timeout` 默认 60s + 余量）。
 | GET | `/api/qa/conversations/{id}/messages` | 会话消息 |
 | POST | `/api/qa/feedback` | 占位（返回 204，实际反馈走 `/api/feedback`） |
 
@@ -207,6 +215,7 @@ Feedback（rating=DOWN + reasonCode + evidence）
 - chart 只管理应用工作负载；基础设施凭据一律来自 existing Secret（固定 key：`db-username`、`db-password`、`rabbitmq-username`、`rabbitmq-password`、`minio-access-key`、`minio-secret-key`、`session-secret`；trace body 开启时另需 `trace-fingerprint-key` / `trace-current-key-id` / `trace-current-key`），chart 不创建、不落明文。
 - NetworkPolicy 默认 deny：web 仅接受 Ingress 流量并只允许 DNS + backend:8080 出站；backend 仅接受 web（8080）与监控（8081）入口，出站限 DNS 与 `networkPolicy.externalEgress` 显式声明的 selector 或 CIDR（禁止 `0.0.0.0/0`）。
 - ServiceMonitor（可选）只抓带 management 标签的 Service 的 `management` 命名端口（`/actuator/prometheus`）。
+- Chat 生成模型：`veridex.chat.provider`（默认 `deterministic` 测试占位，`ollama` 为首个真实 Chat provider）。Ollama 由安装者预置（不进默认 Compose/chart/离线包），后端经 `VERIDEX_CHAT_PROVIDER/VERIDEX_OLLAMA_BASE_URL/VERIDEX_OLLAMA_CHAT_MODEL/VERIDEX_CHAT_TIMEOUT` 配置；HTTP 时必须显式放行 `VERIDEX_OUTBOUND_ALLOWED_*` 并在 `networkPolicy.externalEgress` 声明 Ollama 的 selector/CIDR + 11434（chart 默认拒绝该出站）。真实模型显式验收：`scripts/verify-ollama-chat.sh`（不进默认 CI）。
 - 部署校验入口：`scripts/verify-deployment.sh`（镜像、Compose 栈、Helm lint/template 矩阵、kind 集群验收、离线包；随 `scripts/verify.sh` 执行）。已知限制：backend 为内存 Session，多副本需粘性或后续引入 Spring Session；备份恢复与多架构镜像门禁留给 Phase 5-e。
 
 ## 8. 与历史设计文档的关系

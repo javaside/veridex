@@ -247,8 +247,14 @@ Spring Boot 配置位于 `backend/src/main/resources/application.yml`。常用�
 | `VERIDEX_OPENSEARCH_INDEX_PREFIX` | `veridex` |
 | `VERIDEX_EMBEDDING_PROVIDER` | `deterministic` |
 | `VERIDEX_EMBEDDING_DIMENSIONS` | `128` |
-| `VERIDEX_OLLAMA_BASE_URL` | `http://localhost:11434` |
+| `VERIDEX_OLLAMA_BASE_URL` | `http://localhost:11434`（embedding 与 chat 共用） |
 | `VERIDEX_OLLAMA_EMBEDDING_MODEL` | `qwen3-embedding` |
+| `VERIDEX_CHAT_PROVIDER` | `deterministic`（测试占位）或 `ollama`（首个真实 Chat provider） |
+| `VERIDEX_CHAT_TIMEOUT` | `60s`（一次模型生成总时限） |
+| `VERIDEX_OLLAMA_CHAT_MODEL` | `qwen3:8b`（可用宿主机已装模型覆盖，如 `qwen3.5:9b-mlx`） |
+| `VERIDEX_OUTBOUND_ALLOWED_HOSTS` | 空；使用真实 Ollama 时填其 host |
+| `VERIDEX_OUTBOUND_ALLOWED_PORTS` | 空；Ollama 为 `11434` |
+| `VERIDEX_OUTBOUND_ALLOW_INSECURE_HTTP` | `false`；Ollama 走 HTTP 时置 `true` |
 | `VERIDEX_ENVIRONMENT` | `local` |
 | `VERIDEX_TRACING_SAMPLING_PROBABILITY` | `0.1` |
 | `VERIDEX_OTLP_ENDPOINT` | `http://localhost:4318/v1/traces` |
@@ -272,6 +278,30 @@ VERIDEX_DB_PASSWORD='replace-me' \
 ```
 
 本地 OpenSearch 设置了 `DISABLE_SECURITY_PLUGIN=true`，仅适合开发环境。
+
+### Chat 生成模型（真实流式问答）
+
+- 默认 `deterministic` 是**测试占位**：从证据块模板拼接回答，无外部依赖、CI/离线可重复；
+  首个真实 Chat provider 为 **Ollama**。
+- 启用真实模型（需安装者预置 Ollama 与模型权重）：
+
+```bash
+VERIDEX_CHAT_PROVIDER=ollama \
+VERIDEX_OLLAMA_BASE_URL=http://ollama.internal:11434 \
+VERIDEX_OLLAMA_CHAT_MODEL=qwen3:8b \
+VERIDEX_CHAT_TIMEOUT=60s \
+VERIDEX_OUTBOUND_ALLOWED_HOSTS=ollama.internal \
+VERIDEX_OUTBOUND_ALLOWED_PORTS=11434 \
+VERIDEX_OUTBOUND_ALLOW_INSECURE_HTTP=true \
+./mvnw -pl backend spring-boot:run
+```
+
+- Ollama 经 HTTP 时必须显式开启 insecure-http 并放行 host/port（后端出站策略 fail-fast）；
+  模型故障/超时**不会**回退 deterministic。
+- 流式回答为 **provisional**：`answer.delta` 只是临时文本，只有引用终检通过
+  （`answer.completed`）才持久化；引用失败或模型失败发 `run.failed` 且不保存不完整回答；
+  客户端断开会取消上游模型流并落 `CANCELLED`。
+- 真实 Ollama 显式验收入口：`./scripts/verify-ollama-chat.sh`（不进默认 CI）。
 
 ## Phase 5-b 可观测性
 

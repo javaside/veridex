@@ -5,8 +5,9 @@ import io.veridex.conversation.api.ConversationView;
 import io.veridex.generation.api.GenerationEvent;
 import io.veridex.generation.api.GenerationResult;
 import io.veridex.generation.api.GenerationService;
-import io.veridex.generation.application.GenerationModelException;
-import io.veridex.generation.application.InvalidCitationException;
+import io.veridex.generation.api.GenerationErrorCodes;
+import io.veridex.generation.api.GenerationModelException;
+import io.veridex.generation.api.InvalidCitationException;
 import io.veridex.knowledge.api.KnowledgeScopeQuery;
 import io.veridex.qa.api.AskRequest;
 import io.veridex.qa.api.QaEvent;
@@ -171,7 +172,7 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
     private void handleGenerationError(Throwable error, FluxSink<QaEvent> sink,
                                        VeridexObservability.ObservationScope observation, UUID runId,
                                        AskRequest request, HybridSearchResult searchResult) {
-        TelemetryErrorCode code = TelemetryErrorCode.classify(toException(error));
+        TelemetryErrorCode code = GenerationErrorCodes.classify(toException(error));
         recorder.fail(runId, code.name());
         traceBodyCapture.capture(runId, TraceBodyCapture.TerminalOutcome.FAILED, code.name(),
                 new TraceBodyCapture.TraceBodyMaterial(request.question(), List.of(), null,
@@ -202,7 +203,7 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
     private void handleError(RuntimeException e, FluxSink<QaEvent> sink,
                              VeridexObservability.ObservationScope observation, UUID runId,
                              AskRequest request) {
-        TelemetryErrorCode code = TelemetryErrorCode.classify(e);
+        TelemetryErrorCode code = GenerationErrorCodes.classify(e);
         if (runId != null) {
             recorder.fail(runId, code.name());
             traceBodyCapture.capture(runId, TraceBodyCapture.TerminalOutcome.FAILED, code.name(),

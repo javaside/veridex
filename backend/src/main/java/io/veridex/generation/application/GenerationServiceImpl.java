@@ -2,8 +2,12 @@ package io.veridex.generation.application;
 
 import io.veridex.conversation.api.MessageRecord;
 import io.veridex.generation.api.CitationView;
+import io.veridex.generation.api.GenerationErrorCodes;
 import io.veridex.generation.api.GenerationEvent;
 import io.veridex.generation.api.GenerationParameters;
+import io.veridex.generation.api.InvalidCitationException;
+import io.veridex.generation.api.ModelEmptyException;
+import io.veridex.generation.api.ModelTimeoutException;
 import io.veridex.generation.api.GenerationResult;
 import io.veridex.generation.api.GenerationService;
 import io.veridex.generation.api.PromptMessageView;
@@ -96,7 +100,7 @@ public class GenerationServiceImpl implements GenerationService {
             response = model.call(prompt);
             observation.success(TelemetryTag.generationOutcome(TelemetryOutcome.Generation.SUCCESS));
         } catch (RuntimeException e) {
-            observation.failure(TelemetryErrorCode.classify(e));
+            observation.failure(GenerationErrorCodes.classify(e));
             throw e;
         } finally {
             observation.close();
@@ -164,7 +168,7 @@ public class GenerationServiceImpl implements GenerationService {
                     observability.record(MetricName.GENERATION_FIRST_TOKEN, firstToken, providerTag());
                     return Flux.just(new GenerationEvent.Completed(result));
                 }))
-                .doOnError(e -> observation.failure(TelemetryErrorCode.classify(e)));
+                .doOnError(e -> observation.failure(GenerationErrorCodes.classify(e)));
     }
 
     // ---------- 共享私有逻辑 ----------

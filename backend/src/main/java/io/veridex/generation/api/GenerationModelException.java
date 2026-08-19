@@ -1,4 +1,4 @@
-package io.veridex.generation.application;
+package io.veridex.generation.api;
 
 /**
  * 模型失败族（设计 §5.1/§5.2/§4.5）：无 deterministic 回退，错误经 Flux error channel 传播。

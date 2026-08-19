@@ -1,4 +1,4 @@
-package io.veridex.generation.application;
+package io.veridex.generation.api;
 
 /** 模型返回空响应（设计 §5.1）：归类 MODEL_ERROR。 */
 public class ModelEmptyException extends GenerationModelException {
