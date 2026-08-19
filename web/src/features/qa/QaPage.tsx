@@ -48,6 +48,7 @@ export function QaPage() {
   const [loading, setLoading] = useState(true)
   const [preview, setPreview] = useState<{ title: string; content: string } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
   // 流式回答缓冲：ref 供事件回调累积（不触发渲染、无并发问题），state 镜像用于渲染。
   // 不能用「updater 内写 ref 定位消息」：React 19 StrictMode 双调用 updater 会读到
   // 旧 base 上不存在的索引 → undefined.content 白屏。
@@ -111,6 +112,11 @@ export function QaPage() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
   }, [messages])
 
+  // 页面卸载/组件销毁：取消进行中的问答流（设计 §7）
+  useEffect(() => {
+    return () => abortRef.current?.abort()
+  }, [])
+
   const loadConversation = useCallback(async (conversationId: string) => {
     setActiveConversationId(conversationId)
     resetStream()
@@ -130,6 +136,8 @@ export function QaPage() {
     resetStream()
     lastQuestionRef.current = trimmed
     lastRunIdRef.current = null
+    const controller = new AbortController()
+    abortRef.current = controller
     setMessages((current) => [
       ...current,
       { id: `user-${Date.now()}`, role: 'USER', content: trimmed },
@@ -148,11 +156,13 @@ export function QaPage() {
             setStreamCitationList(event.data.citations)
             break
           case 'answer.refused':
-            finalizeStream()
+            // 拒答发生在 delta 之前：丢弃空的 provisional 并显示拒答（设计 §7）
+            resetStream()
             setMessages((current) => [...current, { id: `system-${Date.now()}`, role: 'SYSTEM', content: event.data.message }])
             break
           case 'run.failed':
-            finalizeStream()
+            // 引用终检失败/模型故障：丢弃 provisional 文本，显示错误（设计 D9）
+            resetStream()
             setMessages((current) => [...current, { id: `error-${Date.now()}`, role: 'ERROR', content: event.data.message }])
             break
           case 'answer.completed':
@@ -162,10 +172,17 @@ export function QaPage() {
           default:
             break
         }
-      })
+      }, controller.signal)
+    } catch (error) {
+      // 用户主动取消：丢弃 provisional，不显示伪失败
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        resetStream()
+      } else {
+        throw error
+      }
     } finally {
       setStreaming(false)
-      finalizeStream()
+      resetStream()
       const latest = await qaApi.conversations()
       setConversations(latest)
     }

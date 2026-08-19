@@ -129,6 +129,48 @@ describe('QaPage', () => {
     expect(await screen.findByText('opensearch down')).toBeInTheDocument()
   })
 
+  test('run.failed discards provisional text and shows error', async () => {
+    mockedAsk.mockImplementation(async (_q, _kb, _c, onEvent) => {
+      onEvent({ name: 'answer.delta', data: { text: '根据《请假制度》' } })
+      onEvent({ name: 'run.failed', data: { message: '模型服务暂时不可用' } })
+    })
+
+    render(<QaPage />)
+
+    await screen.findByRole('heading', { name: '向制度知识库提问' })
+    fireEvent.change(screen.getByLabelText('问题'), { target: { value: '请假' } })
+    fireEvent.click(screen.getByRole('button', { name: '发送' }))
+
+    expect(await screen.findByText('模型服务暂时不可用')).toBeInTheDocument()
+    // provisional 文本必须被丢弃（设计 D9 / §7）
+    expect(screen.queryByText(/根据《请假制度》/)).not.toBeInTheDocument()
+  })
+
+  test('ask receives an AbortSignal and abort does not show fake failure', async () => {
+    let capturedSignal: AbortSignal | undefined
+    let release: () => void = () => {}
+    mockedAsk.mockImplementation(async (_q, _kb, _c, _onEvent, signal) => {
+      capturedSignal = signal
+      // 模拟用户取消：等待 abort 事件
+      await new Promise<void>((resolve) => {
+        release = resolve
+        signal?.addEventListener('abort', () => resolve())
+      })
+    })
+
+    const { unmount } = render(<QaPage />)
+    await screen.findByRole('heading', { name: '向制度知识库提问' })
+    fireEvent.change(screen.getByLabelText('问题'), { target: { value: '请假' } })
+    fireEvent.click(screen.getByRole('button', { name: '发送' }))
+
+    expect(capturedSignal).toBeInstanceOf(AbortSignal)
+    unmount() // 卸载触发 abort
+    await new Promise((r) => setTimeout(r, 0))
+    expect(screen.queryByText('请求失败')).not.toBeInTheDocument()
+    expect(screen.queryByText(/根据《请假制度》/)).not.toBeInTheDocument()
+    void release
+  })
+
   test('loading a conversation populates message history', async () => {
     mockedConversations.mockResolvedValue([{ id: 'c1', title: '请假', createdAt: '2026-08-12T00:00:00Z' }])
     vi.mocked(qaApi.messages).mockResolvedValue([

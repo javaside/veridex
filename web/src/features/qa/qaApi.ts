@@ -33,30 +33,50 @@ async function parseSse(response: Response, onEvent: (event: QaEvent) => void) {
   if (!reader) return
   const decoder = new TextDecoder()
   let buffer = ''
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    const blocks = buffer.split('\n\n')
-    buffer = blocks.pop() ?? ''
-    for (const block of blocks) {
-      const dataLine = block.split('\n').find((line) => line.startsWith('data:'))
-      const nameLine = block.split('\n').find((line) => line.startsWith('event:'))
-      if (!dataLine) continue
-      const name = (nameLine?.slice(6).trim() ?? '') as QaEvent['name']
-      onEvent({ name, data: JSON.parse(dataLine.slice(5).trim()) })
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const blocks = buffer.split('\n\n')
+      buffer = blocks.pop() ?? ''
+      for (const block of blocks) {
+        const dataLine = block.split('\n').find((line) => line.startsWith('data:'))
+        const nameLine = block.split('\n').find((line) => line.startsWith('event:'))
+        if (!dataLine) continue
+        const name = (nameLine?.slice(6).trim() ?? '') as QaEvent['name']
+        onEvent({ name, data: JSON.parse(dataLine.slice(5).trim()) })
+      }
     }
+  } catch (error) {
+    // 用户主动取消：静默返回，不伪造 run.failed（设计 §7）
+    if (error instanceof DOMException && error.name === 'AbortError') return
+    throw error
   }
 }
 
 export const qaApi = {
-  ask: async (question: string, knowledgeBaseIds: string[], conversationId: string | null, onEvent: (event: QaEvent) => void) => {
-    const response = await fetch('/api/qa/ask', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
-      body: JSON.stringify({ question, knowledgeBaseIds, conversationId }),
-    })
+  ask: async (
+    question: string,
+    knowledgeBaseIds: string[],
+    conversationId: string | null,
+    onEvent: (event: QaEvent) => void,
+    signal?: AbortSignal,
+  ) => {
+    let response: Response
+    try {
+      response = await fetch('/api/qa/ask', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+        body: JSON.stringify({ question, knowledgeBaseIds, conversationId }),
+        signal,
+      })
+    } catch (error) {
+      // 用户主动取消：静默返回，不伪造 run.failed（设计 §7）
+      if (error instanceof DOMException && error.name === 'AbortError') return
+      throw error
+    }
     if (!response.ok) {
       onEvent({ name: 'run.failed', data: { message: `请求失败 (${response.status})` } })
       return
