@@ -33,8 +33,11 @@ class SensitiveOutputRegressionTest {
         SimpleMeterRegistry meters = new SimpleMeterRegistry();
         var observability = new VeridexObservability(meters, ObservationRegistry.create());
         var model = new DeterministicChatModel();
+        var chatProperties = new io.veridex.generation.infrastructure.ChatProperties("deterministic",
+                java.time.Duration.ofSeconds(60),
+                new io.veridex.generation.infrastructure.ChatProperties.Ollama("http://localhost:11434", "qwen3:8b"));
         GenerationServiceImpl service = new GenerationServiceImpl(model, refusalPolicy, citationValidator,
-                documentVersions, observability);
+                documentVersions, observability, chatProperties);
 
         String question = "SENSITIVE_QUESTION_5C";
         String chunkText = "SENSITIVE_CHUNK_5C";

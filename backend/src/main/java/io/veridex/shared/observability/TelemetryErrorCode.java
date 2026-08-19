@@ -9,6 +9,8 @@ public enum TelemetryErrorCode {
     EMBEDDING_UNAVAILABLE("embedding_unavailable"),
     DUAL_RETRIEVAL_FAILED("dual_retrieval_failed"),
     MODEL_ERROR("model_error"),
+    MODEL_TIMEOUT("model_timeout"),
+    INVALID_CITATION("invalid_citation"),
     STORAGE_ERROR("storage_error"),
     PARSE_ERROR("parse_error"),
     OUTBOX_PUBLISH_FAILED("outbox_publish_failed"),
@@ -28,10 +30,20 @@ public enum TelemetryErrorCode {
 
     public static Set<String> persistedQueryRunCodes() {
         return Set.of(OPENSEARCH_TIMEOUT.name(), EMBEDDING_UNAVAILABLE.name(), DUAL_RETRIEVAL_FAILED.name(),
-                MODEL_ERROR.name(), STORAGE_ERROR.name(), PARSE_ERROR.name(), UNKNOWN.name(), "TRACE_FAILURE");
+                MODEL_ERROR.name(), MODEL_TIMEOUT.name(), INVALID_CITATION.name(),
+                STORAGE_ERROR.name(), PARSE_ERROR.name(), UNKNOWN.name(), "TRACE_FAILURE");
     }
 
-    public static TelemetryErrorCode classify(Exception exception) {
+    public static TelemetryErrorCode classify(Throwable exception) {
+        if (exception instanceof io.veridex.generation.application.ModelTimeoutException) {
+            return MODEL_TIMEOUT;
+        }
+        if (exception instanceof io.veridex.generation.application.InvalidCitationException) {
+            return INVALID_CITATION;
+        }
+        if (exception instanceof io.veridex.generation.application.GenerationModelException) {
+            return MODEL_ERROR;
+        }
         if (exception instanceof TimeoutException) {
             return OPENSEARCH_TIMEOUT;
         }

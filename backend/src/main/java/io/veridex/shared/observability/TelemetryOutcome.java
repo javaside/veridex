@@ -25,7 +25,9 @@ public final class TelemetryOutcome {
 
     public enum Generation {
         SUCCESS,
-        ERROR
+        ERROR,
+        REFUSED,
+        CANCELLED
     }
 
     public enum Outbox {

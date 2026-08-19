@@ -3,6 +3,7 @@ package io.veridex.generation;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,13 +16,15 @@ import io.veridex.generation.api.GenerationResult;
 import io.veridex.generation.application.CitationValidator;
 import io.veridex.generation.application.GenerationServiceImpl;
 import io.veridex.generation.application.RefusalPolicy;
-import io.veridex.generation.infrastructure.DeterministicChatModel;
+import io.veridex.generation.infrastructure.ChatProperties;
 import io.veridex.knowledge.api.DocumentVersionQuery;
 import io.veridex.retrieval.api.EvidencePiece;
 import io.veridex.shared.RefusalReason;
 import io.veridex.shared.observability.VeridexObservability;
 import java.util.List;
 import java.util.UUID;
+import java.time.Duration;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -31,17 +34,24 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 
 @ExtendWith(MockitoExtension.class)
 class GenerationServiceImplTest {
 
-    @Mock DeterministicChatModel model;
+    @Mock ChatModel model;
     @Mock RefusalPolicy refusalPolicy;
     @Mock CitationValidator citationValidator;
     @Mock DocumentVersionQuery documentVersions;
+    @Mock ChatProperties chatProperties;
     @Spy VeridexObservability observability = new VeridexObservability(new SimpleMeterRegistry(), ObservationRegistry.create());
     @InjectMocks GenerationServiceImpl service;
+
+    @BeforeEach
+    void deterministicProvider() {
+        lenient().when(chatProperties.provider()).thenReturn("deterministic");
+    }
 
     @Test
     void refusesWhenPolicySaysSo() {
@@ -80,7 +90,9 @@ class GenerationServiceImplTest {
     void recordsModelFailureWithBoundedTags() {
         SimpleMeterRegistry meters = new SimpleMeterRegistry();
         GenerationServiceImpl instrumented = new GenerationServiceImpl(model, refusalPolicy, citationValidator,
-                documentVersions, new VeridexObservability(meters, ObservationRegistry.create()));
+                documentVersions, new VeridexObservability(meters, ObservationRegistry.create()),
+                new ChatProperties("deterministic", Duration.ofSeconds(60),
+                        new ChatProperties.Ollama("http://localhost:11434", "qwen3:8b")));
         var evidence = List.of(new EvidencePiece(1, UUID.randomUUID(), UUID.randomUUID(), 0, "t", "1", "text"));
         when(refusalPolicy.evaluate(eq(evidence), org.mockito.ArgumentMatchers.anyInt())).thenReturn(null);
         when(model.call(any(Prompt.class))).thenThrow(new RuntimeException("SENSITIVE_MODEL_FAILURE"));

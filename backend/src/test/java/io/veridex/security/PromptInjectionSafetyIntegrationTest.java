@@ -31,7 +31,11 @@ class PromptInjectionSafetyIntegrationTest {
     private GenerationServiceImpl service() {
         var model = new DeterministicChatModel();
         var observability = new VeridexObservability(new SimpleMeterRegistry(), ObservationRegistry.create());
-        return new GenerationServiceImpl(model, refusalPolicy, citationValidator, documentVersions, observability);
+        var chatProperties = new io.veridex.generation.infrastructure.ChatProperties("deterministic",
+                java.time.Duration.ofSeconds(60),
+                new io.veridex.generation.infrastructure.ChatProperties.Ollama("http://localhost:11434", "qwen3:8b"));
+        return new GenerationServiceImpl(model, refusalPolicy, citationValidator, documentVersions,
+                observability, chatProperties);
     }
 
     @Test

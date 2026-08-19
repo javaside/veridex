@@ -4,6 +4,8 @@ public enum MetricName {
     RETRIEVAL_CHANNEL_FAILURE("veridex.retrieval.channel.failure"),
     RETRIEVAL_DEGRADATION("veridex.retrieval.degradation"),
     GENERATION_TOKENS("veridex.generation.tokens"),
+    GENERATION_FIRST_TOKEN("veridex.generation.first_token"),
+    GENERATION_OUTCOME("veridex.generation.outcome"),
     OUTBOX_PENDING("veridex.outbox.pending"),
     OUTBOX_OLDEST_UNPUBLISHED_AGE("veridex.outbox.oldest.unpublished.age"),
     OUTBOX_PUBLISH_FAILURE("veridex.outbox.publish.failure"),

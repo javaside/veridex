@@ -93,14 +93,26 @@ public class QueryRun {
     }
 
     public void fail(String error) {
+        if (isTerminal()) {
+            return;
+        }
         this.status = Status.FAILED;
         this.error = error;
         this.completedAt = Instant.now();
     }
 
     public void cancel() {
+        if (isTerminal()) {
+            return;
+        }
         this.status = Status.CANCELLED;
         this.completedAt = Instant.now();
+    }
+
+    /** 取消/失败收尾幂等：不覆盖已完成、已拒答或已失败状态（设计 §5.3）。 */
+    private boolean isTerminal() {
+        return status == Status.COMPLETED || status == Status.REFUSED
+                || status == Status.FAILED || status == Status.CANCELLED;
     }
 
     public UUID getId() { return id; }

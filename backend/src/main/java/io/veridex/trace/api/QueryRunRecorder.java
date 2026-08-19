@@ -13,7 +13,11 @@ public interface QueryRunRecorder {
 
     void markRetrieving(UUID runId, List<RetrievalHitRecord> hits);
 
-    void markGenerating(UUID runId, GenerationRecord gen);
+    /** 生成开始：仅把 QueryRun 置为 GENERATING（设计 §4.4 步骤 5）。 */
+    void markGenerating(UUID runId);
+
+    /** 生成结束：记录/回填 GenerationRun 指标行（幂等 upsert）。 */
+    void recordGeneration(UUID runId, GenerationRecord gen);
 
     void addCitations(UUID runId, List<CitationRecord> citations);
 
@@ -30,8 +34,8 @@ public interface QueryRunRecorder {
                               boolean enteredContext, String filterReason) {
     }
 
-    record GenerationRecord(String model, int inputTokens, int outputTokens, long durationMs,
-                            String degradation, String contextHash) {
+    record GenerationRecord(String provider, String model, int inputTokens, int outputTokens,
+                            long durationMs, long firstTokenLatencyMs, String degradation, String contextHash) {
     }
 
     record CitationRecord(int citationIndex, UUID documentVersionId, int chunkIndex,

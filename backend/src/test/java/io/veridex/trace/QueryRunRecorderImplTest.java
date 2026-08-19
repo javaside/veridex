@@ -3,6 +3,8 @@ package io.veridex.trace;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -88,12 +90,45 @@ class QueryRunRecorderImplTest {
     }
 
     @Test
-    void markGeneratingPersistsGenerationRun() {
+    void markGeneratingTransitionsStatusOnly() {
         var run = new QueryRun(USER, null, "q", "q", List.of());
         when(runs.findById(RUN)).thenReturn(Optional.of(run));
-        recorder.markGenerating(RUN, new GenerationRecord("deterministic", 10, 20, 5, null, "abc"));
-        verify(gens).save(argThat(g -> g.getModel().equals("deterministic")));
+        recorder.markGenerating(RUN);
         assertThat(run.getStatus()).isEqualTo(QueryRun.Status.GENERATING);
+        verify(gens, never()).save(any());
+    }
+
+    @Test
+    void recordGenerationCreatesThenUpdatesSingleRow() {
+        var first = new GenerationRecord("deterministic", "deterministic", 10, 20, 5, 3, null, "abc");
+        var second = new GenerationRecord("deterministic", "deterministic", 30, 40, 9, 7, null, "abc");
+        var existing = new io.veridex.trace.domain.GenerationRun(RUN, "deterministic", "deterministic",
+                0, 0, 0, 0, null, null);
+        when(gens.findFirstByQueryRunId(RUN)).thenReturn(Optional.empty(), Optional.of(existing));
+        recorder.recordGeneration(RUN, first);
+        recorder.recordGeneration(RUN, second);
+        verify(gens, times(1)).save(any());
+        assertThat(existing.getInputTokens()).isEqualTo(30);
+        assertThat(existing.getOutputTokens()).isEqualTo(40);
+        assertThat(existing.getFirstTokenLatencyMs()).isEqualTo(7);
+    }
+
+    @Test
+    void cancelDoesNotOverrideCompleted() {
+        var completed = new QueryRun(USER, null, "q", "q", List.of());
+        completed.complete();
+        when(runs.findById(RUN)).thenReturn(Optional.of(completed));
+        recorder.cancel(RUN);
+        assertThat(completed.getStatus()).isEqualTo(QueryRun.Status.COMPLETED);
+    }
+
+    @Test
+    void failDoesNotOverrideRefused() {
+        var refused = new QueryRun(USER, null, "q", "q", List.of());
+        refused.refuse(RefusalReason.NO_RELEVANT_EVIDENCE.name());
+        when(runs.findById(RUN)).thenReturn(Optional.of(refused));
+        recorder.fail(RUN, "MODEL_ERROR");
+        assertThat(refused.getStatus()).isEqualTo(QueryRun.Status.REFUSED);
     }
 
     @Test

@@ -122,8 +122,10 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
                 .toList());
 
         GenerationResult result = generation.generate(normalized, searchResult.evidence(), history);
-        recorder.markGenerating(runId, new GenerationRecord(result.model(), result.inputTokens(),
-                result.outputTokens(), result.durationMs(),
+        recorder.markGenerating(runId);
+        recorder.recordGeneration(runId, new GenerationRecord(result.provider(), result.model(),
+                result.inputTokens(), result.outputTokens(), result.durationMs(),
+                result.firstTokenLatencyMs(),
                 searchResult.degradations().isEmpty() ? null : String.join("; ", searchResult.degradations()),
                 result.contextHash()));
 

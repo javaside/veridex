@@ -51,10 +51,17 @@ public class QueryRunRecorderImpl implements QueryRunRecorder {
     }
 
     @Override
-    public void markGenerating(UUID runId, GenerationRecord g) {
-        gens.save(new GenerationRun(runId, g.model(), g.inputTokens(), g.outputTokens(),
-                g.durationMs(), g.degradation(), g.contextHash()));
+    public void markGenerating(UUID runId) {
         runs.findById(runId).ifPresent(run -> run.mark(QueryRun.Status.GENERATING));
+    }
+
+    @Override
+    public void recordGeneration(UUID runId, GenerationRecord g) {
+        gens.findFirstByQueryRunId(runId).ifPresentOrElse(
+                existing -> existing.applyMetrics(g.inputTokens(), g.outputTokens(), g.durationMs(),
+                        g.firstTokenLatencyMs(), g.degradation(), g.contextHash()),
+                () -> gens.save(new GenerationRun(runId, g.provider(), g.model(), g.inputTokens(),
+                        g.outputTokens(), g.durationMs(), g.firstTokenLatencyMs(), g.degradation(), g.contextHash())));
     }
 
     @Override
