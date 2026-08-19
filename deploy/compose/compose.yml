@@ -108,6 +108,9 @@ services:
     image: veridex-backend:0.1.0
     environment:
       VERIDEX_ENVIRONMENT: local
+      # reindex profile 透传：restore.sh 用 compose run -e SPRING_PROFILES_ACTIVE=reindex
+      # 覆盖为一次性重建容器，常驻启动保持空（不装配 ReindexRunner）
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
       VERIDEX_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-veridex}
       VERIDEX_DB_USERNAME: ${POSTGRES_USER:-veridex}
       VERIDEX_DB_PASSWORD: ${POSTGRES_PASSWORD:-veridex-local}

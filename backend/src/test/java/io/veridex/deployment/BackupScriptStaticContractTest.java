@@ -34,7 +34,6 @@ class BackupScriptStaticContractTest {
     }
 
     @Test
-    @Disabled("Task 4 实现 restore.sh 后启用")
     void restoreScriptGuardsNonFreshAndIncompatibleVersions() throws Exception {
         String s = script("restore.sh");
         assertThat(s).contains("set -euo pipefail");
