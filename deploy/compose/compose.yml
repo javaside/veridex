@@ -27,16 +27,6 @@ services:
       timeout: 5s
       retries: 20
 
-  redis:
-    image: redis:8-alpine
-    ports: ["6379:6379"]
-    command: ["redis-server", "--appendonly", "no"]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
   minio:
     image: minio/minio:RELEASE.2025-07-23T15-54-02Z
     command: ["server", "/data", "--console-address", ":9001"]

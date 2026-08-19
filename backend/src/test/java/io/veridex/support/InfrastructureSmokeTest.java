@@ -15,7 +15,6 @@ class InfrastructureSmokeTest extends InfrastructureContainers {
     void allRequiredDependenciesBecomeReachable() throws Exception {
         assertThat(POSTGRES.isRunning()).isTrue();
         assertThat(RABBITMQ.isRunning()).isTrue();
-        assertThat(REDIS.isRunning()).isTrue();
         assertThat(MINIO.isRunning()).isTrue();
         assertThat(OPENSEARCH.isRunning()).isTrue();
 

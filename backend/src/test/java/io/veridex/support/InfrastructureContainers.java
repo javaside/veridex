@@ -13,8 +13,6 @@ abstract class InfrastructureContainers {
 
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine");
     static final RabbitMQContainer RABBITMQ = new RabbitMQContainer("rabbitmq:4-management-alpine");
-    static final GenericContainer<?> REDIS = new GenericContainer<>(DockerImageName.parse("redis:8-alpine"))
-            .withExposedPorts(6379);
     static final GenericContainer<?> MINIO = new GenericContainer<>(
             DockerImageName.parse("minio/minio:RELEASE.2025-07-23T15-54-02Z"))
             .withCommand("server", "/data", "--console-address", ":9001")
@@ -30,7 +28,6 @@ abstract class InfrastructureContainers {
     static void startInfrastructure() {
         start(POSTGRES);
         start(RABBITMQ);
-        start(REDIS);
         start(MINIO);
         start(OPENSEARCH);
     }
