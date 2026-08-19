@@ -2,6 +2,9 @@ server:
   servlet:
     session:
       cookie:
+        # Spring Session 的 DefaultCookieSerializer 未显式命名时默认 SESSION；
+        # 保持既有 JSESSIONID 线上契约（浏览器已登录 cookie、文档、回归测试）不变。
+        name: JSESSIONID
         http-only: true
         same-site: lax
         secure: ${VERIDEX_SESSION_COOKIE_SECURE:false}
@@ -37,6 +40,12 @@ spring:
   mvc:
     async:
       request-timeout: ${VERIDEX_SSE_ASYNC_TIMEOUT:120s}
+  session:
+    # Spring Boot 4 移除了 store-type：由 classpath 上的 spring-boot-starter-session-jdbc 激活 JDBC 存储
+    timeout: ${VERIDEX_SESSION_TIMEOUT:8h}
+    jdbc:
+      initialize-schema: never
+      table-name: SPRING_SESSION
   ai:
     chat:
       client:

@@ -12,7 +12,13 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "users")
-public class PlatformUser {
+public class PlatformUser implements java.io.Serializable {
+
+    /**
+     * 登录态经 Spring Session JDBC 以 Java 序列化落到 SPRING_SESSION_ATTRIBUTES，
+     * principal（PlatformUserDetails）内嵌本实体，必须可序列化（spec §4.4）。
+     */
+    private static final long serialVersionUID = 1L;
 
     @Id
     private UUID id = UUID.randomUUID();

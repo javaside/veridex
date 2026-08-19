@@ -115,6 +115,13 @@
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- Session 外部化到 PostgreSQL（Phase 5-e spec D2）：多副本滚动/故障不丢登录态。
+             Spring Boot 4 拆分模块：session 自动配置在 spring-boot-session-jdbc（由本 starter 传递），
+             直接依赖 org.springframework.session:spring-session-jdbc 不会激活任何自动配置。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-session-jdbc</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
