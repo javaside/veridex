@@ -2140,3 +2140,53 @@ git diff --check
 - [ ] **Step 5: 阶段总结（门禁陈述）**
 
 对照设计 §10 验收标准逐条给出结论（1–12），并更新 `docs/superpowers/plans/2026-08-19-ollama-chat-provider-streaming.md` 顶部 checkbox 为已完成；随后进入 Phase 5-e 设计（备份恢复+容量），容量报告须同时覆盖 deterministic 基线与 Ollama `qwen3:8b`。
+
+
+---
+
+## 执行记录（2026-08-19）
+
+全部 6 个 Task 完成，提交 cf43820→040ddcf（12 个）。门禁 `verify.sh` 各步骤全绿（见 Task 6 结论）。
+
+### 实施偏差
+
+- **异常类迁往 `generation::api`**：`GenerationModelException` 族与 `GenerationErrorCodes` 原计划放 `generation.application`，
+  但 `qa` 模块只允许依赖 `generation::api`，且 `shared.observability.TelemetryErrorCode` 引用 generation 异常会形成模块环
+  （`generation→knowledge→iam→shared→generation`，ArchitectureTest 强制）。改为放入 `generation.api`（它们本就是流式契约的一部分），
+  分类逻辑收敛到 `GenerationErrorCodes.classify`；`TelemetryErrorCode.classify` 恢复为通用分类。
+  `generation` 模块声明增加 `shared::security`（OllamaChatConfiguration 使用 OutboundAccessPolicy）。
+
+- **ChatProviderSelectionTest 默认 provider 显式声明**：ApplicationContextRunner 环境无 application.yml 默认值，
+  verifier 要求 provider 非空，故 base runner 显式设 `veridex.chat.provider=deterministic`；matchIfMissing 默认行为由集成测试与契约测试覆盖。
+
+- **usage 元数据 API 以 spring-ai 2.0.0 实测为准**：`ChatResponseMetadata` 位于 `org.springframework.ai.chat.metadata`（非 model 包），
+  `DefaultUsage` 无 builder、用 `new DefaultUsage(prompt, completion, total)`。
+
+- **kind 验收环境适配（DNS 污染）**：依赖镜像经宿主机 `docker pull` + `docker save | ctr import` 进节点（`kind load --all-platforms`
+  在仅有单平台 blob 的宿主机上报 digest 缺失）；kind 节点 containerd 声明 daocloud mirror；
+  `rabbitmq:4-alpine` 在 kind 节点以 root 入口生成 root 属主 `.erlang.cookie` 导致预启动 eacces，
+  显式 `runAsUser/runAsGroup: 999` 修复（test-deps.yaml）。
+
+- **契约测试断言按占位符文本定位**：`ChatConfigContractTest` 最初按 `provider:`/`timeout:` 键匹配会被 embedding 块误命中，
+  改为按 `VERIDEX_CHAT_*` 占位符查找。
+
+- **前端 `qaApi.ask`/`QaPage` 细节**：abort 走 `DOMException AbortError` 静默返回；`run.failed`/`answer.refused` 先 `resetStream()` 丢弃 provisional；
+  `finally` 不再无条件 `finalizeStream()`（只在 `answer.completed` 固化）。
+
+### Task 6 门禁结论（对照设计 §10 验收标准）
+
+1. 零配置只装配 `DeterministicChatModel`，现有 CI 不变 —— `ChatProviderSelectionTest.defaultProviderAssemblesOnlyDeterministicChatModel` + 全量回归绿。
+2. `VERIDEX_CHAT_PROVIDER=ollama` 只装配 `OllamaChatModel` —— 选择测试 + `OllamaChatModel` 实例断言。
+3. 在线问答在模型完成前发首个真实 delta —— `QaApiIntegrationTest.firstAnswerDeltaArrivesBeforeStreamCompletes`（读到 `event:answer.delta` 时流未结束）。
+4. 同步评测仍可执行且共享 prompt/拒答/引用 —— `EvaluationRunService` 走 `generate`，编译与回归绿。
+5. 只有引用终检通过才保存 assistant 消息并发 `answer.completed` —— `GenerationStreamingTest` + `QuestionAnsweringServiceTest.happyPath`。
+6. 引用失败发 `run.failed`（INVALID_CITATION），前端不保留 provisional —— `invalidCitationFailsRunWithoutPersistingAssistant` + `QaPage.test.tsx`。
+7. 模型故障/超时不回退 deterministic，trace/metrics 记稳定码 —— `GenerationStreamingTest`（MODEL_TIMEOUT/MODEL_ERROR）+ `TelemetryErrorCode`。
+8. 客户端断开取消上游模型流，QueryRun 进 CANCELLED —— `cancellationCancelsRunAndPropagates` + `QueryRun.cancel()` 幂等。
+9. Ollama 受 OutboundAccessPolicy 与 Helm NetworkPolicy 双重约束 —— `ollamaBaseUrlMustPassOutboundPolicy` + externalEgress 示例/离线文档。
+10. 默认日志/metrics/SSE 错误不泄露敏感内容 —— `SensitiveOutputRegressionTest`/`PromptInjectionSafetyIntegrationTest` 回归绿。
+11. backend/web/部署验证/真实 Ollama 显式验收 —— `verify.sh` 各步骤全绿；`scripts/verify-ollama-chat.sh` 提供显式入口
+    （本机 Ollama 可达、模型 `qwen3.5:9b-mlx` 实测流式返回；端到端真实模型验收需以 `VERIDEX_CHAT_PROVIDER=ollama` 起栈）。
+12. README/architecture 明确 deterministic=测试占位、Ollama=首个真实 provider —— Task 6 文档提交。
+
+下一阶段：Phase 5-e 备份恢复+容量设计；容量报告须同时覆盖 deterministic 基线与 Ollama `qwen3:8b`（本机可用 `qwen3.5:9b-mlx` 代替）真实模型结果。
