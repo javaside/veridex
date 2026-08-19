@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -49,7 +48,6 @@ class BackupScriptStaticContractTest {
     }
 
     @Test
-    @Disabled("Task 5 实现 verify-recovery.sh 后启用")
     void recoveryDrillScriptDrivesFullCycle() throws Exception {
         String s = script("verify-recovery.sh");
         assertThat(s).contains("set -euo pipefail");

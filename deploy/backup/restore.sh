@@ -17,6 +17,10 @@ set -euo pipefail
 #    转义在 set -u 下会被外层 bash 提前展开报错，导致非空卷守卫失效；现改为 fail-closed——
 #    先 up/等 postgres 就绪再查表数，查不到即中止，杜绝误覆盖。
 # 5. information_schema 查询用 `current_schema()`（函数需括号，草案漏写）。
+# 6. --fresh 全新卷首次初始化（initdb）需数秒：单次 pg_isready 会撞上
+#    「no response」导致恢复中断（Task 5 演练实测：pg_isready exit 2）；改为轮询就绪。
+# 7. reindex 容器首次连 OpenSearch 时若集群未就绪（fresh 卷初始化/分片恢复）会逐 KB
+#    失败；reindex 前先轮询 OpenSearch /_cluster/health。
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 STACK="${ROOT_DIR}/deploy/compose"
@@ -64,7 +68,14 @@ fi
 
 echo "==> 3/6 起基础设施并恢复 PostgreSQL"
 "${COMPOSE[@]}" up -d postgres minio rabbitmq opensearch
-"${COMPOSE[@]}" exec -T postgres sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null
+# 轮询 postgres 就绪：--fresh 全新卷首次 initdb 需数秒，单次 pg_isready 会返回
+# 「no response」（exit 2）导致恢复中断（Task 5 演练实测）。
+for _ in $(seq 1 60); do
+  "${COMPOSE[@]}" exec -T postgres sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null 2>&1 && break
+  sleep 2
+done
+"${COMPOSE[@]}" exec -T postgres sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null \
+  || fail "postgres 未就绪（fresh 卷初始化超时）"
 "${COMPOSE[@]}" exec -T postgres sh -c \
   'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid()" >/dev/null; \
    psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public"' >/dev/null
@@ -90,6 +101,13 @@ echo "    回灌 $(find "${BACKUP_DIR}/objects" -type f | wc -l | tr -d ' ') 个
 
 echo "==> 6/6 OpenSearch 源重建（一次性 reindex 容器）"
 START_NS=$(date +%s)
+# 轮询 OpenSearch 就绪：fresh 卷首次启动需初始化/分片恢复，未就绪时 reindex 会逐 KB 失败。
+for _ in $(seq 1 30); do
+  "${COMPOSE[@]}" exec -T opensearch sh -c 'curl -fsS http://localhost:9200/_cluster/health >/dev/null' >/dev/null 2>&1 && break
+  sleep 10
+done
+"${COMPOSE[@]}" exec -T opensearch sh -c 'curl -fsS http://localhost:9200/_cluster/health >/dev/null' >/dev/null \
+  || fail "OpenSearch 未就绪（fresh 卷初始化超时）"
 # compose run 用镜像默认 entrypoint（java -jar），仅注入 profile；跑完 --rm 即退
 "${COMPOSE[@]}" run --rm --no-deps \
   -e SPRING_PROFILES_ACTIVE=reindex \
