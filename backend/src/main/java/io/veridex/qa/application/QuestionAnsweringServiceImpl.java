@@ -2,13 +2,15 @@ package io.veridex.qa.application;
 
 import io.veridex.conversation.api.ConversationService;
 import io.veridex.conversation.api.ConversationView;
-import io.veridex.generation.api.CitationView;
+import io.veridex.generation.api.GenerationEvent;
 import io.veridex.generation.api.GenerationResult;
-import io.veridex.generation.api.PromptMessageView;
 import io.veridex.generation.api.GenerationService;
+import io.veridex.generation.application.GenerationModelException;
+import io.veridex.generation.application.InvalidCitationException;
 import io.veridex.knowledge.api.KnowledgeScopeQuery;
 import io.veridex.qa.api.AskRequest;
 import io.veridex.qa.api.QaEvent;
+import io.veridex.retrieval.api.EvidencePiece;
 import io.veridex.retrieval.api.HybridSearchResult;
 import io.veridex.retrieval.api.HybridSearchService;
 import io.veridex.shared.RefusalReason;
@@ -22,20 +24,22 @@ import io.veridex.trace.api.QueryRunRecorder.CitationRecord;
 import io.veridex.trace.api.QueryRunRecorder.GenerationRecord;
 import io.veridex.trace.api.QueryRunRecorder.RetrievalHitRecord;
 import io.veridex.trace.api.TraceBodyCapture;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import reactor.core.Disposable;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.FluxSink;
+import reactor.core.scheduler.Schedulers;
 
 /**
- * 问答编排：知识范围交集 → 会话归属校验 → QueryRun 创建 → 混合检索 → 生成/拒答 →
- * 引用校验 → 事件序列。任何未捕获异常兜底为 run.failed（双路检索失败报系统错误，不伪装无答案）。
+ * 问答编排（设计 §4.4/§4.5/§5）：cold Flux，订阅后才执行；模型流完成后再引用终检；
+ * 客户端断开经 sink.onCancel 传播为上游取消并落 CANCELLED；取消/失败收尾幂等。
  */
 @Service
 public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
 
     private static final int HISTORY_TURNS = 6;
-    private static final int STREAM_CHUNK = 8;
 
     private final KnowledgeScopeQuery knowledgeScope;
     private final ConversationService conversations;
@@ -59,104 +63,172 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
     }
 
     @Override
-    public List<QaEvent> ask(UUID userId, AskRequest request) {
-        UUID[] runRef = new UUID[1];
+    public Flux<QaEvent> ask(UUID userId, AskRequest request) {
         boolean existingConversation = request.conversationId() != null;
-        var observation = observability.start(ObservationName.QA_RUN,
-                TelemetryTag.conversation(existingConversation ? TelemetryOutcome.Conversation.EXISTING
-                        : TelemetryOutcome.Conversation.NEW));
+        return Flux.<QaEvent>create(sink -> execute(userId, request, sink,
+                        observability.start(ObservationName.QA_RUN,
+                                TelemetryTag.conversation(existingConversation
+                                        ? TelemetryOutcome.Conversation.EXISTING
+                                        : TelemetryOutcome.Conversation.NEW))),
+                FluxSink.OverflowStrategy.BUFFER)
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    private void execute(UUID userId, AskRequest request, FluxSink<QaEvent> sink,
+                         VeridexObservability.ObservationScope observation) {
+        UUID[] runRef = new UUID[1];
+        Disposable[] modelSubscription = new Disposable[1];
+        sink.onCancel(() -> cancelRun(runRef[0], modelSubscription[0], observation));
+
         try {
-            List<QaEvent> result = execute(userId, request, runRef);
-            observation.success(TelemetryTag.qaOutcome(classify(result)));
-            return result;
-        } catch (Exception e) {
-            observation.failure(TelemetryErrorCode.classify(e));
-            if (runRef[0] != null) {
-                String errorCode = TelemetryErrorCode.classify(e).name();
-                recorder.fail(runRef[0], errorCode);
-                traceBodyCapture.capture(runRef[0], TraceBodyCapture.TerminalOutcome.FAILED, errorCode,
-                        new TraceBodyCapture.TraceBodyMaterial(request.question(), List.of(), null, List.of(), List.of()));
+            List<UUID> scope = knowledgeScope.resolve(userId, request.knowledgeBaseIds());
+            if (scope.isEmpty()) {
+                sink.next(new QaEvent.AnswerRefused("ACCESS_RESTRICTED", "当前可访问知识范围内证据不足"));
+                observation.success(TelemetryTag.qaOutcome(TelemetryOutcome.Qa.REFUSED));
+                sink.complete();
+                return;
             }
-            String message = e.getMessage() != null ? e.getMessage() : "系统错误";
-            return List.of(new QaEvent.RunFailed(message));
-        } finally {
-            observation.close();
+
+            UUID conversationId = request.conversationId();
+            if (conversationId == null) {
+                ConversationView created = conversations.create(userId, truncate(request.question(), 80));
+                conversationId = created.id();
+            } else if (conversations.findOwned(userId, conversationId).isEmpty()) {
+                throw new IllegalStateException("会话不存在或无权访问");
+            }
+
+            String normalized = request.question().trim();
+            UUID runId = recorder.start(userId, conversationId, scope, normalized);
+            runRef[0] = runId;
+            sink.next(new QaEvent.RunStarted(runId, conversationId));
+
+            var history = conversations.recentMessages(conversationId, HISTORY_TURNS);
+            conversations.addMessage(conversationId, "USER", request.question(), runId);
+
+            HybridSearchResult searchResult = hybridSearch.search(userId, scope, request.knowledgeBaseIds(), normalized);
+            sink.next(new QaEvent.RetrievalCompleted(searchResult.evidence().size()));
+            recorder.markRetrieving(runId, searchResult.hits().stream()
+                    .map(h -> new RetrievalHitRecord(h.knowledgeBaseId(), h.documentVersionId(), h.chunkIndex(),
+                            h.channel(), h.bm25Score(), h.vectorScore(), h.fusionScore(), h.rank(),
+                            h.enteredContext(), h.filterReason()))
+                    .toList());
+
+            recorder.markGenerating(runId);
+            final UUID convId = conversationId;
+            modelSubscription[0] = generation.stream(normalized, searchResult.evidence(), history)
+                    .subscribe(
+                            event -> handleGenerationEvent(event, sink, observation, runId, convId,
+                                    request, searchResult),
+                            error -> handleGenerationError(error, sink, observation, runId, request,
+                                    searchResult),
+                            () -> { /* 终端事件由 handleGenerationEvent 的 Completed/Refused 分支负责 */ });
+        } catch (RuntimeException e) {
+            handleError(e, sink, observation, runRef[0], request);
         }
     }
 
-    private static TelemetryOutcome.Qa classify(List<QaEvent> events) {
-        return events.stream().anyMatch(QaEvent.AnswerRefused.class::isInstance)
-                ? TelemetryOutcome.Qa.REFUSED
-                : TelemetryOutcome.Qa.COMPLETED;
-    }
-
-    private List<QaEvent> execute(UUID userId, AskRequest request, UUID[] runRef) {
-        List<UUID> scope = knowledgeScope.resolve(userId, request.knowledgeBaseIds());
-        if (scope.isEmpty()) {
-            return List.of(new QaEvent.AnswerRefused("ACCESS_RESTRICTED", "当前可访问知识范围内证据不足"));
+    private void handleGenerationEvent(GenerationEvent event, FluxSink<QaEvent> sink,
+                                       VeridexObservability.ObservationScope observation, UUID runId,
+                                       UUID conversationId, AskRequest request,
+                                       HybridSearchResult searchResult) {
+        if (event instanceof GenerationEvent.Delta delta) {
+            sink.next(new QaEvent.AnswerDelta(delta.text()));
+            return;
         }
-
-        UUID conversationId = request.conversationId();
-        if (conversationId == null) {
-            ConversationView created = conversations.create(userId, truncate(request.question(), 80));
-            conversationId = created.id();
-        } else if (conversations.findOwned(userId, conversationId).isEmpty()) {
-            throw new IllegalStateException("会话不存在或无权访问");
-        }
-
-        String normalized = request.question().trim();
-        UUID runId = recorder.start(userId, conversationId, scope, normalized);
-        runRef[0] = runId;
-        List<QaEvent> events = new ArrayList<>();
-        events.add(new QaEvent.RunStarted(runId, conversationId));
-
-        var history = conversations.recentMessages(conversationId, HISTORY_TURNS);
-        conversations.addMessage(conversationId, "USER", request.question(), runId);
-
-        HybridSearchResult searchResult = hybridSearch.search(userId, scope, request.knowledgeBaseIds(), normalized);
-        events.add(new QaEvent.RetrievalCompleted(searchResult.evidence().size()));
-        recorder.markRetrieving(runId, searchResult.hits().stream()
-                .map(h -> new RetrievalHitRecord(h.knowledgeBaseId(), h.documentVersionId(), h.chunkIndex(),
-                        h.channel(), h.bm25Score(), h.vectorScore(), h.fusionScore(), h.rank(),
-                        h.enteredContext(), h.filterReason()))
-                .toList());
-
-        GenerationResult result = generation.generate(normalized, searchResult.evidence(), history);
-        recorder.markGenerating(runId);
-        recorder.recordGeneration(runId, new GenerationRecord(result.provider(), result.model(),
-                result.inputTokens(), result.outputTokens(), result.durationMs(),
-                result.firstTokenLatencyMs(),
-                searchResult.degradations().isEmpty() ? null : String.join("; ", searchResult.degradations()),
-                result.contextHash()));
-
-        if (result.refusalReason() != null) {
-            events.add(new QaEvent.AnswerRefused(result.refusalReason().name(),
+        if (event instanceof GenerationEvent.Refused refused) {
+            GenerationResult result = refused.result();
+            sink.next(new QaEvent.AnswerRefused(result.refusalReason().name(),
                     refusalMessage(result.refusalReason())));
             recorder.refuse(runId, result.refusalReason());
-            traceBodyCapture.capture(runId, TraceBodyCapture.TerminalOutcome.REFUSED, result.refusalReason().name(),
+            traceBodyCapture.capture(runId, TraceBodyCapture.TerminalOutcome.REFUSED,
+                    result.refusalReason().name(), material(request.question(), result, searchResult.evidence()));
+            observation.success(TelemetryTag.qaOutcome(TelemetryOutcome.Qa.REFUSED));
+            sink.complete();
+            return;
+        }
+        if (event instanceof GenerationEvent.Completed completed) {
+            GenerationResult result = completed.result();
+            recorder.recordGeneration(runId, new GenerationRecord(result.provider(), result.model(),
+                    result.inputTokens(), result.outputTokens(), result.durationMs(),
+                    result.firstTokenLatencyMs(),
+                    searchResult.degradations().isEmpty() ? null : String.join("; ", searchResult.degradations()),
+                    result.contextHash()));
+            recorder.addCitations(runId, result.citations().stream()
+                    .map(c -> new CitationRecord(c.citationIndex(), c.documentVersionId(), c.chunkIndex(),
+                            c.sourceLocation(), c.citationText(), c.validationStatus()))
+                    .toList());
+            conversations.addMessage(conversationId, "ASSISTANT", result.answer(), runId);
+            sink.next(new QaEvent.CitationAvailable(result.citations()));
+            sink.next(new QaEvent.AnswerCompleted(runId));
+            recorder.complete(runId);
+            traceBodyCapture.capture(runId, TraceBodyCapture.TerminalOutcome.COMPLETED, null,
                     material(request.question(), result, searchResult.evidence()));
-            return events;
+            observation.success(TelemetryTag.qaOutcome(TelemetryOutcome.Qa.COMPLETED));
+            sink.complete();
         }
+    }
 
-        recorder.addCitations(runId, result.citations().stream()
-                .map(c -> new CitationRecord(c.citationIndex(), c.documentVersionId(), c.chunkIndex(),
-                        c.sourceLocation(), c.citationText(), c.validationStatus()))
-                .toList());
-        for (int i = 0; i < result.answer().length(); i += STREAM_CHUNK) {
-            events.add(new QaEvent.AnswerDelta(
-                    result.answer().substring(i, Math.min(result.answer().length(), i + STREAM_CHUNK))));
+    private void handleGenerationError(Throwable error, FluxSink<QaEvent> sink,
+                                       VeridexObservability.ObservationScope observation, UUID runId,
+                                       AskRequest request, HybridSearchResult searchResult) {
+        TelemetryErrorCode code = TelemetryErrorCode.classify(toException(error));
+        recorder.fail(runId, code.name());
+        traceBodyCapture.capture(runId, TraceBodyCapture.TerminalOutcome.FAILED, code.name(),
+                new TraceBodyCapture.TraceBodyMaterial(request.question(), List.of(), null,
+                        searchResult.evidence().stream()
+                                .map(e -> new TraceBodyCapture.EvidenceSnapshot(
+                                        e.citationIndex(), e.documentVersionId(), e.chunkIndex(), e.title(),
+                                        e.structurePath(), e.text()))
+                                .toList(),
+                        List.of()));
+        observation.failure(code);
+        sink.next(new QaEvent.RunFailed(userSafeMessage(error)));
+        sink.complete();
+    }
+
+    private void cancelRun(UUID runId, Disposable modelSubscription,
+                           VeridexObservability.ObservationScope observation) {
+        if (modelSubscription != null && !modelSubscription.isDisposed()) {
+            modelSubscription.dispose();
         }
-        events.add(new QaEvent.CitationAvailable(result.citations()));
-        conversations.addMessage(conversationId, "ASSISTANT", result.answer(), runId);
-        events.add(new QaEvent.AnswerCompleted(runId));
-        recorder.complete(runId);
-        traceBodyCapture.capture(runId, TraceBodyCapture.TerminalOutcome.COMPLETED, null,
-                material(request.question(), result, searchResult.evidence()));
-        return events;
+        if (runId != null) {
+            recorder.cancel(runId);
+            traceBodyCapture.capture(runId, TraceBodyCapture.TerminalOutcome.CANCELLED, null,
+                    new TraceBodyCapture.TraceBodyMaterial("", List.of(), null, List.of(), List.of()));
+        }
+        observation.success(TelemetryTag.qaOutcome(TelemetryOutcome.Qa.CANCELLED));
+    }
+
+    private void handleError(RuntimeException e, FluxSink<QaEvent> sink,
+                             VeridexObservability.ObservationScope observation, UUID runId,
+                             AskRequest request) {
+        TelemetryErrorCode code = TelemetryErrorCode.classify(e);
+        if (runId != null) {
+            recorder.fail(runId, code.name());
+            traceBodyCapture.capture(runId, TraceBodyCapture.TerminalOutcome.FAILED, code.name(),
+                    new TraceBodyCapture.TraceBodyMaterial(request.question(), List.of(), null, List.of(), List.of()));
+        }
+        observation.failure(code);
+        sink.next(new QaEvent.RunFailed(userSafeMessage(e)));
+        sink.complete();
+    }
+
+    private static RuntimeException toException(Throwable error) {
+        return error instanceof RuntimeException re ? re : new RuntimeException(error);
+    }
+
+    private static String userSafeMessage(Throwable error) {
+        if (error instanceof InvalidCitationException) {
+            return "回答未通过引用校验，未保存本次结果";
+        }
+        if (error instanceof GenerationModelException) {
+            return "模型服务暂时不可用，请稍后重试";
+        }
+        return "系统错误，请稍后重试";
     }
 
     private static TraceBodyCapture.TraceBodyMaterial material(String question, GenerationResult result,
-                                                                List<io.veridex.retrieval.api.EvidencePiece> evidence) {
+                                                                List<EvidencePiece> evidence) {
         var prompts = result.promptMessages().stream()
                 .map(p -> new TraceBodyCapture.PromptMessage(p.role(), p.content())).toList();
         var evidenceSnapshots = evidence.stream()

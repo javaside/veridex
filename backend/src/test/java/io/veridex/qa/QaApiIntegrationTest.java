@@ -57,6 +57,19 @@ class QaApiIntegrationTest extends QaTestFixture {
     }
 
     @Test
+    void firstAnswerDeltaArrivesBeforeStreamCompletes() throws Exception {
+        String session = login("admin");
+        String kbId = seedKnowledgeBase("制度库", "请假制度.md", LEAVE_CHUNK);
+        publish(session, kbId);
+
+        String head = askUntilEvent(session, "请假几天", List.of(kbId), "answer.delta");
+
+        // 读到首个 answer.delta 时流尚未结束：必须还没有 answer.completed
+        assertThat(head).contains("event:answer.delta");
+        assertThat(head).doesNotContain("event:answer.completed");
+    }
+
+    @Test
     void conversationsAndMessagesAreListed() throws Exception {
         String session = login("admin");
         String kbId = seedKnowledgeBase("制度库", "请假制度.md", LEAVE_CHUNK);

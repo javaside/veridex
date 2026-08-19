@@ -15,6 +15,7 @@ import io.veridex.support.MinioContainerConfiguration;
 import io.veridex.support.OpenSearchContainerConfiguration;
 import io.veridex.support.PostgresIntegrationTest;
 import io.veridex.support.RabbitContainerConfiguration;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -118,6 +119,46 @@ abstract class QaTestFixture extends PostgresIntegrationTest {
         HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isLessThan(300);
         return resp.body();
+    }
+
+    /** 流式发起问答：读到指定事件为止（不等待流 EOF），返回已累积的 SSE 文本（设计 §9.1/§10.3）。 */
+    protected String askUntilEvent(String session, String question, List<String> kbIds, String targetEvent) throws Exception {
+        var body = new StringBuilder("{\"question\":\"" + question + "\",\"knowledgeBaseIds\":[");
+        for (int i = 0; i < kbIds.size(); i++) {
+            if (i > 0) {
+                body.append(',');
+            }
+            body.append('"').append(kbIds.get(i)).append('"');
+        }
+        body.append("]}");
+
+        HttpRequest req = HttpRequest.newBuilder(URI.create(base() + "/api/qa/ask"))
+                .header("Content-Type", "application/json")
+                .header("Cookie", session)
+                .header("X-XSRF-TOKEN", csrfToken)
+                .POST(HttpRequest.BodyPublishers.ofString(body.toString(), StandardCharsets.UTF_8))
+                .build();
+        HttpResponse<InputStream> resp = http.send(req, HttpResponse.BodyHandlers.ofInputStream());
+        assertThat(resp.statusCode()).isLessThan(300);
+
+        StringBuilder accumulated = new StringBuilder();
+        try (var reader = new java.io.BufferedReader(
+                new java.io.InputStreamReader(resp.body(), StandardCharsets.UTF_8))) {
+            StringBuilder block = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                block.append(line).append('\n');
+                if (line.isEmpty()) {
+                    String chunk = block.toString();
+                    accumulated.append(chunk);
+                    if (chunk.contains("event:" + targetEvent)) {
+                        break;
+                    }
+                    block.setLength(0);
+                }
+            }
+        }
+        return accumulated.toString();
     }
 
     /** 建知识库 + 造 READY 文档版本（写 MinIO chunks/parsed）。返回 kbId。 */

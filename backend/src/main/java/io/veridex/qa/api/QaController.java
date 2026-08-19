@@ -7,10 +7,10 @@ import io.veridex.iam.api.CurrentActor;
 import io.veridex.qa.application.QuestionAnsweringService;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,10 +18,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import reactor.core.publisher.Flux;
 
 /**
- * 员工问答 API：SSE 流式问答、会话列表、会话消息与反馈占位。
+ * 员工问答 API：SSE 流式问答（真实 token 流，设计 §4.3）、会话列表、会话消息与反馈占位。
+ * Controller 只做事件名映射；服务端超时由 spring.mvc.async.request-timeout 兜底（≥ chat.timeout + 余量）。
  */
 @RestController
 @RequestMapping("/api/qa")
@@ -36,21 +37,13 @@ public class QaController {
     }
 
     @PostMapping(value = "/ask", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter ask(@RequestBody AskRequest request) {
+    public Flux<ServerSentEvent<QaEvent>> ask(@RequestBody AskRequest request) {
         UUID userId = CurrentActor.id();
-        SseEmitter emitter = new SseEmitter(60_000L);
-        CompletableFuture.runAsync(() -> {
-            try {
-                for (QaEvent event : service.ask(userId, request)) {
-                    emitter.send(SseEmitter.event().name(eventName(event)).data(event));
-                }
-                emitter.complete();
-            } catch (Exception e) {
-                emitter.completeWithError(e);
-            }
-        });
-        emitter.onTimeout(emitter::complete);
-        return emitter;
+        return service.ask(userId, request)
+                .map(event -> ServerSentEvent.<QaEvent>builder()
+                        .event(eventName(event))
+                        .data(event)
+                        .build());
     }
 
     @GetMapping("/conversations")

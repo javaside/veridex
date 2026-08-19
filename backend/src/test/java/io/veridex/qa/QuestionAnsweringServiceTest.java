@@ -5,18 +5,19 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.veridex.conversation.api.ConversationService;
 import io.veridex.conversation.api.ConversationView;
 import io.veridex.generation.api.CitationView;
+import io.veridex.generation.api.GenerationEvent;
 import io.veridex.generation.api.GenerationResult;
 import io.veridex.generation.api.GenerationService;
 import io.veridex.knowledge.api.KnowledgeScopeQuery;
 import io.veridex.qa.api.AskRequest;
 import io.veridex.qa.api.QaEvent;
-import io.veridex.qa.application.QuestionAnsweringService;
 import io.veridex.qa.application.QuestionAnsweringServiceImpl;
 import io.veridex.retrieval.api.EvidencePiece;
 import io.veridex.retrieval.api.HybridSearchResult;
@@ -37,7 +38,12 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Flux;
+import reactor.test.StepVerifier;
 
+/**
+ * 问答编排（设计 §4.4/§4.5/§5）：事件顺序、成功落库、失败不落 assistant、取消幂等。
+ */
 @ExtendWith(MockitoExtension.class)
 class QuestionAnsweringServiceTest {
 
@@ -55,43 +61,133 @@ class QuestionAnsweringServiceTest {
     private static final UUID KB = UUID.randomUUID();
     private static final UUID CONV = UUID.randomUUID();
 
+    private static EvidencePiece evidence() {
+        return new EvidencePiece(1, KB, UUID.randomUUID(), 0, "请假制度", "1",
+                "员工请假需提前两个工作日提交申请，经审批后生效。");
+    }
+
     @Test
     void emptyScopeRefusesAccessRestricted() {
         when(knowledgeScope.resolve(USER, List.of(KB))).thenReturn(List.of());
-        var events = service.ask(USER, new AskRequest("制度", List.of(KB), null));
-        assertThat(events.get(events.size() - 1)).isInstanceOf(QaEvent.AnswerRefused.class);
-        var refused = (QaEvent.AnswerRefused) events.get(events.size() - 1);
-        assertThat(refused.reason()).isEqualTo("ACCESS_RESTRICTED");
-        assertThat(refused.message()).isEqualTo("当前可访问知识范围内证据不足");
+        StepVerifier.create(service.ask(USER, new AskRequest("制度", List.of(KB), null)))
+                .expectNextMatches(e -> e instanceof QaEvent.AnswerRefused r
+                        && r.reason().equals("ACCESS_RESTRICTED")
+                        && r.message().equals("当前可访问知识范围内证据不足"))
+                .verifyComplete();
     }
 
     @Test
     void happyPathEmitsStreamingEventsWithCitations() {
         UUID ver = UUID.randomUUID();
         var evidence = List.of(new EvidencePiece(1, KB, ver, 0, "请假制度", "1",
-                "员工请假需提前两个工作日提交申请，经直属主管审批后生效；连续请假超过五个工作日的，还需报人力资源部备案。"));
+                "员工请假需提前两个工作日提交申请，经审批后生效。"));
         var searchResult = new HybridSearchResult(evidence, List.of(new RankedHitView(
                 KB, ver, 0, "BM25", 2.0, null, 2.0, 1, true, null)), List.of());
         when(knowledgeScope.resolve(USER, List.of(KB))).thenReturn(List.of(KB));
         when(conversations.findOwned(USER, CONV)).thenReturn(Optional.of(new ConversationView(CONV, "t", java.time.Instant.now())));
         when(recorder.start(any(), eq(CONV), eq(List.of(KB)), any())).thenReturn(UUID.randomUUID());
         when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假")).thenReturn(searchResult);
-        when(generation.generate(eq("请假"), eq(evidence), any())).thenReturn(
-                new GenerationResult("根据《请假制度》[1]，员工请假需提前两个工作日提交申请",
+        when(generation.stream(eq("请假"), eq(evidence), any())).thenReturn(Flux.just(
+                new GenerationEvent.Delta("根据《请假制度》[1]"),
+                new GenerationEvent.Completed(new GenerationResult("根据《请假制度》[1]",
                         List.of(new CitationView(1, UUID.randomUUID(), ver, 0, "请假制度", "[1]", "VALID")),
-                        null, "deterministic", 10, 20, 5, "abc"));
+                        null, "deterministic", "deterministic", 10, 20, 5, 3, false, "abc", List.of()))));
 
-        var events = service.ask(USER, new AskRequest("请假", List.of(KB), CONV));
-
-        assertThat(events).anyMatch(e -> e instanceof QaEvent.RunStarted);
-        assertThat(events).anyMatch(e -> e instanceof QaEvent.RetrievalCompleted);
-        assertThat(events).anyMatch(e -> e instanceof QaEvent.AnswerDelta);
-        var citations = events.stream().filter(e -> e instanceof QaEvent.CitationAvailable)
-                .map(e -> (QaEvent.CitationAvailable) e).findFirst().orElseThrow();
-        assertThat(citations.citations()).hasSize(1);
-        assertThat(events.get(events.size() - 1)).isInstanceOf(QaEvent.AnswerCompleted.class);
+        StepVerifier.create(service.ask(USER, new AskRequest("请假", List.of(KB), CONV)))
+                .expectNextMatches(e -> e instanceof QaEvent.RunStarted)
+                .expectNextMatches(e -> e instanceof QaEvent.RetrievalCompleted)
+                .expectNextMatches(e -> e instanceof QaEvent.AnswerDelta)
+                .expectNextMatches(e -> e instanceof QaEvent.CitationAvailable)
+                .expectNextMatches(e -> e instanceof QaEvent.AnswerCompleted)
+                .verifyComplete();
         verify(recorder).complete(any());
         verify(recorder).markRetrieving(any(), argThat(hits -> hits.size() == 1));
+        verify(recorder).recordGeneration(any(), argThat(gen -> gen.provider().equals("deterministic")));
+        verify(conversations).addMessage(eq(CONV), eq("ASSISTANT"), eq("根据《请假制度》[1]"), any());
+    }
+
+    @Test
+    void refusalEmitsAnswerRefusedWithoutModelCall() {
+        UUID ver = UUID.randomUUID();
+        var evidence = List.of(new EvidencePiece(1, KB, ver, 0, "请假制度", "1",
+                "员工请假需提前两个工作日提交申请。"));
+        var searchResult = new HybridSearchResult(evidence, List.of(), List.of());
+        when(knowledgeScope.resolve(USER, List.of(KB))).thenReturn(List.of(KB));
+        when(conversations.findOwned(USER, CONV)).thenReturn(Optional.of(new ConversationView(CONV, "t", java.time.Instant.now())));
+        when(recorder.start(any(), eq(CONV), eq(List.of(KB)), any())).thenReturn(UUID.randomUUID());
+        when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假")).thenReturn(searchResult);
+        when(generation.stream(eq("请假"), eq(evidence), any())).thenReturn(Flux.just(
+                new GenerationEvent.Refused(new GenerationResult(null, List.of(),
+                        RefusalReason.INSUFFICIENT_EVIDENCE, "deterministic", "deterministic", 0, 0, 0, 0, true, null, List.of()))));
+
+        StepVerifier.create(service.ask(USER, new AskRequest("请假", List.of(KB), CONV)))
+                .expectNextMatches(e -> e instanceof QaEvent.RunStarted)
+                .expectNextMatches(e -> e instanceof QaEvent.RetrievalCompleted)
+                .expectNextMatches(e -> e instanceof QaEvent.AnswerRefused)
+                .verifyComplete();
+        verify(recorder).refuse(any(), eq(RefusalReason.INSUFFICIENT_EVIDENCE));
+        verify(conversations, never()).addMessage(eq(CONV), eq("ASSISTANT"), any(), any());
+    }
+
+    @Test
+    void invalidCitationFailsRunWithoutPersistingAssistant() {
+        UUID ver = UUID.randomUUID();
+        var evidence = List.of(new EvidencePiece(1, KB, ver, 0, "请假制度", "1",
+                "员工请假需提前两个工作日提交申请。"));
+        when(knowledgeScope.resolve(USER, List.of(KB))).thenReturn(List.of(KB));
+        when(conversations.findOwned(USER, CONV)).thenReturn(Optional.of(new ConversationView(CONV, "t", java.time.Instant.now())));
+        when(recorder.start(any(), eq(CONV), eq(List.of(KB)), any())).thenReturn(UUID.randomUUID());
+        when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假"))
+                .thenReturn(new HybridSearchResult(evidence, List.of(), List.of()));
+        // 引用终检在 GenerationServiceImpl 内完成；编排层收到的是终检异常
+        when(generation.stream(eq("请假"), eq(evidence), any())).thenReturn(Flux.error(
+                new io.veridex.generation.application.InvalidCitationException("invalid")));
+
+        StepVerifier.create(service.ask(USER, new AskRequest("请假", List.of(KB), CONV)))
+                .expectNextMatches(e -> e instanceof QaEvent.RunStarted)
+                .expectNextMatches(e -> e instanceof QaEvent.RetrievalCompleted)
+                .expectNextMatches(e -> e instanceof QaEvent.RunFailed)
+                .verifyComplete();
+        verify(recorder).fail(any(), eq("INVALID_CITATION"));
+        verify(conversations, never()).addMessage(eq(CONV), eq("ASSISTANT"), any(), any());
+        verify(recorder, never()).complete(any());
+    }
+
+    @Test
+    void modelErrorFailsRunWithoutPersistingAssistant() {
+        when(knowledgeScope.resolve(USER, List.of(KB))).thenReturn(List.of(KB));
+        when(conversations.findOwned(USER, CONV)).thenReturn(Optional.of(new ConversationView(CONV, "t", java.time.Instant.now())));
+        when(recorder.start(any(), eq(CONV), eq(List.of(KB)), any())).thenReturn(UUID.randomUUID());
+        when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假"))
+                .thenReturn(new HybridSearchResult(List.of(evidence()), List.of(), List.of()));
+        when(generation.stream(any(), any(), any()))
+                .thenReturn(Flux.error(new io.veridex.generation.application.ModelTimeoutException("t")));
+
+        StepVerifier.create(service.ask(USER, new AskRequest("请假", List.of(KB), CONV)))
+                .expectNextMatches(e -> e instanceof QaEvent.RunStarted)
+                .expectNextMatches(e -> e instanceof QaEvent.RetrievalCompleted)
+                .expectNextMatches(e -> e instanceof QaEvent.RunFailed)
+                .verifyComplete();
+        verify(recorder).fail(any(), eq("MODEL_TIMEOUT"));
+        verify(conversations, never()).addMessage(eq(CONV), eq("ASSISTANT"), any(), any());
+    }
+
+    @Test
+    void cancellationCancelsRunAndPropagates() {
+        when(knowledgeScope.resolve(USER, List.of(KB))).thenReturn(List.of(KB));
+        when(conversations.findOwned(USER, CONV)).thenReturn(Optional.of(new ConversationView(CONV, "t", java.time.Instant.now())));
+        when(recorder.start(any(), eq(CONV), eq(List.of(KB)), any())).thenReturn(UUID.randomUUID());
+        when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假"))
+                .thenReturn(new HybridSearchResult(List.of(evidence()), List.of(), List.of()));
+        when(generation.stream(any(), any(), any())).thenReturn(Flux.never());
+
+        StepVerifier.create(service.ask(USER, new AskRequest("请假", List.of(KB), CONV)))
+                .expectNextMatches(e -> e instanceof QaEvent.RunStarted)
+                .expectNextMatches(e -> e instanceof QaEvent.RetrievalCompleted)
+                .thenCancel()
+                .verify();
+        verify(recorder).cancel(any());
+        verify(conversations, never()).addMessage(eq(CONV), eq("ASSISTANT"), any(), any());
     }
 
     @Test
@@ -100,8 +196,10 @@ class QuestionAnsweringServiceTest {
         when(conversations.create(any(), any())).thenReturn(new ConversationView(UUID.randomUUID(), "t", java.time.Instant.now()));
         when(recorder.start(any(), any(), any(), any())).thenReturn(UUID.randomUUID());
         when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假")).thenThrow(new RuntimeException("opensearch down"));
-        var events = service.ask(USER, new AskRequest("请假", List.of(KB), null));
-        assertThat(events.get(events.size() - 1)).isInstanceOf(QaEvent.RunFailed.class);
+        StepVerifier.create(service.ask(USER, new AskRequest("请假", List.of(KB), null)))
+                .expectNextMatches(e -> e instanceof QaEvent.RunStarted)
+                .expectNextMatches(e -> e instanceof QaEvent.RunFailed)
+                .verifyComplete();
         verify(recorder).fail(any(), anyString());
     }
 
@@ -113,14 +211,16 @@ class QuestionAnsweringServiceTest {
         when(recorder.start(any(), eq(conversation.id()), eq(List.of(KB)), any())).thenReturn(UUID.randomUUID());
         when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假")).thenReturn(
                 new HybridSearchResult(List.of(), List.of(), List.of()));
-        when(generation.generate(eq("请假"), eq(List.of()), any())).thenReturn(
-                new GenerationResult(null, List.of(), RefusalReason.NO_RELEVANT_EVIDENCE,
-                        "deterministic", 0, 0, 0, null));
+        when(generation.stream(eq("请假"), eq(List.of()), any())).thenReturn(Flux.just(
+                new GenerationEvent.Refused(new GenerationResult(null, List.of(),
+                        RefusalReason.NO_RELEVANT_EVIDENCE, "deterministic", "deterministic", 0, 0, 0, 0, true, null, List.of()))));
 
-        var events = service.ask(USER, new AskRequest("请假", List.of(KB), null));
-
+        StepVerifier.create(service.ask(USER, new AskRequest("请假", List.of(KB), null)))
+                .expectNextMatches(e -> e instanceof QaEvent.RunStarted)
+                .expectNextMatches(e -> e instanceof QaEvent.RetrievalCompleted)
+                .expectNextMatches(e -> e instanceof QaEvent.AnswerRefused)
+                .verifyComplete();
         verify(conversations).create(USER, "请假");
-        assertThat(events.get(events.size() - 1)).isInstanceOf(QaEvent.AnswerRefused.class);
     }
 
     @Test
@@ -133,11 +233,13 @@ class QuestionAnsweringServiceTest {
         when(recorder.start(any(), eq(CONV), eq(List.of(KB)), any())).thenReturn(UUID.randomUUID());
         when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假"))
                 .thenReturn(new HybridSearchResult(List.of(), List.of(), List.of()));
-        when(generation.generate(eq("请假"), eq(List.of()), any())).thenReturn(
-                new GenerationResult(null, List.of(), RefusalReason.NO_RELEVANT_EVIDENCE,
-                        "deterministic", 0, 0, 0, null));
+        when(generation.stream(eq("请假"), eq(List.of()), any())).thenReturn(Flux.just(
+                new GenerationEvent.Refused(new GenerationResult(null, List.of(),
+                        RefusalReason.NO_RELEVANT_EVIDENCE, "deterministic", "deterministic", 0, 0, 0, 0, true, null, List.of()))));
 
-        instrumented.ask(USER, new AskRequest("请假", List.of(KB), CONV));
+        StepVerifier.create(instrumented.ask(USER, new AskRequest("请假", List.of(KB), CONV)))
+                .expectNextCount(3)
+                .verifyComplete();
 
         assertThat(meters.find("veridex.qa.run").tag("outcome", "refused").timer().count()).isEqualTo(1);
         assertThat(meters.find("veridex.qa.run").timer().getId().getTags())
@@ -148,7 +250,8 @@ class QuestionAnsweringServiceTest {
     void rejectsConversationOwnedByAnotherUser() {
         when(knowledgeScope.resolve(USER, List.of(KB))).thenReturn(List.of(KB));
         when(conversations.findOwned(USER, CONV)).thenReturn(Optional.empty());
-        var events = service.ask(USER, new AskRequest("请假", List.of(KB), CONV));
-        assertThat(events.get(events.size() - 1)).isInstanceOf(QaEvent.RunFailed.class);
+        StepVerifier.create(service.ask(USER, new AskRequest("请假", List.of(KB), CONV)))
+                .expectNextMatches(e -> e instanceof QaEvent.RunFailed)
+                .verifyComplete();
     }
 }
