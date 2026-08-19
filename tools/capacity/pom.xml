@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- 独立工具模块：parent 不指向根 pom（根 pom 只聚合 backend），
+         本模块不进 verify.sh，cd tools/capacity && ../../mvnw package 构建。 -->
+    <groupId>io.veridex</groupId>
+    <artifactId>veridex-capacity-tools</artifactId>
+    <version>0.1.0</version>
+    <packaging>jar</packaging>
+
+    <properties>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- 依赖版本与 backend 锁定版本对齐（./mvnw -f backend/pom.xml dependency:tree 确认，
+             brief 骨架里的 42.7.4/3.2.0/8.5.17 是旧值，按实际锁定版本覆盖） -->
+        <postgresql.version>42.7.8</postgresql.version>
+        <opensearch-java.version>3.9.0</opensearch-java.version>
+        <opensearch-rest-client.version>3.8.0</opensearch-rest-client.version>
+        <minio.version>8.6.0</minio.version>
+        <jackson.version>2.20.1</jackson.version>
+        <httpclient.version>4.5.14</httpclient.version>
+        <httpcore.version>4.4.16</httpcore.version>
+        <shade.version>3.6.0</shade.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>${postgresql.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.opensearch.client</groupId>
+            <artifactId>opensearch-java</artifactId>
+            <version>${opensearch-java.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.opensearch.client</groupId>
+            <artifactId>opensearch-rest-client</artifactId>
+            <version>${opensearch-rest-client.version}</version>
+        </dependency>
+        <!-- opensearch-java 的 RestClientTransport 底层是 Apache HttpAsyncClient（org.apache.http 包，httpcore 4.x），
+             httpclient5 不提供该包；与 backend/pom.xml 的显式锚定一致。 -->
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpclient</artifactId>
+            <version>${httpclient.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpcore</artifactId>
+            <version>${httpcore.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.minio</groupId>
+            <artifactId>minio</artifactId>
+            <version>${minio.version}</version>
+        </dependency>
+        <!-- minio 8.6.0 的 HTTP 客户端是 okhttp；与 backend 显式锚定版本一致 -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp-jvm</artifactId>
+            <version>5.2.1</version>
+        </dependency>
+        <!-- JacksonJsonpMapper（OpenSearchClientConfig 同款）与 chunks.json 序列化共用 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>${shade.version}</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals><goal>shade</goal></goals>
+                        <configuration>
+                            <!-- manifest 默认 mainClass=SeedGenerator（java -jar 直跑生成器）；
+                                 ReindexBenchmark 用 java -cp ... io.veridex.capacity.ReindexBenchmark
+                                 运行（README 写明命令）。 -->
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>io.veridex.capacity.SeedGenerator</mainClass>
+                                </transformer>
+                            </transformers>
+                            <shadedArtifactAttached>false</shadedArtifactAttached>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
