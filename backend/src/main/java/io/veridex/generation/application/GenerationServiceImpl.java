@@ -46,7 +46,9 @@ import reactor.core.publisher.Flux;
 public class GenerationServiceImpl implements GenerationService {
 
     private static final String DEFAULT_SYSTEM_TEMPLATE =
-            "你是企业制度问答助手。只允许使用以下证据回答，不得使用模型通用知识补全。\n";
+            "你是企业制度问答助手。只允许使用以下证据回答，不得使用模型通用知识补全。\n"
+            + "每个证据块以 [EVIDENCE 编号|标题|正文] 给出。回答时引用证据必须使用 [编号] 格式"
+            + "（例如 [1]、[2]，编号对应证据块开头的编号），不要写 [EVIDENCE ...] 字样。\n";
     private static final GenerationParameters DEFAULT_PARAMETERS =
             new GenerationParameters(50, DEFAULT_SYSTEM_TEMPLATE, "deterministic");
 
