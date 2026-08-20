@@ -6,6 +6,7 @@ import io.minio.GetObjectArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -103,6 +104,9 @@ public final class SeedGenerator {
                 UUID kbId = UUID.randomUUID();
                 String name = "容量库-" + kb;
                 String slug = "capacity-" + kb + "-" + kbId.toString().substring(0, 8);
+                String indexName = null;
+                List<String> minioKeys = new ArrayList<>();
+                try {
 
                 try (PreparedStatement ps = db.prepareStatement("""
                         INSERT INTO knowledge_base (id, name, slug, description, owner_id, status, created_at)
@@ -123,7 +127,7 @@ public final class SeedGenerator {
                 }
 
                 int versionNo = nextVersionNo(db, kbId);
-                String indexName = INDEX_PREFIX + "-" + kbId + "-" + versionNo;
+                indexName = INDEX_PREFIX + "-" + kbId + "-" + versionNo;
                 String aliasName = INDEX_PREFIX + "-" + kbId + "-active";
                 createIndex(os, indexName);
                 UUID releaseId = UUID.randomUUID();
@@ -163,6 +167,9 @@ public final class SeedGenerator {
                     putObject(minio, objectKey, mdBytes, "text/markdown");
                     putObject(minio, objectKey + ".parsed.json", parsedJson.getBytes(StandardCharsets.UTF_8), "application/json");
                     putObject(minio, objectKey + ".chunks.json", chunksJson, "application/json");
+                    minioKeys.add(objectKey);
+                    minioKeys.add(objectKey + ".parsed.json");
+                    minioKeys.add(objectKey + ".chunks.json");
 
                     indexChunks(os, indexName, kbId, releaseId, versionId, chunkTexts, titles, paths);
                     docChunks += a.chunksPerDoc;
@@ -194,6 +201,13 @@ public final class SeedGenerator {
                 if (!ok) {
                     throw new IllegalStateException("OpenSearch count mismatch for " + indexName
                             + ": expected " + docChunks + " got " + count);
+                }
+                } catch (Exception e) {
+                    // 失败清理：删除刚建的 OpenSearch 索引（连同其上 alias）、回滚该 KB 的 PG 行、删除已写 MinIO 对象
+                    cleanupFailedKb(db, minio, os, kbId, indexName, minioKeys);
+                    System.err.printf("[seed] FAILED kb=%s name=%s index=%s: %s%n", kbId, name, indexName, e);
+                    System.err.printf("[seed] CLEANED-UP kb=%s: OpenSearch 索引/PG 行/MinIO 对象已清理，可安全重跑（详见 README「失败清理与重跑」）%n", kbId);
+                    throw e;
                 }
             }
         }
@@ -266,6 +280,65 @@ public final class SeedGenerator {
             ps.setInt(6, documentCount);
             ps.setLong(7, chunkCount);
             ps.executeUpdate();
+        }
+    }
+
+    // ----------------------------------------------------- failure cleanup
+
+    /**
+     * 失败路径清理（best-effort，任何一步失败都不掩盖原始异常）：
+     * 删除刚建的 OpenSearch 索引（删除索引即连同其上 alias 一并移除）、
+     * 回滚该 KB 的 PG 行、删除已写 MinIO 对象。
+     */
+    private static void cleanupFailedKb(Connection db, MinioClient minio, OpenSearchClient os,
+                                        UUID kbId, String indexName, List<String> minioKeys) {
+        if (indexName != null) {
+            try {
+                deleteIndex(os, indexName);
+                System.err.println("[seed] cleanup: deleted OpenSearch index " + indexName);
+            } catch (Exception ex) {
+                System.err.println("[seed] cleanup: WARN failed to delete OpenSearch index " + indexName + ": " + ex);
+            }
+        }
+        rollbackKbRows(db, kbId); // 内部逐条 best-effort，不抛出
+        System.err.println("[seed] cleanup: rolled back PG rows for kb " + kbId);
+        for (String key : minioKeys) {
+            try {
+                minio.removeObject(RemoveObjectArgs.builder().bucket(ENV_MINIO_BUCKET).object(key).build());
+            } catch (Exception ex) {
+                System.err.println("[seed] cleanup: WARN failed to delete MinIO object " + key + ": " + ex);
+            }
+        }
+        if (!minioKeys.isEmpty()) {
+            System.err.println("[seed] cleanup: deleted " + minioKeys.size() + " MinIO object(s)");
+        }
+    }
+
+    /** 逆序删除该 KB 写入的全部 PG 行（index_release_document → index_release → document_version → document → grant → KB）。
+     *  每条 DELETE 独立 try/catch：单条失败（如表被并发改动）不阻塞其余回滚，保证 best-effort 语义。 */
+    private static void rollbackKbRows(Connection db, UUID kbId) {
+        rollbackDelete(db, """
+                DELETE FROM index_release_document
+                WHERE release_id IN (SELECT id FROM index_release WHERE knowledge_base_id = ?)""", kbId);
+        rollbackDelete(db, "DELETE FROM index_release WHERE knowledge_base_id = ?", kbId);
+        rollbackDelete(db, """
+                DELETE FROM document_version
+                WHERE document_id IN (SELECT id FROM document WHERE knowledge_base_id = ?)""", kbId);
+        rollbackDelete(db, "DELETE FROM document WHERE knowledge_base_id = ?", kbId);
+        rollbackDelete(db, "DELETE FROM knowledge_base_grant WHERE knowledge_base_id = ?", kbId);
+        rollbackDelete(db, "DELETE FROM knowledge_base WHERE id = ?", kbId);
+    }
+
+    /** 执行单条回滚 DELETE；失败仅打印 WARN，不抛出（保证其余回滚语句继续执行）。 */
+    private static void rollbackDelete(Connection db, String sql, UUID kbId) {
+        try (PreparedStatement ps = db.prepareStatement(sql)) {
+            ps.setObject(1, kbId);
+            int n = ps.executeUpdate();
+            if (n > 0) {
+                System.err.println("[seed] cleanup: deleted " + n + " row(s) via: " + sql.split("\\n")[0].trim() + " …");
+            }
+        } catch (Exception ex) {
+            System.err.println("[seed] cleanup: WARN rollback statement failed (" + sql.split("\\n")[0].trim() + "): " + ex);
         }
     }
 

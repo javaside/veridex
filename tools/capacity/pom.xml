@@ -20,7 +20,14 @@
         <opensearch-java.version>3.9.0</opensearch-java.version>
         <opensearch-rest-client.version>3.8.0</opensearch-rest-client.version>
         <minio.version>8.6.0</minio.version>
-        <jackson.version>2.20.1</jackson.version>
+        <!-- Jackson 2 全家统一锚定 opensearch-java 3.9.0 声明线（评审 Important-1 修复）。jackson-bom
+             2.21.2 定义：annotations=2.21、core/databind=2.21.2（jackson-annotations 无 2.21.2 版本，
+             中央仓库只有 2.21）。必须全家一起锚定：minio 8.6.0 传递的 jackson-annotations 2.19.1 /
+             jackson-core 2.20.1 会因深度优先覆盖造成 databind 2.21.2 + annotations 2.19.1 版本错配
+             （运行时 NoClassDefFoundError: JsonSerializeAs）。backend 运行时经 minio 先声明实际解析
+             为 2.20.1，两端 JSON 序列化兼容，见 task-6-report 修复记录。 -->
+        <jackson.version>2.21.2</jackson.version>
+        <jackson-annotations.version>2.21</jackson-annotations.version>
         <httpclient.version>4.5.14</httpclient.version>
         <httpcore.version>4.4.16</httpcore.version>
         <shade.version>3.6.0</shade.version>
@@ -65,7 +72,17 @@
             <artifactId>okhttp-jvm</artifactId>
             <version>5.2.1</version>
         </dependency>
-        <!-- JacksonJsonpMapper（OpenSearchClientConfig 同款）与 chunks.json 序列化共用 -->
+        <!-- Jackson 2 全家统一锚定 opensearch-java 3.9.0 声明线（annotations 2.21 / core 2.21.2 / databind 2.21.2） -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+            <version>${jackson-annotations.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>

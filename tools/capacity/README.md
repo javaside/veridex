@@ -13,7 +13,9 @@
 
 依赖版本与 backend 锁定版本对齐（`./mvnw -f backend/pom.xml dependency:tree` 确认）：
 postgresql 42.7.8、opensearch-java 3.9.0、opensearch-rest-client 3.8.0、minio 8.6.0、
-jackson-databind 2.20.1、httpclient 4.5.14 / httpcore 4.4.16。
+jackson-databind 2.21.2（opensearch-java 3.9.0 传递声明版本，显式锚定；backend 运行时经
+minio 8.6.0 先声明实际解析为 2.20.1，两端 JSON 序列化兼容，评审 Important-1 修复）、
+httpclient 4.5.14 / httpcore 4.4.16。
 
 ## 前置条件
 
@@ -108,6 +110,46 @@ Task 7 补充（另见 Phase 5-e 计划）。基准负载建议：
 - MinIO：`veridex-documents/<kbId>/<docId>/v1/doc-{i}.md`、`.parsed.json`、`.chunks.json`
 - OpenSearch：`veridex-<kbId>-<versionNo>`（每 KB 一个索引）+ alias `veridex-<kbId>-active`
 - 容量观测：`docker compose ps` / Grafana `:3000`（prometheus/opensearch 指标）
+
+## 失败清理与重跑
+
+SeedGenerator 每个 KB 的流程（插 KB 行 → 建索引 → 写文档/MinIO → bulk → 写 release →
+挂 alias）在任一步失败时，会在退出前自动执行 per-KB 清理（best-effort，不掩盖原始异常）：
+
+- 删除刚建的 OpenSearch 索引（`veridex-<kbId>-<versionNo>`；删除索引即连同其上 alias 一并移除，
+  不会留下「PG 声称 active 但 alias 未指向」或半成品索引）；
+- 回滚该 KB 的全部 PG 行（`index_release_document` / `index_release` / `document_version` /
+  `document` / `knowledge_base_grant` / `knowledge_base`）；
+- 删除本次已写入 MinIO 的 `<kbId>/...` 对象。
+
+失败时 stderr 打印 `[seed] FAILED kb=...` 与 `[seed] CLEANED-UP kb=...`，进程以非零码退出；
+清理失败的单项打印 `[seed] cleanup: WARN ...`，不影响其余清理项。
+
+### 半成品检查命令
+
+万一自动清理未能完全执行（如进程被 kill -9、网络中断导致 cleanup WARN），可用以下命令
+检查并手动清理残留：
+
+```bash
+# 1) 残留 KB 行（slug 形如 capacity-<n>-<uuid8>；正常重跑每次新建 KB，UUID 前缀不冲突）
+docker exec veridex-postgres-1 psql -U veridex -d veridex -t -c \
+  "SELECT id, name, slug FROM knowledge_base WHERE slug LIKE 'capacity-%' ORDER BY created_at;"
+
+# 2) 残留 PG 行（无对应 KB 行则属半成品，可整删）——删除某 KB 的全部行（含级联）：
+docker exec veridex-postgres-1 psql -U veridex -d veridex -c \
+  "DELETE FROM knowledge_base WHERE id = '<kbId>';"   # 子表 ON DELETE CASCADE 级联
+
+# 3) 残留 OpenSearch 索引（无 alias 指向、或 index_release 已删的半成品）
+curl -s 'http://localhost:9200/_cat/indices/veridex-*?v'
+curl -s -X DELETE 'http://localhost:9200/veridex-<kbId>-<versionNo>'   # 手动删除半成品索引
+
+# 4) 残留 MinIO 对象（无对应 KB 行的孤儿对象，可整前缀删）
+#    mc rm --recursive --force local/veridex-documents/<kbId>/   （或用 MinIO 控制台）
+```
+
+重跑前建议核对 `index_release WHERE is_active` 与 alias 实际指向一致：
+`curl -s 'http://localhost:9200/_cat/aliases/veridex-*active?v'`。正常失败清理后
+这些检查应为空/一致。
 
 ## 注意
 
