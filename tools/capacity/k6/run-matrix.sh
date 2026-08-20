@@ -93,6 +93,16 @@ if [ "${WITH_EVAL:-0}" = "1" ]; then
   if [ -z "${EVAL_DATASET_ID}" ] || [ -z "${EVAL_PROFILE_ID}" ]; then
     echo "WARN: WITH_EVAL=1 但 EVAL_DATASET_ID/EVAL_PROFILE_ID 未设置，跳过干扰组（前置见 README）" >&2
   else
+    # M-2: 干扰档需有同档无评测基线（vus${EVAL_VUS}.json）可比——EVAL_VUS 必须 ∈ VUS_LIST
+    #      （默认 "5 20 50"；VUS_LIST 被覆盖时按实际档位校验）。
+    case " ${VUS_LIST} " in
+      *" ${EVAL_VUS} "*) ;;
+      *)
+        echo "ERROR: WITH_EVAL=1 但 EVAL_VUS=${EVAL_VUS} 不在 VUS_LIST（${VUS_LIST}）中：" \
+             "干扰档 vus${EVAL_VUS}-with-eval 无同档基线可比；请设 EVAL_VUS ∈ VUS_LIST（默认 5 20 50）" >&2
+        exit 1
+        ;;
+    esac
     echo "==> 评测干扰组: ${EVAL_VUS} VU + 评测运行（dataset=${EVAL_DATASET_ID} profile=${EVAL_PROFILE_ID}）"
     # 后台触发评测（与 k6 压测并发，量化 P99 漂移）；评测在请求线程内同步执行
     trigger_eval &
@@ -100,7 +110,23 @@ if [ "${WITH_EVAL:-0}" = "1" ]; then
     k6 run "${ROOT_DIR}/k6/qa-load.js" \
       -e BASE_URL="${BASE_URL}" -e KB_IDS="${KB_IDS}" -e VUS="${EVAL_VUS}" -e DURATION="${DURATION}" \
       --summary-export "${OUT_DIR}/${PROVIDER}-vus${EVAL_VUS}-with-eval.json"
-    wait "${EVAL_PID}" || true
+    # M-1: 后台 curl 失败（如 dataset/配置档未在 PG 预置、后端不可达）时输出 WARN，
+    #      不静默吞掉，也不掩盖矩阵结果。
+    if wait "${EVAL_PID}"; then
+      EVAL_RC=0
+    else
+      EVAL_RC=$?
+    fi
+    if [ "${EVAL_RC}" -ne 0 ] || [ ! -s "${OUT_DIR}/eval-run.json" ]; then
+      echo "WARN: 评测触发失败（后台退出码 ${EVAL_RC}，${OUT_DIR}/eval-run.json 缺失/为空）：" \
+           "多为 EVAL_DATASET_ID/EVAL_PROFILE_ID 未在 PG 预置或后端不可达——干扰组无对比数据；矩阵结果不受影响" >&2
+    else
+      EVAL_STATUS="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("status","?"))' "${OUT_DIR}/eval-run.json" 2>/dev/null || echo '?')"
+      echo "eval run 回执：status=${EVAL_STATUS}"
+      if [ "${EVAL_STATUS}" != "COMPLETED" ]; then
+        echo "WARN: eval run status=${EVAL_STATUS}（非 COMPLETED），干扰组数据可能不可用；矩阵结果不受影响" >&2
+      fi
+    fi
   fi
 fi
 

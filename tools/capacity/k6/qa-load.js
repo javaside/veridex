@@ -30,6 +30,10 @@ const QUESTIONS = [
 ];
 
 export const options = {
+  // 全链路时延分位（spec §4.5 要求 P50/P95/P99）：显式声明 summaryTrendStats，
+  // 否则 k6 默认只导出 avg/min/med/max + p(90)/p(95)，--summary-export 里不会有 p(99)
+  // （Task 8 容量报告引用全链路 P99，review I-1）。
+  summaryTrendStats: ['avg', 'min', 'med', 'p(90)', 'p(95)', 'p(99)', 'max'],
   scenarios: {
     qa: {
       executor: 'ramping-vus',

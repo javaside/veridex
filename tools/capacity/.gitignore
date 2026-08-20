@@ -1,0 +1,3 @@
+# 容量压测产物（k6 summary-export / first-token PromQL / eval-run 回执，含 dataset UUID）
+# README 声明不提交 git；根 .gitignore 无覆盖该路径的通配，故在此显式忽略（review M-3）。
+results/

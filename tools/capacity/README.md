@@ -162,14 +162,16 @@ WITH_EVAL=1 \
 | `PROM_URL` | `http://localhost:9090` | Prometheus 直连地址 |
 | `DURATION` | `5m` | 每档稳态时长 |
 | `VUS_LIST` | `5 20 50` | 梯度档位（验证可覆盖 `1`） |
-| `EVAL_VUS` | `50` | 干扰组 VU 档 |
+| `EVAL_VUS` | `50` | 干扰组 VU 档（必须 ∈ `VUS_LIST`，否则 WITH_EVAL 直接失败——干扰档无同档基线可比） |
 | `WITH_EVAL` | `0` | `1` 时跑评测干扰组 |
 | `EVAL_DATASET_ID` / `EVAL_PROFILE_ID` | 空 | 评测 dataset/配置档（PG 预置，见下） |
 | `EVAL_DATASET_VERSION_NO` / `EVAL_PROFILE_VERSION_NO` | `1` | 评测版本号 |
 
 输出（`tools/capacity/results/<时间戳>/`，不提交 git）：
 
-- `${PROVIDER}-vus${n}.json`：k6 `--summary-export`（P50/P95/P99 全链路、吞吐、错误率）
+- `${PROVIDER}-vus${n}.json`：k6 `--summary-export`（P50/P95/P99 全链路——`qa-load.js`
+  `options.summaryTrendStats` 已含 `p(99)`：`avg/min/med/p(90)/p(95)/p(99)/max`；
+  另含吞吐与错误率）
 - `${PROVIDER}-vus${n}-first-token.json`：first_token P99（或退化 max，见下）
 - `${PROVIDER}-vus${n}-first-token-mean.json`：first_token 均值
 - `${PROVIDER}-vus50-with-eval.json` / `eval-run.json`：干扰组结果与评测运行回执
@@ -191,7 +193,9 @@ WITH_EVAL=1 \
 - dataset/配置档前置：PG 需预置（Phase 3 已有：
   dataset `ce263b98-7994-4e0f-bfd8-1c1fb243144a`「技术书籍问答评测集」v1/v2/v3、
   profile `ae61c1aa-b747-4864-8136-f5d14a835938`「检索基线」v1）；运行在请求线程内同步执行。
-- 若未预置 dataset：脚本打印 WARN 并跳过干扰组（干扰组实际执行留给 Task 8 的 1M 全量压测）。
+- 若未预置 dataset：脚本打印 WARN 并跳过干扰组（干扰组实际执行留给 Task 8 的 1M 全量压测）；
+  env 已设但触发失败（dataset/配置档在 PG 缺失或后端不可达）时，脚本在干扰档 k6 结束后打印
+  WARN 并保留矩阵结果——不静默吞掉，也不掩盖无评测基线的对比缺口。
 
 ### first_token PromQL（实测调整）
 
