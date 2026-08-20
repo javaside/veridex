@@ -33,7 +33,8 @@ class PromptInjectionSafetyIntegrationTest {
         var observability = new VeridexObservability(new SimpleMeterRegistry(), ObservationRegistry.create());
         var chatProperties = new io.veridex.generation.infrastructure.ChatProperties("deterministic",
                 java.time.Duration.ofSeconds(60),
-                new io.veridex.generation.infrastructure.ChatProperties.Ollama("http://localhost:11434", "qwen3:8b"));
+                new io.veridex.generation.infrastructure.ChatProperties.Ollama("http://localhost:11434", "qwen3:8b"),
+                new io.veridex.generation.infrastructure.ChatProperties.DeepSeek("https://api.deepseek.com", "sk-test", "deepseek-v4-pro"));
         return new GenerationServiceImpl(model, refusalPolicy, citationValidator, documentVersions,
                 observability, chatProperties);
     }

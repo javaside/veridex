@@ -97,11 +97,15 @@ veridex:
       base-url: ${VERIDEX_OLLAMA_BASE_URL:http://localhost:11434}
       model: ${VERIDEX_OLLAMA_EMBEDDING_MODEL:qwen3-embedding:0.6b}
   chat:
-    provider: ${VERIDEX_CHAT_PROVIDER:deterministic}
+    provider: ${VERIDEX_CHAT_PROVIDER:deepseek}
     timeout: ${VERIDEX_CHAT_TIMEOUT:60s}
     ollama:
       base-url: ${VERIDEX_OLLAMA_BASE_URL:http://localhost:11434}
       model: ${VERIDEX_OLLAMA_CHAT_MODEL:qwen3.5:9b}
+    deepseek:
+      base-url: ${VERIDEX_DEEPSEEK_BASE_URL:https://api.deepseek.com}
+      api-key: ${VERIDEX_DEEPSEEK_API_KEY:${DEEPSEEK_API_KEY:}}
+      model: ${VERIDEX_DEEPSEEK_MODEL:deepseek-v4-flash}
   observability:
     environment: ${VERIDEX_ENVIRONMENT:local}
   trace:

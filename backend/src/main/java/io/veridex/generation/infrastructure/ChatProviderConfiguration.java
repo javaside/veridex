@@ -21,7 +21,7 @@ public class ChatProviderConfiguration {
 
     public static class ChatProviderVerifier implements InitializingBean {
 
-        private static final Set<String> ALLOWED = Set.of("deterministic", "ollama");
+        private static final Set<String> ALLOWED = Set.of("deterministic", "ollama", "deepseek");
 
         private final ChatProperties properties;
 

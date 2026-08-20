@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * 配置文本契约（设计 §5.2）：SSE async timeout 不得短于模型总时限加收尾余量；
- * provider 默认 deterministic。读取 application.yml 原文断言，避免起全量上下文。
+ * provider 默认 deepseek。读取 application.yml 原文断言，避免起全量上下文。
  */
 class ChatConfigContractTest {
 
@@ -32,8 +32,8 @@ class ChatConfigContractTest {
     }
 
     @Test
-    void chatProviderDefaultsToDeterministic() throws Exception {
-        assertThat(lineContaining("VERIDEX_CHAT_PROVIDER:deterministic"))
-                .isEqualTo("provider: ${VERIDEX_CHAT_PROVIDER:deterministic}");
+    void chatProviderDefaultsToDeepSeek() throws Exception {
+        assertThat(lineContaining("VERIDEX_CHAT_PROVIDER:deepseek"))
+                .isEqualTo("provider: ${VERIDEX_CHAT_PROVIDER:deepseek}");
     }
 }

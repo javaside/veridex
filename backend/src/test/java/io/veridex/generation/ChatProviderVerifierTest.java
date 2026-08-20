@@ -9,19 +9,21 @@ import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 /**
- * provider 合法值校验（设计 D3/D10）：只允许 deterministic/ollama，非法值启动失败。
+ * provider 合法值校验（设计 D3/D10）：只允许 deterministic/ollama/deepseek，非法值启动失败。
  */
 class ChatProviderVerifierTest {
 
     private static ChatProviderVerifier verifier(String provider) {
         return new ChatProviderVerifier(new ChatProperties(provider, Duration.ofSeconds(60),
-                new ChatProperties.Ollama("http://localhost:11434", "qwen3:8b")));
+                new ChatProperties.Ollama("http://localhost:11434", "qwen3:8b"),
+                new ChatProperties.DeepSeek("https://api.deepseek.com", "sk-test", "deepseek-v4-pro")));
     }
 
     @Test
-    void acceptsDeterministicAndOllama() {
+    void acceptsDeterministicOllamaAndDeepseek() {
         assertThatCode(() -> verifier("deterministic").afterPropertiesSet()).doesNotThrowAnyException();
         assertThatCode(() -> verifier("ollama").afterPropertiesSet()).doesNotThrowAnyException();
+        assertThatCode(() -> verifier("deepseek").afterPropertiesSet()).doesNotThrowAnyException();
     }
 
     @Test

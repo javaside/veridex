@@ -92,7 +92,8 @@ class GenerationServiceImplTest {
         GenerationServiceImpl instrumented = new GenerationServiceImpl(model, refusalPolicy, citationValidator,
                 documentVersions, new VeridexObservability(meters, ObservationRegistry.create()),
                 new ChatProperties("deterministic", Duration.ofSeconds(60),
-                        new ChatProperties.Ollama("http://localhost:11434", "qwen3:8b")));
+                        new ChatProperties.Ollama("http://localhost:11434", "qwen3:8b"),
+                        new ChatProperties.DeepSeek("https://api.deepseek.com", "sk-test", "deepseek-v4-pro")));
         var evidence = List.of(new EvidencePiece(1, UUID.randomUUID(), UUID.randomUUID(), 0, "t", "1", "text"));
         when(refusalPolicy.evaluate(eq(evidence), org.mockito.ArgumentMatchers.anyInt())).thenReturn(null);
         when(model.call(any(Prompt.class))).thenThrow(new RuntimeException("SENSITIVE_MODEL_FAILURE"));

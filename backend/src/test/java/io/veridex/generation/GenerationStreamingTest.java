@@ -47,7 +47,8 @@ class GenerationStreamingTest {
     @Mock CitationValidator citationValidator;
     @Mock DocumentVersionQuery documentVersions;
     ChatProperties chatProperties = new ChatProperties("deterministic", Duration.ofSeconds(60),
-            new ChatProperties.Ollama("http://localhost:11434", "qwen3:8b"));
+            new ChatProperties.Ollama("http://localhost:11434", "qwen3:8b"),
+            new ChatProperties.DeepSeek("https://api.deepseek.com", "sk-test", "deepseek-v4-pro"));
 
     private GenerationServiceImpl service() {
         return new GenerationServiceImpl(model, refusalPolicy, citationValidator, documentVersions,
@@ -125,7 +126,8 @@ class GenerationStreamingTest {
         when(refusalPolicy.evaluate(any(), eq(50))).thenReturn(null);
         when(model.stream(any(Prompt.class))).thenReturn(Flux.never());
         ChatProperties shortTimeout = new ChatProperties("deterministic", Duration.ofMillis(50),
-                new ChatProperties.Ollama("http://localhost:11434", "qwen3:8b"));
+                new ChatProperties.Ollama("http://localhost:11434", "qwen3:8b"),
+                new ChatProperties.DeepSeek("https://api.deepseek.com", "sk-test", "deepseek-v4-pro"));
         GenerationServiceImpl timed = new GenerationServiceImpl(model, refusalPolicy, citationValidator,
                 documentVersions, new VeridexObservability(new SimpleMeterRegistry(), ObservationRegistry.create()),
                 shortTimeout);
