@@ -27,6 +27,8 @@ import io.veridex.trace.api.QueryRunRecorder.RetrievalHitRecord;
 import io.veridex.trace.api.TraceBodyCapture;
 import java.util.List;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
@@ -39,6 +41,8 @@ import reactor.core.scheduler.Schedulers;
  */
 @Service
 public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
+
+    private static final Logger log = LoggerFactory.getLogger(QuestionAnsweringServiceImpl.class);
 
     private static final int HISTORY_TURNS = 6;
 
@@ -172,6 +176,7 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
     private void handleGenerationError(Throwable error, FluxSink<QaEvent> sink,
                                        VeridexObservability.ObservationScope observation, UUID runId,
                                        AskRequest request, HybridSearchResult searchResult) {
+        log.error("qa generation failed: runId={} error={}", runId, error.toString(), error);
         TelemetryErrorCode code = GenerationErrorCodes.classify(toException(error));
         recorder.fail(runId, code.name());
         traceBodyCapture.capture(runId, TraceBodyCapture.TerminalOutcome.FAILED, code.name(),

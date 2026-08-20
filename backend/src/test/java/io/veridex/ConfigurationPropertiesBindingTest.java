@@ -43,7 +43,7 @@ class ConfigurationPropertiesBindingTest {
         assertThat(embedding.provider()).isEqualTo("deterministic");
         assertThat(embedding.dimensions()).isEqualTo(128);
         assertThat(embedding.ollama().baseUrl()).isEqualTo("http://localhost:11434");
-        assertThat(embedding.ollama().model()).isEqualTo("qwen3-embedding");
+        assertThat(embedding.ollama().model()).isEqualTo("qwen3-embedding:0.6b");
     }
 
     @Test

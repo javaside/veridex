@@ -69,7 +69,7 @@ public class GenerationServiceImpl implements GenerationService {
         this.documentVersions = documentVersions;
         this.observability = observability;
         this.chatProperties = chatProperties;
-        this.modelTags = new BoundedModelTags(java.util.Set.of("deterministic", "ollama"));
+        this.modelTags = new BoundedModelTags(java.util.Set.of("deterministic", "ollama", "deepseek"));
     }
 
     // ---------- 同步入口（评测继续使用） ----------
@@ -140,7 +140,8 @@ public class GenerationServiceImpl implements GenerationService {
                         Flux.error(new ModelTimeoutException("model timeout")))
                 .doOnNext(response -> {
                     lastResponse.set(response);
-                    String text = response.getResult().getOutput().getText();
+                    var result = response.getResult();
+                    String text = result == null || result.getOutput() == null ? null : result.getOutput().getText();
                     if (text != null && !text.isEmpty()) {
                         if (firstTokenLatencyMs.get() < 0) {
                             firstTokenLatencyMs.set((System.nanoTime() - start) / 1_000_000);
@@ -150,8 +151,13 @@ public class GenerationServiceImpl implements GenerationService {
                 });
 
         return upstream
-                .map(response -> response.getResult().getOutput().getText())
-                .filter(text -> text != null && !text.isBlank())
+                // reasoning 模型（如 deepseek-v4-pro）流式时先输出 reasoning_content，
+                // 此时 content 为 null；mapNotNull 过滤掉这些空 chunk，避免 Flux.map 对 null 抛 NPE。
+                .mapNotNull(response -> {
+                    var result = response.getResult();
+                    return result == null || result.getOutput() == null ? null : result.getOutput().getText();
+                })
+                .filter(text -> !text.isBlank())
                 .map(text -> (GenerationEvent) new GenerationEvent.Delta(text))
                 .concatWith(Flux.defer(() -> {
                     long elapsedMs = (System.nanoTime() - start) / 1_000_000;
@@ -199,8 +205,11 @@ public class GenerationServiceImpl implements GenerationService {
     }
 
     private String modelName() {
-        return "ollama".equals(chatProperties.provider())
-                ? chatProperties.ollama().model() : "deterministic";
+        return switch (chatProperties.provider()) {
+            case "ollama" -> chatProperties.ollama().model();
+            case "deepseek" -> chatProperties.deepseek().model();
+            default -> "deterministic";
+        };
     }
 
     private TelemetryTag providerTag() {
