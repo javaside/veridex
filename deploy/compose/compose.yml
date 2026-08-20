@@ -108,6 +108,8 @@ services:
     image: veridex-backend:0.1.0
     environment:
       VERIDEX_ENVIRONMENT: local
+      # 容量压测可经 .env 覆盖（VERIDEX_RATE_LIMIT_PER_MINUTE）
+      VERIDEX_RATE_LIMIT_PER_MINUTE: ${VERIDEX_RATE_LIMIT_PER_MINUTE:-600}
       # reindex profile 透传：restore.sh 用 compose run -e SPRING_PROFILES_ACTIVE=reindex
       # 覆盖为一次性重建容器，常驻启动保持空（不装配 ReindexRunner）
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
@@ -128,13 +130,13 @@ services:
       VERIDEX_CORS_ALLOWED_ORIGINS: http://localhost:8090
       # --- Ollama Chat（可选，默认 deterministic 无需配置）---
       # 指向宿主机 Ollama 时用 host.docker.internal，不要用 localhost（容器内）。
-      # VERIDEX_CHAT_PROVIDER: ollama
-      # VERIDEX_OLLAMA_BASE_URL: http://host.docker.internal:11434
-      # VERIDEX_OLLAMA_CHAT_MODEL: qwen3:8b
-      # VERIDEX_CHAT_TIMEOUT: 60s
-      # VERIDEX_OUTBOUND_ALLOWED_HOSTS: host.docker.internal
-      # VERIDEX_OUTBOUND_ALLOWED_PORTS: "11434"
-      # VERIDEX_OUTBOUND_ALLOW_INSECURE_HTTP: "true"
+      VERIDEX_CHAT_PROVIDER: ${VERIDEX_CHAT_PROVIDER:-deterministic}
+      VERIDEX_OLLAMA_BASE_URL: ${VERIDEX_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      VERIDEX_OLLAMA_CHAT_MODEL: ${VERIDEX_OLLAMA_CHAT_MODEL:-qwen3:8b}
+      VERIDEX_CHAT_TIMEOUT: ${VERIDEX_CHAT_TIMEOUT:-60s}
+      VERIDEX_OUTBOUND_ALLOWED_HOSTS: ${VERIDEX_OUTBOUND_ALLOWED_HOSTS:-host.docker.internal}
+      VERIDEX_OUTBOUND_ALLOWED_PORTS: ${VERIDEX_OUTBOUND_ALLOWED_PORTS:-11434}
+      VERIDEX_OUTBOUND_ALLOW_INSECURE_HTTP: ${VERIDEX_OUTBOUND_ALLOW_INSECURE_HTTP:-true}
       # 提示：compose 栈未打包 Ollama 服务，需自行提供（设计 §8.1）。
     read_only: true
     tmpfs:
