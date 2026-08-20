@@ -11,6 +11,7 @@ export type DocumentVersion = {
   objectKey: string
 }
 export type ChunkPreview = { index: number; text: string; title: string; structurePath: string }
+export type DocumentVersionLocation = { knowledgeBaseId: string; documentId: string; versionId: string }
 export type Release = {
   releaseId: string
   versionNo: number
@@ -45,6 +46,11 @@ export const knowledgeApi = {
     fetch(`/api/knowledge-bases/${kbId}/documents`, { credentials: 'include' }).then((response) => json<DocumentSummary[]>(response)),
   versions: (documentId: string): Promise<DocumentVersion[]> =>
     fetch(`/api/documents/${documentId}/versions`, { credentials: 'include' }).then((response) => json<DocumentVersion[]>(response)),
+  locateVersion: (versionId: string): Promise<DocumentVersionLocation | null> =>
+    fetch(`/api/documents/versions/${versionId}/location`, { credentials: 'include' }).then(async (response) => {
+      if (response.status === 404) return null
+      return json<DocumentVersionLocation>(response)
+    }),
   upload: (kbId: string, file: File): Promise<DocumentVersion> => {
     const form = new FormData()
     form.append('file', file)

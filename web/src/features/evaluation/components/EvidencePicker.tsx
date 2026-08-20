@@ -6,20 +6,13 @@ type KnowledgeBase = { id: string; name: string }
 
 /**
  * 反向定位：给定一个 documentVersionId，找出它所属的「知识库 → 文档 → 版本」。
- * 证据只存了 documentVersionId，没有冗余 KB/文档信息，因此需要遍历定位。
+ * 证据只存了 documentVersionId，没有冗余 KB/文档信息；由后端一次查询返回，
+ * 避免遍历全量 KB/文档造成 N+1 请求风暴。
  */
-async function resolveVersion(kbList: KnowledgeBase[], versionId: string) {
-  for (const kb of kbList) {
-    const docs = await knowledgeApi.documents(kb.id)
-    for (const doc of docs) {
-      const vers = await knowledgeApi.versions(doc.id)
-      const found = vers.find((v) => v.id === versionId)
-      if (found) {
-        return { baseId: kb.id, documentId: doc.id, versionId: found.id }
-      }
-    }
-  }
-  return null
+async function resolveVersion(versionId: string) {
+  const location = await knowledgeApi.locateVersion(versionId)
+  if (!location) return null
+  return { baseId: location.knowledgeBaseId, documentId: location.documentId, versionId: location.versionId }
 }
 
 export function EvidencePicker({ initial, onSelect }: { initial?: EvidenceRef[]; onSelect: (evidence: EvidenceRef[]) => void }) {
@@ -44,7 +37,7 @@ export function EvidencePicker({ initial, onSelect }: { initial?: EvidenceRef[];
         // 回显已保存的证据：定位到对应知识库/文档/版本并勾选分块
         const ref = (initial ?? []).find((r) => r.chunkIndexes.length > 0)
         if (ref) {
-          const resolved = await resolveVersion(kbList, ref.documentVersionId)
+          const resolved = await resolveVersion(ref.documentVersionId)
           if (!active) return
           if (resolved) {
             const [docs, vers, chunkList] = await Promise.all([

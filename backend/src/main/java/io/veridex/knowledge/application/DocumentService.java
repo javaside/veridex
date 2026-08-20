@@ -96,6 +96,21 @@ public class DocumentService implements DocumentVersionProcessing {
                         .map(document -> version));
     }
 
+    /**
+     * 反向定位：给定 documentVersionId，返回它所属的「知识库 → 文档 → 版本」。
+     * 证据只存 documentVersionId，前端回显时原本需要遍历所有 KB/文档做 N+1 查询；
+     * 这里用两条索引查找一次完成，供 EvidencePicker 单请求回显。
+     */
+    public Optional<LocatedVersion> locateVersion(UUID versionId, UUID userId) {
+        return versions.findById(versionId)
+                .flatMap(version -> documents.findById(version.getDocumentId())
+                        .filter(document -> authorization.canView(document.getKnowledgeBaseId(), userId))
+                        .map(document -> new LocatedVersion(document.getKnowledgeBaseId(), document.getId(), version.getId())));
+    }
+
+    public record LocatedVersion(UUID knowledgeBaseId, UUID documentId, UUID versionId) {
+    }
+
     @Override
     public String findVersionStatus(UUID versionId) {
         return require(versionId).getStatus().name();

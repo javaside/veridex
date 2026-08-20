@@ -12,6 +12,9 @@ test('回显已保存证据：定位到知识库/文档/版本并勾选分块', 
     if (url === '/api/knowledge-bases') {
       return json([{ id: 'kb-1', name: 'springai', description: null, slug: 'springai' }])
     }
+    if (url === '/api/documents/versions/dv-1/location') {
+      return json({ knowledgeBaseId: 'kb-1', documentId: 'doc-1', versionId: 'dv-1' })
+    }
     if (url === '/api/knowledge-bases/kb-1/documents') {
       return json([{ id: 'doc-1', filename: 'Java 8实战.pdf', contentType: 'application/pdf', sizeBytes: 1 }])
     }
