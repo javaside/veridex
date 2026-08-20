@@ -231,6 +231,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .qa-conv-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qa-conv-item:hover { background: var(--surface-muted); color: var(--text-primary); }
 .qa-conv-item.active { background: var(--surface-accent); border-color: #b9d3cc; color: var(--accent); font-weight: 650; }
+.qa-load-more { width: 100%; margin-top: 10px; }
 .qa-chat { display: flex; flex-direction: column; min-height: calc(100dvh - 190px); background: var(--surface-panel); border: 1px solid var(--border); border-radius: var(--radius-panel); overflow: hidden; }
 .qa-messages { flex: 1; overflow-y: auto; padding: 22px 24px; display: flex; flex-direction: column; gap: 16px; }
 .qa-welcome { margin: auto; text-align: center; color: var(--text-secondary); max-width: 46ch; }

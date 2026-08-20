@@ -16,6 +16,8 @@ type LocalMessage = {
   question?: string
 }
 
+const CONVERSATION_PAGE_SIZE = 50
+
 const REASON_CODES: FeedbackReasonCode[] = ['WRONG_ANSWER', 'HALLUCINATION', 'MISSING_EVIDENCE', 'OUTDATED', 'WRONG_REFUSAL', 'OTHER']
 const REASON_LABELS: Record<FeedbackReasonCode, string> = {
   WRONG_ANSWER: '回答错误',
@@ -41,6 +43,7 @@ export function QaPage() {
   const [bases, setBases] = useState<KnowledgeBase[]>([])
   const [selectedKbIds, setSelectedKbIds] = useState<string[]>([])
   const [conversations, setConversations] = useState<ConversationView[]>([])
+  const [visibleCount, setVisibleCount] = useState(CONVERSATION_PAGE_SIZE)
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
   const [messages, setMessages] = useState<LocalMessage[]>([])
   const [question, setQuestion] = useState('')
@@ -247,20 +250,31 @@ export function QaPage() {
             {conversations.length === 0 ? (
               <p className="qa-empty-hint">暂无历史会话。</p>
             ) : (
-              <ul>
-                {conversations.map((conversation) => (
-                  <li key={conversation.id}>
-                    <button
-                      type="button"
-                      className={conversation.id === activeConversationId ? 'qa-conv-item active' : 'qa-conv-item'}
-                      onClick={() => void loadConversation(conversation.id)}
-                    >
-                      <ChatCircleDots size={15} aria-hidden="true" />
-                      <span>{conversation.title}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <ul>
+                  {conversations.slice(0, visibleCount).map((conversation) => (
+                    <li key={conversation.id}>
+                      <button
+                        type="button"
+                        className={conversation.id === activeConversationId ? 'qa-conv-item active' : 'qa-conv-item'}
+                        onClick={() => void loadConversation(conversation.id)}
+                      >
+                        <ChatCircleDots size={15} aria-hidden="true" />
+                        <span>{conversation.title}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {conversations.length > visibleCount && (
+                  <button
+                    type="button"
+                    className="secondary-button qa-load-more"
+                    onClick={() => setVisibleCount((n) => n + CONVERSATION_PAGE_SIZE)}
+                  >
+                    加载更多（还有 {conversations.length - visibleCount} 个会话）
+                  </button>
+                )}
+              </>
             )}
           </section>
         </aside>
