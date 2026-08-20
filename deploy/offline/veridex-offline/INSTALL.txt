@@ -55,3 +55,30 @@ Ollama Chat（可选）
 
 排障：Secret 缺 key 或 backend 安全配置非法时 Pod 不 ready，日志只输出固定配置错误码；
 Secret 值原地变更后执行 kubectl -n veridex rollout restart deploy/veridex-veridex-backend。
+
+备份 / 恢复（k8s）
+-----------------
+- Veridex 不内置备份调度器；备份与恢复由安装者自行编排。仓库提供脚本与语义
+  （deploy/backup/backup.sh、restore.sh、verify-recovery.sh），本附录给出 k8s 侧落地方式。
+
+- 备份内容与语义：
+  * PostgreSQL：pg_dump 逻辑备份，含 Flyway schema_version、全部业务数据与
+    Spring Session 会话表（Session 已外置于 PG，随备份恢复）。
+  * MinIO：对象导出（mc mirror 语义，对象键结构原样保留）。
+  * OpenSearch：**不备份**——恢复走源重建（reindex 语义，spec D1）。
+  * 备份产物目录含 manifest.json 与 SHA256SUMS，恢复前须校验完整性。
+
+- k8s 侧调度建议：以 CronJob 在 veridex 命名空间按保留策略周期执行 pg_dump 与
+  对象导出，输出写挂载的 PV（容量与保留窗口由安装者按数据量规划）或对接企业备份存储。
+  备份命令参考（需在可访问 PostgreSQL/MinIO 的 Pod 或 job 内执行）：
+    pg_dump -Fc -h <PG_HOST> -U veridex -d veridex > postgres.dump
+    mc mirror <MINIO_ALIAS>/veridex-documents ./objects
+  （与 deploy/backup/backup.sh 的产物布局保持一致，便于复用恢复脚本语义。）
+
+- 恢复（引用仓库脚本语义，按需裁剪）：
+    1. 恢复 PostgreSQL（pg_restore）→ 校验 Flyway 迁移版本兼容；
+    2. MinIO 对象回灌（mc mirror 反向）；
+    3. OpenSearch 源重建（一次性 reindex 任务，按 KB 发布新 IndexRelease）；
+    4. 冒烟 + 问答抽查。完整流程与 RTO 口径见 deploy/backup/verify-recovery.sh
+      （2026-08-19 实测 RTO=21s：销毁 → smoke 通过，不含 QA 抽查；
+       1M 规模 RTO 见 docs/capacity-report-2026-08.md）。

@@ -57,7 +57,7 @@ Veridex 是面向企业私有化部署的 RAG（Retrieval-Augmented Generation�
 | 消息队列 | RabbitMQ 4 |
 | 对象存储 | MinIO |
 | 检索索引 | OpenSearch 3.2 |
-| 缓存基础设施 | Redis 8（当前阶段尚未进入主要业务链路） |
+| 会话存储 | PostgreSQL（Spring Session JDBC，迁移 V15） |
 | 文档解析 | Apache Tika 3 |
 | 集成测试 | JUnit、Testcontainers |
 
@@ -110,7 +110,7 @@ docker compose -f deploy/compose/compose.yml up -d
 docker compose -f deploy/compose/compose.yml ps
 ```
 
-等待 `postgres`、`rabbitmq`、`redis`、`minio` 和 `opensearch` 的状态全部变为 `healthy`。首次启动可能需要下载镜像，OpenSearch 通常最慢。
+等待 `postgres`、`rabbitmq`、`minio` 和 `opensearch` 的状态全部变为 `healthy`。首次启动可能需要下载镜像，OpenSearch 通常最慢。
 
 查看基础设施日志：
 
@@ -177,6 +177,21 @@ npm --prefix web run dev
 - Helm chart 校验与 kind 集群验收：`./scripts/verify-deployment.sh 4`（chart 位于 `deploy/helm/veridex`，凭据必须使用 existing Secret）
 - 受限网络离线交付：`./scripts/verify-deployment.sh 5` 与 `deploy/offline/veridex-offline/INSTALL.txt`
 
+### 备份与恢复（Phase 5-e）
+
+备份/恢复由仓库脚本提供（详见[容量与恢复报告](docs/capacity-report-2026-08.md)与离线交付 `INSTALL.txt` 附录）：
+
+- `deploy/backup/backup.sh`：PG 逻辑备份（`pg_dump`，含 Flyway `schema_version` 与会话表）+ MinIO 对象导出，产物目录含 `manifest.json` 与 `SHA256SUMS` 完整性校验。OpenSearch **不备份**——恢复走源重建（spec D1）。
+- `deploy/backup/restore.sh`：恢复 PostgreSQL → 校验迁移版本兼容 → MinIO 对象回灌 → OpenSearch 源重建（一次性 reindex 容器）→ 业务就绪；`--fresh` 为销毁式恢复。
+- `deploy/backup/verify-recovery.sh`：一键恢复演练（起栈 → 种子 → 备份 → 销毁 → 恢复 → smoke + 问答抽查 → 输出 RTO）。**不进 `verify.sh`**，由运维按需执行。
+- 实测演练（2026-08-19）：RTO=21s（口径为销毁→smoke 通过，不含 QA 抽查；备份 `backups/20260819T224613`）。
+- k8s 侧：chart **不内置备份调度器**；备份（pg_dump/对象导出）由安装者以 CronJob 自行调度，恢复步骤语义见 `deploy/offline/veridex-offline/INSTALL.txt` 附录。
+
+### 多副本语义
+
+- **Session 已外部化到 PostgreSQL**（Spring Session JDBC，迁移 V15）：浏览器 Session 为多副本共享状态，backend 多副本无需粘性路由；`session-secret` 经 Secret 注入，多副本一致。
+- **API 限流为每副本语义**（`RateLimitFilter` 进程内固定窗口，默认 `VERIDEX_RATE_LIMIT_PER_MINUTE=600` 请求/分/用户/副本）：N 副本部署下**总限额 ≈ 限额 × N**，扩容副本即线性提升总额限；如需跨副本全局限额，需引入共享限流存储（当前未实现）。
+
 ## 服务地址与默认账号
 
 ### 本地服务
@@ -192,7 +207,6 @@ npm --prefix web run dev
 | MinIO API | `http://localhost:9000` | S3 兼容接口 |
 | MinIO Console | `http://localhost:9001` | 用户名 `veridex`，密码 `veridex-local-secret` |
 | OpenSearch | `http://localhost:9200` | 本地关闭安全插件 |
-| Redis | `localhost:6379` | 当前主要作为后续能力基础设施 |
 | Prometheus | `http://localhost:9090` | 应用与 RabbitMQ metrics |
 | Grafana | `http://localhost:3000` | 预置 Veridex Overview dashboard |
 | Tempo | `http://localhost:3200` | trace 查询 API |
@@ -400,7 +414,7 @@ docker compose -f deploy/compose/compose.yml ps
 
 ### 端口已被占用
 
-默认使用 `5432`、`5672`、`6379`、`9000`、`9001`、`9200`、`15672`、`8080` 和 `5173`。先停止占用端口的进程，或者修改 Compose 端口映射并通过后端环境变量同步连接地址。
+默认使用 `5432`、`5672`、`9000`、`9001`、`9200`、`15672`、`8080` 和 `5173`。先停止占用端口的进程，或者修改 Compose 端口映射并通过后端环境变量同步连接地址。
 
 ### OpenSearch 无法启动或反复重启
 
@@ -465,4 +479,5 @@ VERIDEX_EMBEDDING_DIMENSIONS=1024 \
 - [知识入库处理管道](docs/knowledge-ingestion-pipeline.md)
 - [架构与模块说明](docs/architecture.md)
 - [RAG 配置参数语义](docs/rag-configuration-parameters.md)
+- [容量与恢复报告（2026-08）](docs/capacity-report-2026-08.md)
 - [Phase 2 实施计划](docs/superpowers/plans/2026-08-11-knowledge-ingestion-vertical-slice.md)

@@ -22,5 +22,8 @@ application-local.yaml
 .data/
 logs/
 
+# Backup artifacts (deploy/backup/backup.sh default OUT_DIR=<root>/backups)
+backups/
+
 # Browser debugging artifacts
 .chrome-*

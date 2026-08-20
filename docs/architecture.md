@@ -1,6 +1,6 @@
 # 架构与模块说明
 
-> 本文档基于当前代码状态整理（更新至 Phase 5-b），说明后端模块划分、前端路由、数据库迁移、API 与可观测性边界。它是面向开发者的「地图」，具体某个环节的参数语义见 [RAG 配置参数语义](rag-configuration-parameters.md)，知识入库链路见[知识入库处理管道](knowledge-ingestion-pipeline.md)。
+> 本文档基于当前代码状态整理（更新至 Phase 5-e），说明后端模块划分、前端路由、数据库迁移、API 与可观测性边界。它是面向开发者的「地图」，具体某个环节的参数语义见 [RAG 配置参数语义](rag-configuration-parameters.md)，知识入库链路见[知识入库处理管道](knowledge-ingestion-pipeline.md)，容量与恢复实测见[容量与恢复报告](capacity-report-2026-08.md)。
 
 ## 1. 后端模块划分
 
@@ -42,7 +42,7 @@
 
 ## 3. 数据库迁移
 
-Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V12：
+Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V15：
 
 | 版本 | 内容 |
 |---|---|
@@ -59,6 +59,8 @@ Flyway 迁移位于 `backend/src/main/resources/db/migration/`，当前到 V12�
 | V11 | Phase 4-d 评测运行：`evaluation_run`、`evaluation_run_case` |
 | V12 | Phase 5-a API key：`api_key`（哈希凭据、scope、吊销与使用时间） |
 | V13 | Phase 5-b 可观测性：`trace_body`、Rabbit propagation columns、QueryRun scrub/fingerprint |
+| V14 | Phase 5-d Chat provider 流式：`generation_run.provider`、`first_token_latency_ms` |
+| V15 | Phase 5-e Session 外部化：Spring Session JDBC 表（`SPRING_SESSION`、`SPRING_SESSION_ATTRIBUTES`，Flyway 管理、cleanup 按 IX2 索引清理过期行） |
 
 ## 4. 可观测性边界
 
@@ -216,7 +218,10 @@ Feedback（rating=DOWN + reasonCode + evidence）
 - NetworkPolicy 默认 deny：web 仅接受 Ingress 流量并只允许 DNS + backend:8080 出站；backend 仅接受 web（8080）与监控（8081）入口，出站限 DNS 与 `networkPolicy.externalEgress` 显式声明的 selector 或 CIDR（禁止 `0.0.0.0/0`）。
 - ServiceMonitor（可选）只抓带 management 标签的 Service 的 `management` 命名端口（`/actuator/prometheus`）。
 - Chat 生成模型：`veridex.chat.provider`（默认 `deterministic` 测试占位，`ollama` 为首个真实 Chat provider）。Ollama 由安装者预置（不进默认 Compose/chart/离线包），后端经 `VERIDEX_CHAT_PROVIDER/VERIDEX_OLLAMA_BASE_URL/VERIDEX_OLLAMA_CHAT_MODEL/VERIDEX_CHAT_TIMEOUT` 配置；HTTP 时必须显式放行 `VERIDEX_OUTBOUND_ALLOWED_*` 并在 `networkPolicy.externalEgress` 声明 Ollama 的 selector/CIDR + 11434（chart 默认拒绝该出站）。真实模型显式验收：`scripts/verify-ollama-chat.sh`（不进默认 CI）。
-- 部署校验入口：`scripts/verify-deployment.sh`（镜像、Compose 栈、Helm lint/template 矩阵、kind 集群验收、离线包；随 `scripts/verify.sh` 执行）。已知限制：backend 为内存 Session，多副本需粘性或后续引入 Spring Session；备份恢复与多架构镜像门禁留给 Phase 5-e。
+- 部署校验入口：`scripts/verify-deployment.sh`（镜像、Compose 栈、Helm lint/template 矩阵、kind 集群验收、离线包；随 `scripts/verify.sh` 执行）。
+- Session 已外部化到 PostgreSQL（Spring Session JDBC，迁移 V15）：浏览器 Session 为多副本共享状态，backend 多副本无需粘性路由；`session-secret` 经 Secret 注入，多副本一致。CSRF token 同样落在 Session 中，随 pg_dump 备份/恢复（恢复演练已隐式验证）。
+- API 限流为**每副本语义**（`RateLimitFilter` 进程内固定窗口，`VERIDEX_RATE_LIMIT_PER_MINUTE` 默认 600 请求/分/用户/副本）：N 副本总限额 ≈ 限额 × N；跨副本全局限额需引入共享限流存储（当前未实现）。
+- 备份与恢复（Phase 5-e）：`deploy/backup/backup.sh`（pg_dump + MinIO 对象导出 + SHA256 manifest；OpenSearch 不备份，恢复走源重建）、`deploy/backup/restore.sh`（含 `--fresh` 销毁式恢复）、`deploy/backup/verify-recovery.sh`（一键演练并输出 RTO，不进 verify.sh）。实测演练 RTO=21s（2026-08-19，口径为销毁→smoke 通过，不含 QA 抽查；详见[容量与恢复报告](capacity-report-2026-08.md)）。k8s 侧备份（pg_dump/对象导出）由安装者以 CronJob 自行调度，恢复步骤语义见离线交付 `INSTALL.txt` 附录。
 
 ## 8. 与历史设计文档的关系
 
