@@ -48,6 +48,7 @@ export function QaPage() {
   const [messages, setMessages] = useState<LocalMessage[]>([])
   const [question, setQuestion] = useState('')
   const [streaming, setStreaming] = useState(false)
+  const [qaStage, setQaStage] = useState('')
   const [loading, setLoading] = useState(true)
   const [preview, setPreview] = useState<{ title: string; content: string } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -136,6 +137,7 @@ export function QaPage() {
     if (!trimmed || streaming || selectedKbIds.length === 0) return
     setQuestion('')
     setStreaming(true)
+    setQaStage('正在检索知识库…')
     resetStream()
     lastQuestionRef.current = trimmed
     lastRunIdRef.current = null
@@ -152,7 +154,11 @@ export function QaPage() {
           case 'run.started':
             setActiveConversationId(event.data.conversationId)
             break
+          case 'retrieval.completed':
+            setQaStage(`已检索到 ${event.data.hitCount} 条证据，正在生成回答…`)
+            break
           case 'answer.delta':
+            setQaStage('')
             appendStreamText(event.data.text)
             break
           case 'citation.available':
@@ -160,11 +166,13 @@ export function QaPage() {
             break
           case 'answer.refused':
             // 拒答发生在 delta 之前：丢弃空的 provisional 并显示拒答（设计 §7）
+            setQaStage('')
             resetStream()
             setMessages((current) => [...current, { id: `system-${Date.now()}`, role: 'SYSTEM', content: event.data.message }])
             break
           case 'run.failed':
             // 引用终检失败/模型故障：丢弃 provisional 文本，显示错误（设计 D9）
+            setQaStage('')
             resetStream()
             setMessages((current) => [...current, { id: `error-${Date.now()}`, role: 'ERROR', content: event.data.message }])
             break
@@ -185,6 +193,7 @@ export function QaPage() {
       }
     } finally {
       setStreaming(false)
+      setQaStage('')
       resetStream()
       const latest = await qaApi.conversations()
       setConversations(latest)
@@ -297,6 +306,12 @@ export function QaPage() {
                 onFeedback={message.role === 'ASSISTANT' && message.runId ? (rating) => handleFeedback(message, rating) : undefined}
               />
             ))}
+            {streaming && streamText === '' && qaStage !== '' && (
+              <div className="qa-generating" role="status" aria-live="polite">
+                <span className="qa-generating-dots"><i /><i /><i /></span>
+                <span>{qaStage}</span>
+              </div>
+            )}
             {streaming && streamText !== '' && (
               <ChatMessage
                 role="ASSISTANT"
