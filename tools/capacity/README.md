@@ -99,10 +99,112 @@ java -cp target/veridex-capacity-tools-0.1.0.jar io.veridex.capacity.ReindexBenc
 
 输出 `reindex_seconds` 与 `os_count` 对账。
 
-## k6 压测
+## k6 压测（Task 7）
 
-Task 7 补充（另见 Phase 5-e 计划）。基准负载建议：
-`/api/qa/ask`（SSE 问答）与检索类接口，数据面使用上面生成的 1M chunk 知识库。
+在线问答负载脚本 `k6/qa-load.js` + 梯度矩阵 `k6/run-matrix.sh`
+（另见 Phase 5-e 计划）。负载打在 `/api/qa/ask`（SSE 问答，spec §4.5）：
+普通 `http.post` 会读完整 SSE 流（服务端 complete 后关闭连接），全链路时延即
+`http_req_duration`；首 token 时延从 Prometheus `veridex.generation.first_token` 查询。
+
+### k6 安装（二选一）
+
+```bash
+brew install k6                                    # macOS
+# 或 Docker（不装 k6 本体）：
+docker run --rm -v "$PWD:/work" -w /work grafana/k6 run /work/tools/capacity/k6/qa-load.js -e ...
+```
+
+`run-matrix.sh` 另需 `curl` 与 `python3`（macOS 自带；用于 PromQL 结果判空与 CSRF 解析）。
+Docker 方式跑矩阵时需把仓库挂载进容器并调整 `k6`/`BASE_URL`（容器内访问宿主机服务用
+`host.docker.internal`）。
+
+### 前置
+
+1. compose 栈已起（backend/web/prometheus 等），且 SeedGenerator 数据在位
+   （1K 自校验：`--kbs 2 --docs-per-kb 5 --chunks-per-doc 100`，共 2×500 chunk）。
+2. 拿 KB id：`SELECT id FROM knowledge_base WHERE slug LIKE 'capacity-%';`
+   （或见 SeedGenerator 输出）。1M 全量压测在 Task 8 用 1M 数据执行，脚本与
+   1K 冒烟共用，无需改动。
+
+### 冒烟（1 VU × 30s）
+
+```bash
+cd tools/capacity
+k6 run k6/qa-load.js -e VUS=1 -e DURATION=30s -e KB_IDS=<kb1>,<kb2>
+```
+
+预期：`http_req_failed`=0、`sse ok` / `answer delivered` 全过。
+
+### 梯度矩阵
+
+```bash
+cd tools/capacity
+# deterministic（默认）× 5/20/50 VU，每档 5m，结果落 results/<时间戳>/
+KB_IDS=<kb1>,<kb2> k6/run-matrix.sh
+
+# ollama 曲线：backend 需以 VERIDEX_CHAT_PROVIDER=ollama 重启后再跑（环境变量经脚本透传命名）
+VERIDEX_CHAT_PROVIDER=ollama KB_IDS=<kb1>,<kb2> k6/run-matrix.sh
+
+# 评测干扰组（WITH_EVAL=1 时在 50 VU 档后台并发触发一次评测运行）
+WITH_EVAL=1 \
+  EVAL_DATASET_ID=ce263b98-7994-4e0f-bfd8-1c1fb243144a \
+  EVAL_PROFILE_ID=ae61c1aa-b747-4864-8136-f5d14a835938 \
+  KB_IDS=<kb1>,<kb2> k6/run-matrix.sh
+```
+
+脚本环境变量：
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `KB_IDS` | 必填 | 逗号分隔的 knowledge base id |
+| `VERIDEX_CHAT_PROVIDER` | `deterministic` | 曲线名（透传进输出文件名；backend 需以同名 env 重启） |
+| `BASE_URL` | `http://127.0.0.1:8090` | web 代理地址 |
+| `PROM_URL` | `http://localhost:9090` | Prometheus 直连地址 |
+| `DURATION` | `5m` | 每档稳态时长 |
+| `VUS_LIST` | `5 20 50` | 梯度档位（验证可覆盖 `1`） |
+| `EVAL_VUS` | `50` | 干扰组 VU 档 |
+| `WITH_EVAL` | `0` | `1` 时跑评测干扰组 |
+| `EVAL_DATASET_ID` / `EVAL_PROFILE_ID` | 空 | 评测 dataset/配置档（PG 预置，见下） |
+| `EVAL_DATASET_VERSION_NO` / `EVAL_PROFILE_VERSION_NO` | `1` | 评测版本号 |
+
+输出（`tools/capacity/results/<时间戳>/`，不提交 git）：
+
+- `${PROVIDER}-vus${n}.json`：k6 `--summary-export`（P50/P95/P99 全链路、吞吐、错误率）
+- `${PROVIDER}-vus${n}-first-token.json`：first_token P99（或退化 max，见下）
+- `${PROVIDER}-vus${n}-first-token-mean.json`：first_token 均值
+- `${PROVIDER}-vus50-with-eval.json` / `eval-run.json`：干扰组结果与评测运行回执
+
+干扰组对比：同 VU 档（50 VU）有/无评测的 P99 漂移。
+
+### 评测触发端点（实测核实）
+
+- 端点：`POST /api/evaluation/runs`（`evaluation/api` 的 `EvaluationRunController`）
+- 鉴权：需 admin 会话 + CSRF（`X-XSRF-TOKEN` + 登录 cookie jar）——不能用空 cookie jar
+  （brief 草案的 `-b <(echo)` 会 401）；脚本已改为 curl 登录 jar + CSRF 后触发。
+- 请求体（`StartRunRequest`，非草案的 `{"concurrency":1}`）：
+
+```json
+{"datasetId":"<uuid>","datasetVersionNo":1,"profileId":"<uuid>","profileVersionNo":1,
+ "knowledgeBaseIds":["<kb1>","<kb2>"]}
+```
+
+- dataset/配置档前置：PG 需预置（Phase 3 已有：
+  dataset `ce263b98-7994-4e0f-bfd8-1c1fb243144a`「技术书籍问答评测集」v1/v2/v3、
+  profile `ae61c1aa-b747-4864-8136-f5d14a835938`「检索基线」v1）；运行在请求线程内同步执行。
+- 若未预置 dataset：脚本打印 WARN 并跳过干扰组（干扰组实际执行留给 Task 8 的 1M 全量压测）。
+
+### first_token PromQL（实测调整）
+
+`veridex.generation.first_token` 是 Micrometer **Timer**（无 SLO bucket），Prometheus
+只暴露 `veridex_generation_first_token_seconds_{count,sum,max}`，`_bucket` 系列不存在——
+brief 草案的 `veridex_generation_first_token_bucket` 查询会返回空。脚本行为：
+
+1. 先试 `histogram_quantile(0.99, sum(rate(veridex_generation_first_token_seconds_bucket[5m])) by (le))`
+   （backend 未来配 bucket 系列后自动生效）；
+2. 为空则 WARN 并退化为 `max_over_time(veridex_generation_first_token_seconds_max[5m])`
+   作为尾部代理；
+3. 另落均值 `sum(rate(..._sum[5m]))/sum(rate(..._count[5m]))`。
+   若 Task 8 需要真 P99，需给 backend 的 Timer 加 `publishPercentileHistogram`/SLO bucket。
 
 ## 结果落盘位置
 
