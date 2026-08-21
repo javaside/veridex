@@ -108,6 +108,8 @@ services:
     image: veridex-backend:0.1.0
     environment:
       VERIDEX_ENVIRONMENT: local
+      # 本地默认 8088（application.yml）；容器内保持 8080 与 nginx upstream 契约一致
+      VERIDEX_PORT: "8080"
       # 容量压测可经 .env 覆盖（VERIDEX_RATE_LIMIT_PER_MINUTE）
       VERIDEX_RATE_LIMIT_PER_MINUTE: ${VERIDEX_RATE_LIMIT_PER_MINUTE:-600}
       # reindex profile 透传：restore.sh 用 compose run -e SPRING_PROFILES_ACTIVE=reindex

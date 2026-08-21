@@ -1,4 +1,7 @@
 server:
+  # 不用默认 8080：本机多个系统/容器默认占用它（此前 sub2api 抢 IPv4:8080 导致登录失败）。
+  # 本地开发用 8088，可用 VERIDEX_PORT 覆盖；compose 内部仍走 backend:8080（见 compose.yml），不受影响。
+  port: ${VERIDEX_PORT:8088}
   servlet:
     session:
       cookie:

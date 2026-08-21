@@ -13,8 +13,8 @@ export default defineConfig({
     // 后端只能走 IPv6，前端代理与浏览器直连随之出现间歇性失败）。
     host: '::',
     proxy: {
-      '/api': 'http://localhost:8080',
-      '/actuator': 'http://localhost:8080',
+      '/api': 'http://localhost:8088',
+      '/actuator': 'http://localhost:8088',
     },
   },
 })

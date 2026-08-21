@@ -63,6 +63,8 @@ spec:
             - configMapRef:
                 name: {{ include "veridex.fullname" . }}-backend-config
           env:
+            - name: VERIDEX_PORT
+              value: "8080"
             - name: VERIDEX_DB_USERNAME
               valueFrom: { secretKeyRef: { name: {{ .Values.backend.existingSecret }}, key: db-username } }
             - name: VERIDEX_DB_PASSWORD
