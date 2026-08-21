@@ -128,7 +128,7 @@ npm --prefix web run dev
 
 ## 许可证
 
-Copyright 2026 zxh。本项目以 [Apache License 2.0](LICENSE) 开源（见 [`LICENSE`](LICENSE)、[`NOTICE`](NOTICE)）。
+Copyright 2026 Xinghua Zhou。本项目以 [Apache License 2.0](LICENSE) 开源（见 [`LICENSE`](LICENSE)、[`NOTICE`](NOTICE)）。
 
 选它的理由：与所依赖的 Spring Boot / Spring AI / Spring Modulith 全栈一致（均 Apache 2.0），并附带显式专利授权。所依赖的第三方组件（后端 Spring 生态为 Apache 2.0、PostgreSQL JDBC 为 BSD 2-Clause，前端 React / React Router 等为 MIT）均为宽松许可，各自保留其原始许可，本项目不对其再许可；完整清单见 [`NOTICE`](NOTICE)。
 
