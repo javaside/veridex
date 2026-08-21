@@ -21,12 +21,12 @@ public class ReindexRunner implements ApplicationRunner, ExitCodeGenerator {
     private static final Logger log = LoggerFactory.getLogger(ReindexRunner.class);
 
     private final KnowledgeBaseQuery knowledgeBases;
-    private final KnowledgeBasePublishService publisher;
+    private final PublishCoordinator coordinator;
     private volatile int exitCode = 0;
 
-    public ReindexRunner(KnowledgeBaseQuery knowledgeBases, KnowledgeBasePublishService publisher) {
+    public ReindexRunner(KnowledgeBaseQuery knowledgeBases, PublishCoordinator coordinator) {
         this.knowledgeBases = knowledgeBases;
-        this.publisher = publisher;
+        this.coordinator = coordinator;
     }
 
     @Override
@@ -35,7 +35,7 @@ public class ReindexRunner implements ApplicationRunner, ExitCodeGenerator {
         int failed = 0;
         for (var kbId : knowledgeBases.findAllIds()) {
             try {
-                publisher.publish(kbId);
+                coordinator.publishAndWait(kbId);
                 ok++;
                 log.info("reindex: kb={} published", kbId);
             } catch (RuntimeException e) {

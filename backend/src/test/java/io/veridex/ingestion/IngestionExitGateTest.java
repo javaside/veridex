@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.veridex.indexing.api.ChunkRecord;
 import io.veridex.indexing.api.IndexReleaseManager;
-import io.veridex.indexing.application.KnowledgeBasePublishService;
+import io.veridex.indexing.application.PublishCoordinator;
 import io.veridex.indexing.application.SearchIndexGateway;
 import io.veridex.indexing.domain.IndexReleaseRepository;
 import io.veridex.knowledge.api.ObjectStorage;
@@ -41,7 +41,7 @@ class IngestionExitGateTest extends PostgresIntegrationTest {
     @Autowired SearchIndexGateway gateway;
     @Autowired IndexReleaseManager releaseManager;
     @Autowired IndexReleaseRepository releaseRepository;
-    @Autowired KnowledgeBasePublishService publishService;
+    @Autowired PublishCoordinator publishCoordinator;
 
     private static final UUID ACTOR = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
@@ -67,7 +67,7 @@ class IngestionExitGateTest extends PostgresIntegrationTest {
         Uploaded v1 = uploadAndPut("a.md", "# 第一版\n\n稳定内容");
         publishMessage(v1);
         awaitReady(v1.version().getId());
-        publishService.publish(v1.kbId());
+        publishCoordinator.publishAndWait(v1.kbId());
 
         // 同一知识库上传 b.md：MinIO 中不存在该对象 → worker storage.get 抛异常 → markFailed + DLQ
         Uploaded v2 = uploadVersion("b.md", v1.kbId());
@@ -75,7 +75,7 @@ class IngestionExitGateTest extends PostgresIntegrationTest {
         awaitStatus(v2.version().getId(), DocumentVersionStatus.FAILED);
 
         // 再次手动发布：失败版本被排除（excludedCount=1），新快照不含 v2
-        var result = publishService.publish(v1.kbId());
+        var result = publishCoordinator.publishAndWait(v1.kbId());
         assertThat(result.excludedCount()).isEqualTo(1);
 
         String alias = "veridex-" + v1.kbId() + "-active";
@@ -88,7 +88,7 @@ class IngestionExitGateTest extends PostgresIntegrationTest {
         Uploaded u = uploadAndPut("off.md", "# 离线\n\n敏感内容");
         publishMessage(u);
         awaitReady(u.version().getId());
-        var published = publishService.publish(u.kbId());
+        var published = publishCoordinator.publishAndWait(u.kbId());
 
         String alias = "veridex-" + u.kbId() + "-active";
         assertThat(gateway.findChunksByDocumentVersion(alias, u.version().getId())).isNotEmpty();
@@ -104,7 +104,7 @@ class IngestionExitGateTest extends PostgresIntegrationTest {
         Uploaded u = uploadAndPut("off.md", "# 离线\n\n敏感内容");
         publishMessage(u);
         awaitReady(u.version().getId());
-        var published = publishService.publish(u.kbId());
+        var published = publishCoordinator.publishAndWait(u.kbId());
 
         String alias = "veridex-" + u.kbId() + "-active";
         releaseManager.offline(u.kbId(), published.release().releaseId());

@@ -15,6 +15,7 @@ export function KnowledgePage() {
   const [creating, setCreating] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [publishing, setPublishing] = useState(false)
+  const [activePublish, setActivePublish] = useState<{ kbId: string; releaseId: string } | null>(null)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [highlightReleaseId, setHighlightReleaseId] = useState<string | null>(null)
   const [lastUploaded, setLastUploaded] = useState<{ documentId: string; versionId: string } | null>(null)
@@ -66,16 +67,48 @@ export function KnowledgePage() {
     setPublishing(true)
     setToast(null)
     try {
-      const result = await knowledgeApi.publish(selected.id)
-      setToast({ type: 'success', message: result.excludedCount > 0 ? `本次发布未包含 ${result.excludedCount} 个文档` : '已发布当前知识库' })
-      setHighlightReleaseId(result.release.releaseId)
+      // 异步发布：立即拿到 PUBLISHING 草稿，真正的索引在后台执行，由下方 effect 轮询完成。
+      const release = await knowledgeApi.publish(selected.id)
+      setActivePublish({ kbId: selected.id, releaseId: release.releaseId })
+      setHighlightReleaseId(null)
       setRefreshKey((key) => key + 1)
+      setToast({ type: 'success', message: '已开始发布，正在后台构建索引…' })
     } catch (caught) {
       setToast({ type: 'error', message: caught instanceof Error ? caught.message : '发布失败' })
     } finally {
       setPublishing(false)
     }
   }
+
+  // 轮询异步发布结果：直到目标 release 变为 PUBLISHED（成功）或从列表消失（失败）。
+  useEffect(() => {
+    if (!activePublish) return
+    const { kbId, releaseId } = activePublish
+    let active = true
+    const timer = setInterval(async () => {
+      try {
+        const releases = await knowledgeApi.releases(kbId)
+        if (!active) return
+        const release = releases.find((r) => r.releaseId === releaseId)
+        if (release?.status === 'PUBLISHED') {
+          clearInterval(timer)
+          setActivePublish(null)
+          setHighlightReleaseId(releaseId)
+          setToast({ type: 'success', message: '发布完成' })
+          setRefreshKey((key) => key + 1)
+        } else if (!release) {
+          // 草稿已被丢弃（后台发布失败）
+          clearInterval(timer)
+          setActivePublish(null)
+          setToast({ type: 'error', message: '发布失败，请重试' })
+          setRefreshKey((key) => key + 1)
+        }
+      } catch {
+        // 网络抖动：静默，等待下一次轮询
+      }
+    }, 2000)
+    return () => { active = false; clearInterval(timer) }
+  }, [activePublish])
 
   return (
     <section className="workspace-page knowledge-page">

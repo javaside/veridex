@@ -69,6 +69,8 @@ public class IndexRelease {
     public Instant getCreatedAt() { return createdAt; }
     public Instant getPublishedAt() { return publishedAt; }
 
+    public void markPublishing() { this.status = IndexReleaseStatus.PUBLISHING; }
+
     public void publish() {
         this.status = IndexReleaseStatus.PUBLISHED;
         this.publishedAt = Instant.now();

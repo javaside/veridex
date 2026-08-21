@@ -130,7 +130,8 @@ test('publishes the knowledge base and shows the active release', async () => {
     if (url.endsWith('/documents')) return json([])
     if (url.endsWith('/releases/publish') && init?.method === 'POST') {
       published = true
-      return json({ release: { releaseId: 'release-1', versionNo: 1, status: 'PUBLISHED', indexName: 'veridex-kb-1-1', aliasName: 'veridex-kb-1', isActive: true, documentCount: 2, chunkCount: 10 }, excludedCount: 0 })
+      // 异步发布：POST 立即返回 PUBLISHING 草稿
+      return json({ releaseId: 'release-1', versionNo: 1, status: 'PUBLISHING', indexName: 'veridex-kb-1-1', aliasName: 'veridex-kb-1', isActive: false, documentCount: 0, chunkCount: 0 })
     }
     if (url.endsWith('/releases')) {
       return json(published ? [{ releaseId: 'release-1', versionNo: 1, status: 'PUBLISHED', indexName: 'veridex-kb-1-1', aliasName: 'veridex-kb-1', isActive: true, documentCount: 2, chunkCount: 10 }] : [])
@@ -144,19 +145,23 @@ test('publishes the knowledge base and shows the active release', async () => {
   const publishButton = await screen.findByRole('button', { name: '发布' })
   fireEvent.click(publishButton)
 
-  expect(await screen.findByRole('status')).toHaveTextContent('已发布当前知识库')
-  expect(await screen.findByText('当前检索')).toBeInTheDocument()
+  expect(await screen.findByText('已开始发布，正在后台构建索引…')).toBeInTheDocument()
+  // 轮询到 PUBLISHED 后提示完成
+  expect(await screen.findByText('发布完成', {}, { timeout: 3000 })).toBeInTheDocument()
+  expect(screen.getByText('当前检索')).toBeInTheDocument()
 })
 
-test('shows excluded document notice after publish', async () => {
+test('reports publish failure when the publishing draft disappears', async () => {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } }))
     if (url === '/api/knowledge-bases') return json([{ id: 'kb-1', name: '员工知识', description: null, slug: 'employee' }])
     if (url.endsWith('/documents')) return json([])
     if (url.endsWith('/releases/publish') && init?.method === 'POST') {
-      return json({ release: { releaseId: 'release-1', versionNo: 1, status: 'PUBLISHED', indexName: 'veridex-kb-1-1', aliasName: 'veridex-kb-1', isActive: true, documentCount: 1, chunkCount: 5 }, excludedCount: 2 })
+      return json({ releaseId: 'release-1', versionNo: 1, status: 'PUBLISHING', indexName: 'veridex-kb-1-1', aliasName: 'veridex-kb-1', isActive: false, documentCount: 0, chunkCount: 0 })
     }
+    // 后台发布失败后草稿被丢弃 → 列表始终为空
+    if (url.endsWith('/releases')) return json([])
     return json([])
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -165,5 +170,6 @@ test('shows excluded document notice after publish', async () => {
 
   fireEvent.click(await screen.findByRole('button', { name: '发布' }))
 
-  expect(await screen.findByRole('status')).toHaveTextContent('本次发布未包含 2 个文档')
+  expect(await screen.findByText('已开始发布，正在后台构建索引…')).toBeInTheDocument()
+  expect(await screen.findByText('发布失败，请重试', {}, { timeout: 3000 })).toBeInTheDocument()
 })

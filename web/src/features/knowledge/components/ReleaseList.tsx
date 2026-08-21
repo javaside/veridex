@@ -28,6 +28,7 @@ export function ReleaseList({ kbId, releases, loading, error, onChanged, onRetry
   }
 
   const statusLabel = (release: Release) => {
+    if (release.status === 'PUBLISHING') return '发布中'
     if (release.isActive) return '当前检索'
     if (release.status === 'PUBLISHED') return '历史版本'
     return '已下架'
@@ -44,8 +45,9 @@ export function ReleaseList({ kbId, releases, loading, error, onChanged, onRetry
       {!loading && !error && releases.length > 0 && !hasActive && <div className="state-block compact"><h4>当前无检索版本</h4><p>点击「发布」将当前知识库重新上线为检索快照。</p></div>}
       {!loading && !error && releases.length > 0 && <div className="release-list">{releases.map((release) => {
         const pending = pendingId === release.releaseId
+        const isPublishing = release.status === 'PUBLISHING'
         const rowClass = ['release-row', release.isActive ? 'active' : '', release.releaseId === highlightReleaseId ? 'flash' : ''].filter(Boolean).join(' ')
-        return <article className={rowClass} key={release.releaseId}><div className="release-version"><strong>v{release.versionNo}</strong><StatusBadge status={release.status} /></div><code>{release.indexName}</code><div className="release-summary"><small>{statusLabel(release)}</small><small>{release.documentCount} 份文档 / {release.chunkCount} chunks</small></div><div className="row-actions">{release.isActive ? <button className="text-button" disabled={pending} onClick={() => void act(release, 'offline')}><CloudSlash size={16} />下架</button> : <button className="text-button" disabled={pending} onClick={() => void act(release, 'make-current')}><ArrowsClockwise size={16} />设为当前</button>}<button className="text-button danger" aria-label={`删除发布 v${release.versionNo}`} disabled={pending || release.isActive} title={release.isActive ? '当前检索版本，需先下架' : undefined} onClick={() => setConfirmingDelete(release)}><Trash size={16} />删除</button></div>{rowError[release.releaseId] && <p className="row-error" role="alert">{rowError[release.releaseId]}</p>}</article>
+        return <article className={rowClass} key={release.releaseId}><div className="release-version"><strong>v{release.versionNo}</strong><StatusBadge status={release.status} /></div><code>{release.indexName}</code><div className="release-summary"><small>{statusLabel(release)}</small><small>{release.documentCount} 份文档 / {release.chunkCount} chunks</small></div><div className="row-actions">{release.isActive ? <button className="text-button" disabled={pending} onClick={() => void act(release, 'offline')}><CloudSlash size={16} />下架</button> : <button className="text-button" disabled={pending || isPublishing} onClick={() => void act(release, 'make-current')}><ArrowsClockwise size={16} />设为当前</button>}<button className="text-button danger" aria-label={`删除发布 v${release.versionNo}`} disabled={pending || release.isActive || isPublishing} title={release.isActive ? '当前检索版本，需先下架' : isPublishing ? '发布中，不可操作' : undefined} onClick={() => setConfirmingDelete(release)}><Trash size={16} />删除</button></div>{rowError[release.releaseId] && <p className="row-error" role="alert">{rowError[release.releaseId]}</p>}</article>
       })}</div>}
       <ConfirmDialog
         open={confirmingDelete !== null}

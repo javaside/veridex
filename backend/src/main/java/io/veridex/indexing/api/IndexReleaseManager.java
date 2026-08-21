@@ -11,6 +11,8 @@ public interface IndexReleaseManager {
 
     DraftRelease createDraft(UUID knowledgeBaseId, String aliasName);
 
+    void markPublishing(UUID releaseId);
+
     void prepare(UUID releaseId);
 
     void publish(UUID releaseId);

@@ -25,6 +25,17 @@ public class OpenSearchIndexGateway implements SearchIndexGateway {
 
     private static final int BULK_BATCH = 50;
 
+    // 单个 Ollama embed 调用按「字符预算」分批：qwen3-embedding 的上下文窗口是 32768 token，
+    // 一次塞太多 chunk（token 超限）会让 llama-server 在处理 /v1/embeddings 时连接 EOF → Ollama 400。
+    // 用字符数作为 token 数的上界（token 数 ≤ 字符数），并留足余量，保证单次调用远低于上下文窗口。
+    private static final int MAX_EMBED_CHARS_PER_BATCH = 6000;
+
+    // Ollama 的 llama-server（qwen3-embedding MLX 后端）处理 >2048 token 的 chunk 时会间歇性崩溃，
+    // Ollama 随后重启 llama-server（约 1-2s）。对单次 embed 调用做有限重试 + 短延迟，
+    // 等 llama-server 重启完成后重试通常成功——这是对底层模型服务抖动的兜底，而非掩盖真实失败。
+    private static final int MAX_EMBED_ATTEMPTS = 3;
+    private static final long EMBED_RETRY_DELAY_MS = 2000;
+
     private final OpenSearchClient client;
     private final EmbeddingModel embeddings;
 
@@ -104,13 +115,50 @@ public class OpenSearchIndexGateway implements SearchIndexGateway {
     }
 
     private List<float[]> embedBatch(List<String> texts) {
-        var response = embeddings.call(new EmbeddingRequest(texts, EmbeddingOptions.builder().build()));
-        var results = response.getResults();
-        if (results.size() != texts.size()) {
-            throw new IllegalStateException("embedding returned " + results.size()
-                    + " vectors for " + texts.size() + " chunks");
+        List<float[]> out = new ArrayList<>(texts.size());
+        for (int start = 0; start < texts.size(); ) {
+            // 按字符预算切出一份不会撑爆模型上下文的子批；首个 chunk 无条件纳入，保证超长单块也能推进。
+            int end = start;
+            int chars = 0;
+            while (end < texts.size()) {
+                int next = texts.get(end).length();
+                if (end > start && chars + next > MAX_EMBED_CHARS_PER_BATCH) {
+                    break;
+                }
+                chars += next;
+                end++;
+            }
+            List<String> slice = texts.subList(start, end);
+            var response = embedWithRetry(slice);
+            var results = response.getResults();
+            if (results.size() != slice.size()) {
+                throw new IllegalStateException("embedding returned " + results.size()
+                        + " vectors for " + slice.size() + " chunks");
+            }
+            results.stream().map(Embedding::getOutput).forEach(out::add);
+            start = end;
         }
-        return results.stream().map(Embedding::getOutput).toList();
+        return out;
+    }
+
+    private org.springframework.ai.embedding.EmbeddingResponse embedWithRetry(List<String> slice) {
+        RuntimeException last = null;
+        for (int attempt = 0; attempt < MAX_EMBED_ATTEMPTS; attempt++) {
+            try {
+                return embeddings.call(new EmbeddingRequest(slice, EmbeddingOptions.builder().build()));
+            } catch (RuntimeException e) {
+                last = e;
+                if (attempt < MAX_EMBED_ATTEMPTS - 1) {
+                    try {
+                        Thread.sleep(EMBED_RETRY_DELAY_MS);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw e;
+                    }
+                }
+            }
+        }
+        throw last;
     }
 
     @Override

@@ -48,6 +48,13 @@ public class IndexReleaseService implements IndexReleaseManager {
     }
 
     @Override
+    public void markPublishing(UUID releaseId) {
+        IndexRelease release = require(releaseId);
+        release.markPublishing();
+        releases.save(release);
+    }
+
+    @Override
     public void prepare(UUID releaseId) {
         IndexRelease release = require(releaseId);
         gateway.createIndex(release.getIndexName(), embeddingProperties.dimensions());
@@ -70,7 +77,8 @@ public class IndexReleaseService implements IndexReleaseManager {
     @Override
     public void discardDraft(UUID releaseId) {
         IndexRelease release = require(releaseId);
-        if (release.getStatus() != IndexReleaseStatus.DRAFT) {
+        if (release.getStatus() != IndexReleaseStatus.DRAFT
+                && release.getStatus() != IndexReleaseStatus.PUBLISHING) {
             return;
         }
         gateway.deleteIndex(release.getIndexName());

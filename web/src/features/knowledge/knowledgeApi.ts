@@ -71,12 +71,14 @@ export const knowledgeApi = {
     fetch(`/api/documents/${documentId}/versions/${versionId}/chunks`, { credentials: 'include' }).then((response) => json<ChunkPreview[]>(response)),
   releases: (kbId: string): Promise<Release[]> =>
     fetch(`/api/knowledge-bases/${kbId}/releases`, { credentials: 'include' }).then((response) => json<Release[]>(response)),
-  publish: (kbId: string): Promise<PublishResult> =>
+  // 发布改为异步：POST 返回 202 + PUBLISHING 状态的草稿（ReleaseView），
+  // 真正的索引在后台线程执行，前端按 releaseId 轮询 releases 直到 PUBLISHED。
+  publish: (kbId: string): Promise<Release> =>
     fetch(`/api/knowledge-bases/${kbId}/releases/publish`, {
       method: 'POST',
       credentials: 'include',
       headers: csrfHeaders(),
-    }).then((response) => json<PublishResult>(response)),
+    }).then((response) => json<Release>(response)),
   releaseAction: (kbId: string, releaseId: string, action: 'make-current' | 'offline' | 'delete'): Promise<null> =>
     fetch(`/api/knowledge-bases/${kbId}/releases/${releaseId}/${action}`, {
       method: 'POST',

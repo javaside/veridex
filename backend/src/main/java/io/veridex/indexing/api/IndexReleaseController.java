@@ -1,7 +1,7 @@
 package io.veridex.indexing.api;
 
 import io.veridex.iam.api.CurrentActor;
-import io.veridex.indexing.application.KnowledgeBasePublishService;
+import io.veridex.indexing.application.PublishCoordinator;
 import io.veridex.knowledge.api.KnowledgeBaseAuthorization;
 import java.util.List;
 import java.util.UUID;
@@ -17,14 +17,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class IndexReleaseController {
 
     private final IndexReleaseManager releases;
-    private final KnowledgeBasePublishService publishService;
+    private final PublishCoordinator publishCoordinator;
     private final KnowledgeBaseAuthorization authorization;
 
     public IndexReleaseController(IndexReleaseManager releases,
-                                  KnowledgeBasePublishService publishService,
+                                  PublishCoordinator publishCoordinator,
                                   KnowledgeBaseAuthorization authorization) {
         this.releases = releases;
-        this.publishService = publishService;
+        this.publishCoordinator = publishCoordinator;
         this.authorization = authorization;
     }
 
@@ -37,9 +37,10 @@ public class IndexReleaseController {
     }
 
     @PostMapping("/publish")
-    public ResponseEntity<PublishResult> publish(@PathVariable UUID kbId) {
+    public ResponseEntity<ReleaseView> publish(@PathVariable UUID kbId) {
         requireManage(kbId);
-        return ResponseEntity.ok(publishService.publish(kbId));
+        // 异步发布：立即返回 PUBLISHING 状态的草稿视图（202），后台线程执行索引。
+        return ResponseEntity.accepted().body(publishCoordinator.start(kbId));
     }
 
     @PostMapping("/{releaseId}/make-current")
