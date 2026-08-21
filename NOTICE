@@ -1,0 +1,44 @@
+Veridex
+Copyright 2026 Veridex Contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this project except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+See the LICENSE file in this repository for the full text.
+
+--------------------------------------------------------------------------------
+Third-party components
+
+This project builds upon and bundles the following third-party components.
+Each remains governed by its own license; this project does not relicense them.
+
+Backend (Java / Maven — see backend/pom.xml):
+
+  - Spring Boot / Spring Framework   (org.springframework.boot / org.springframework) — Apache License 2.0
+  - Spring AI                        (org.springframework.ai)                        — Apache License 2.0
+  - Spring Modulith                  (org.springframework.modulith)                  — Apache License 2.0
+  - Micrometer / OpenTelemetry       (io.micrometer / io.opentelemetry)             — Apache License 2.0
+  - springdoc-openapi                (org.springdoc)                                 — Apache License 2.0
+  - MinIO Java SDK                   (io.minio)                                      — Apache License 2.0
+  - OkHttp                           (com.squareup.okhttp3)                         — Apache License 2.0
+  - OpenSearch Java Client           (org.opensearch.client)                        — Apache License 2.0
+  - Apache HttpComponents            (org.apache.httpcomponents)                    — Apache License 2.0
+  - Apache Tika                      (org.apache.tika)                              — Apache License 2.0
+  - Flyway                           (org.flywaydb)                                  — Apache License 2.0
+  - PostgreSQL JDBC Driver           (org.postgresql)                                — BSD 2-Clause
+  - Jackson / Reactor / SLF4J / Logback and other transitive dependencies
+    — see each artifact's META-INF/ for its individual license and notices.
+
+Frontend (TypeScript / npm — see web/package.json):
+
+  - React / React DOM                 (react, react-dom)                       — MIT License
+  - React Router                      (react-router-dom)                        — MIT License
+  - Phosphor Icons                    (@phosphor-icons/react)                   — MIT License
+  - Vite / Vitest / TypeScript / ESLint and other build/dev dependencies
+    — see each package's LICENSE file for its individual license.
+
+A full machine-generated inventory can be produced on demand with the
+license-maven-plugin (goal `add-third-party` / `third-party-report`).

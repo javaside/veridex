@@ -14,13 +14,19 @@
 
 **请不要通过公开 issue 报告安全漏洞**，以免在修复前泄露可利用的细节。
 
-请使用 GitHub 的私有安全通告功能报告：
+优先使用 GitHub 的私有安全通告功能：
 
 1. 进入仓库的 **Security** 标签页
 2. 点击 **Report a vulnerability**（报告漏洞）
 3. 描述漏洞并提交
 
-这样报告会以私有形式通知维护者，我们会在修复并发布后再公开。
+也可以发邮件到 **283323279@qq.com**，标题请带 `[SECURITY]`。请尽量包含：
+
+- 受影响的组件与版本（commit hash 或版本号）
+- 复现步骤，以及触发所需的配置（**请勿在邮件里附上真实 API key**）
+- 你判断的影响面
+
+维护者会在收到报告后 7 天内回复确认。修复后会在对应版本的发布说明里致谢（若你不希望署名，请在报告里说明）。
 
 ## 报告应包含的内容
 
@@ -40,6 +46,17 @@
 3. 与报告者协调披露时间
 4. 发布修复后公开相关细节
 
+## 已知且被接受的风险（不属于漏洞）
+
+以下几点是**设计上如此、已在 README 或文档中明确披露**的，报告它们不会被当作漏洞处理：
+
+- **本地开发默认关闭 OpenSearch 安全插件**：`deploy/compose` 设置 `DISABLE_SECURITY_PLUGIN=true`，仅适合本地开发环境；生产部署必须启用 OpenSearch 安全并配置凭据。
+- **默认开发凭据**：`admin` / `kadmin` / `employee` 用户、RabbitMQ、MinIO、PostgreSQL 的默认密码都是开发默认值（见 README「服务地址与默认账号」），**禁止用于共享测试环境或生产环境**。
+- **API 限流为每副本语义**：`RateLimitFilter` 是进程内固定窗口，N 副本总限额 ≈ 限额 × N；跨副本全局限额需引入共享限流存储（当前未实现）。
+- **确定性 embedding / chat 占位实现**：`deterministic` provider 是开发/测试用的确定性哈希（无语义）与模板拼接回答，不是真实模型；生产需切换到 `deepseek`（对话）与 `ollama`（向量）。
+
+真正属于漏洞的例子：凭据被写进日志或配置文件、`${ENV_VAR}` 插值把不该暴露的变量泄漏出去、依赖链中的已知 CVE、出站访问策略被绕过（SSRF）、对象授权越权等。
+
 ## 安全最佳实践
 
 部署 Veridex 时请注意：
@@ -48,3 +65,4 @@
 - 真实模型（deepseek/ollama）的 API key 与访问凭据只通过环境变量或 Kubernetes Secret 注入，**不要提交到仓库**。
 - 生产环境务必开启 Session Cookie 的 `Secure` 标记与 `VERIDEX_ENVIRONMENT` 非 `local` 值。
 - 默认只放行最小出站目标（`VERIDEX_OUTBOUND_ALLOWED_HOSTS` / `_PORTS`），不要开放 `0.0.0.0/0`。
+- 生产环境启用 OpenSearch 安全插件，不要沿用本地开发配置。

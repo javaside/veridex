@@ -4,6 +4,9 @@
 .idea/
 *.iml
 .DS_Store
+.vscode/
+*.class
+*.log
 
 # Build outputs
 **/target/

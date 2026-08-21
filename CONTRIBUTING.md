@@ -64,8 +64,11 @@ npm --prefix web run dev
 该脚本依次执行后端 `clean verify`、前端测试、前端生产构建与 `git diff --check`。也可以分步执行：
 
 ```bash
-# 后端测试与构建
-./mvnw clean verify
+# 后端测试与构建（务必带 -pl backend：仓库是 Maven 父工程 + backend 单模块）
+./mvnw -pl backend clean verify
+
+# 单个后端测试类（-Dtest 需配 failIfNoSpecifiedTests=false，见下）
+./mvnw -pl backend test -Dtest='SomeTest' -Dsurefire.failIfNoSpecifiedTests=false
 
 # 前端测试
 npm --prefix web test
@@ -76,6 +79,10 @@ npm --prefix web run lint
 # 前端生产构建
 npm --prefix web run build
 ```
+
+后端测试命令必须带 `-pl backend`：仓库根 `pom.xml` 是父工程（`packaging=pom`），直接整仓 `./mvnw clean verify` 会聚合 `backend` 子模块，但指定单测类时若不带模块作用域，`-Dtest` 会作用于父工程并报「无匹配测试」。单类命令的 `-Dsurefire.failIfNoSpecifiedTests=false` 同样不可省：它只放宽「`-Dtest` 模式没匹配到任何测试」这一种错误，不吞断言失败、编译失败或运行时异常。
+
+后端集成测试依赖 Testcontainers（PostgreSQL / RabbitMQ / MinIO / OpenSearch），需要 Docker 正常运行。
 
 ### 代码风格
 

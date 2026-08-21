@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# 安全说明：本 workflow 的 run 里只使用 matrix 等 workflow 自身定义的可信值，
+# 不引用任何 github.event.* 的不可信输入（issue 标题、PR 描述、提交信息等），
+# 因此不存在 Actions 命令注入面。新增步骤时请保持这一约束。
+
+jobs:
+  backend:
+    name: 后端测试（Java 21）
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      # 后端集成测试依赖 Testcontainers（PostgreSQL / RabbitMQ / MinIO / OpenSearch），
+      # ubuntu-latest 自带 Docker，可直接运行。
+      - name: 后端测试与构建
+        run: ./mvnw -B -pl backend clean verify
+
+      - name: 上传测试报告（失败时）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-surefire-reports
+          path: backend/target/surefire-reports/
+          retention-days: 7
+
+  web:
+    name: 前端测试与构建（Node 22）
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 单元测试
+        run: npm test
+
+      - name: Lint
+        run: npm run lint
+
+      - name: 生产构建
+        run: npm run build

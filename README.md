@@ -1,6 +1,8 @@
 # Veridex
 
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![CI](https://github.com/javaside/veridex/actions/workflows/ci.yml/badge.svg)](https://github.com/javaside/veridex/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![Java](https://img.shields.io/badge/Java-21%2B-orange)](https://adoptium.net/)
 
 Veridex 是面向企业私有化部署的 RAG（Retrieval-Augmented Generation，检索增强生成）平台。目前项目已经完成 **Phase 4：质量评测与运营闭环**，支持创建知识库、上传文档、异步解析和分块、发布到 OpenSearch、授权员工流式问答并校验引用，以及版本化评测集、不可变 RAG 配置版本、评测运行、版本对比门禁和反馈转坏例闭环。
 
@@ -489,7 +491,9 @@ VERIDEX_EMBEDDING_DIMENSIONS=1024 \
 
 ## 许可证
 
-Copyright 2026 Veridex Contributors。本项目以 [Apache License 2.0](LICENSE) 授权。
+Copyright 2026 Veridex Contributors。本项目以 [Apache License 2.0](LICENSE) 开源（见 [`LICENSE`](LICENSE)、[`NOTICE`](NOTICE)）。
+
+选它的理由：与所依赖的 Spring Boot / Spring AI / Spring Modulith 全栈一致（均 Apache 2.0），并附带显式专利授权。所依赖的第三方组件（后端 Spring 生态为 Apache 2.0、PostgreSQL JDBC 为 BSD 2-Clause，前端 React / React Router 等为 MIT）均为宽松许可，各自保留其原始许可，本项目不对其再许可；完整清单见 [`NOTICE`](NOTICE)。
 
 ## 贡献
 
