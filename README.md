@@ -101,10 +101,7 @@ npm --prefix web run dev
 |---|---|
 | 快速启动与环境 | [docs/getting-started.md](docs/getting-started.md) |
 | 配置与模型 provider | [docs/configuration.md](docs/configuration.md) |
-| 容器化部署与备份恢复 | [docs/deployment.md](docs/deployment.md) |
-| 可观测性与 Trace Body | [docs/observability.md](docs/observability.md) |
-| 常见问题排障 | [docs/troubleshooting.md](docs/troubleshooting.md) |
-| 架构与模块 | [docs/architecture.md](docs/architecture.md) |
+| 架构、部署拓扑与可观测性 | [docs/architecture.md](docs/architecture.md) |
 | 知识入库管道 | [docs/knowledge-ingestion-pipeline.md](docs/knowledge-ingestion-pipeline.md) |
 | RAG 配置参数语义 | [docs/rag-configuration-parameters.md](docs/rag-configuration-parameters.md) |
 | 容量与恢复报告 | [docs/capacity-report-2026-08.md](docs/capacity-report-2026-08.md) |
