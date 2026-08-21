@@ -46,11 +46,31 @@ docker compose -f deploy/compose/compose.yml logs -f
 
 ### 2. 启动后端
 
-在第二个终端执行：
+> ⚠️ **启动前必须先配好模型，否则问答检索无法给出真实结果。**
+>
+> - **Embedding 向量模型**：默认 `deterministic` 是 128 维无语义哈希，**不能用于真实检索**。必须切换到 `ollama`（`qwen3-embedding`，1024 维），并同步设 `VERIDEX_EMBEDDING_DIMENSIONS=1024`。
+> - **Chat 对话模型**：默认 `deepseek` 是真实模型，但**必须提供 `VERIDEX_DEEPSEEK_API_KEY`**，否则调用会失败；也可切 `ollama`。
+>
+> 两者都要显式配置，**不要用默认的 `deterministic`**。具体变量与示例见 [配置说明](configuration.md) 的「Chat 生成模型」与「Embedding 向量模型」两节。
+
+在第二个终端执行（先导出模型相关环境变量再启动）：
 
 ```bash
+# 示例：deepseek 对话 + Ollama 向量（替换为你的真实值）
+export VERIDEX_CHAT_PROVIDER=deepseek
+export VERIDEX_DEEPSEEK_API_KEY='<你的 API key>'
+export VERIDEX_EMBEDDING_PROVIDER=ollama
+export VERIDEX_EMBEDDING_DIMENSIONS=1024
+export VERIDEX_OLLAMA_BASE_URL=http://localhost:11434
+export VERIDEX_OLLAMA_EMBEDDING_MODEL=qwen3-embedding
+export VERIDEX_OUTBOUND_ALLOWED_HOSTS=api.deepseek.com,localhost
+export VERIDEX_OUTBOUND_ALLOWED_PORTS=443,11434
+export VERIDEX_OUTBOUND_ALLOW_INSECURE_HTTP=true
+
 ./mvnw -pl backend spring-boot:run
 ```
+
+启动日志会打印实际装配的 provider 与模型（`veridex.chat.provider=...`、`veridex.embedding.provider=...`），启动后请先核对这两行，确认配的是真实模型而非 `deterministic`。
 
 后端业务 API 默认监听 `http://localhost:8080`，Actuator 管理端点独立监听 `http://127.0.0.1:8081`（仅 `health`、`info`、`prometheus`）。Flyway 会在启动时自动创建或校验数据库结构。
 

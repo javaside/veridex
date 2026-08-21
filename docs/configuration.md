@@ -72,6 +72,8 @@ VERIDEX_DB_PASSWORD='replace-me' \
 
 ## Chat 生成模型（真实流式问答）
 
+> ⚠️ **运行时/部署必须配好 Chat 模型，不要依赖默认值。** 默认 `deepseek` 是真实模型，但**必须提供 `VERIDEX_DEEPSEEK_API_KEY`**，否则每次问答都会失败；`deterministic` 只是测试占位（模板拼接，无真实语义）。两者都别在没配 key 的情况下当「能用」来跑。
+
 对话模型由 `VERIDEX_CHAT_PROVIDER` 决定，启动时后端会打印实际装配的 provider 与模型（例如 `veridex.chat.provider=deepseek (model=..., baseUrl=...)`）。
 
 - 默认 `deepseek`（模型 `deepseek-v4-flash`）为**真实流式模型**，需提供 `VERIDEX_DEEPSEEK_API_KEY`；
@@ -94,6 +96,8 @@ VERIDEX_OUTBOUND_ALLOW_INSECURE_HTTP=true \
 - 真实 Ollama 显式验收入口：`./scripts/verify-ollama-chat.sh`（不进默认 CI）。
 
 ## Embedding 向量模型
+
+> ⚠️ **运行时/部署必须配好向量模型，默认 `deterministic` 没有用。** 它是 128 维无语义哈希，向量检索路基本失效，只能勉强靠 BM25 兜底。生产/真实问答必须切换到 `ollama`（`qwen3-embedding`，1024 维），并同步设 `VERIDEX_EMBEDDING_DIMENSIONS=1024`。
 
 向量模型由 `VERIDEX_EMBEDDING_PROVIDER` 决定，启动时后端会打印实际装配的 provider、模型与 baseUrl（例如 `veridex.embedding.provider=ollama (model=..., baseUrl=...)`）。
 

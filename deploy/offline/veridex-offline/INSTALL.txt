@@ -43,15 +43,21 @@ PostgreSQL 17 / RabbitMQ 4 / MinIO / OpenSearch 3.2 /（可选）OTel Collector�
      kubectl -n veridex port-forward svc/veridex-veridex-web 8080:80
      VERIDEX_WEB_URL=http://127.0.0.1:8080 deploy/compose/smoke.sh
 
-Ollama Chat（可选）
-------------------
-- Veridex 默认 deterministic（测试占位模型，无外部依赖）；首个真实 Chat provider 为 Ollama。
-- Ollama 与模型权重（qwen3:8b 或自定义）由安装者预置，不打入本交付包。
-- 启用：values 中设 VERIDEX_CHAT_PROVIDER=ollama、VERIDEX_OLLAMA_BASE_URL、
-  VERIDEX_OLLAMA_CHAT_MODEL；并在 networkPolicy.externalEgress 显式放行 Ollama 的
-  selector/CIDR + 11434 端口（chart 默认不开放 Ollama 出站）。
+模型配置（必读）
+----------------
+- ⚠️ **真实问答/检索必须配好 Chat 与 Embedding 模型，不要用默认 deterministic。**
+  默认 deterministic 是 128 维无语义哈希 / 模板占位，跑不出真实结果，只用于无外部依赖的离线冒烟。
+- Chat 对话模型（二选一）：
+  * deepseek：values 设 VERIDEX_CHAT_PROVIDER=deepseek + VERIDEX_DEEPSEEK_API_KEY；
+  * Ollama：VERIDEX_CHAT_PROVIDER=ollama + VERIDEX_OLLAMA_BASE_URL + VERIDEX_OLLAMA_CHAT_MODEL。
+- Embedding 向量模型（**必须**切 Ollama，否则向量检索基本失效）：
+  VERIDEX_EMBEDDING_PROVIDER=ollama + VERIDEX_EMBEDDING_DIMENSIONS=1024 + VERIDEX_OLLAMA_EMBEDDING_MODEL=qwen3-embedding。
+- Ollama 与模型权重（qwen3:8b / qwen3-embedding 或自定义）由安装者预置，不打入本交付包。
+- 启用 Ollama 时：在 networkPolicy.externalEgress 显式放行 Ollama 的 selector/CIDR + 11434 端口
+  （chart 默认不开放 Ollama 出站）。
 - Ollama 经 HTTP 时必须同时设 VERIDEX_OUTBOUND_ALLOWED_HOSTS / VERIDEX_OUTBOUND_ALLOWED_PORTS
   / VERIDEX_OUTBOUND_ALLOW_INSECURE_HTTP=true（后端出站策略 fail-fast）。
+- deepseek 时放行 api.deepseek.com:443；出站策略同样需在 externalEgress 显式声明。
 
 排障：Secret 缺 key 或 backend 安全配置非法时 Pod 不 ready，日志只输出固定配置错误码；
 Secret 值原地变更后执行 kubectl -n veridex rollout restart deploy/veridex-veridex-backend。

@@ -86,7 +86,18 @@ Veridex 是面向企业私有化部署的 RAG（Retrieval-Augmented Generation�
 └── mvnw                      Maven Wrapper
 ```
 
+## 容器化与部署
+
+- **Compose 完整应用栈**：`deploy/compose/compose.yml`（基础设施 + backend + web），冒烟验收 `deploy/compose/smoke.sh`。
+- **原生 Helm chart**：`deploy/helm/veridex`（双端口 Service、existing Secret、Ingress/PDB/HPA/NetworkPolicy/ServiceMonitor）。
+- **部署门禁**：`scripts/verify-deployment.sh`（镜像、Compose 栈、Helm lint/template 矩阵、kind 集群验收、离线交付包）。
+- **受限网络离线交付**：`deploy/offline/` 生成离线包，安装步骤见 `deploy/offline/veridex-offline/INSTALL.txt`。
+
+> ⚠️ 无论哪种部署方式，都要先把 Chat 与 Embedding 模型配成真实 provider，**不要用默认 `deterministic`**（详见 [配置说明](docs/configuration.md)）。
+
 ## 快速开始
+
+> ⚠️ **必须先配好模型，否则问答检索跑不出真实结果。** 默认的 `deterministic` embedding 是 128 维无语义哈希，向量检索基本没用；`deepseek` 对话模型必须提供 `VERIDEX_DEEPSEEK_API_KEY`。启动前请按 [配置说明](docs/configuration.md) 把 `VERIDEX_CHAT_PROVIDER` 与 `VERIDEX_EMBEDDING_PROVIDER` 都配成真实模型，**不要用默认值**。
 
 启动基础设施、后端和前端三个部分：
 
@@ -94,7 +105,7 @@ Veridex 是面向企业私有化部署的 RAG（Retrieval-Augmented Generation�
 # 1. 启动基础设施（PostgreSQL / RabbitMQ / MinIO / OpenSearch）
 docker compose -f deploy/compose/compose.yml up -d
 
-# 2. 启动后端
+# 2. 启动后端（已配好 chat/embedding 模型后）
 ./mvnw -pl backend spring-boot:run
 
 # 3. 启动前端（另开终端）
