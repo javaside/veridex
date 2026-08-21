@@ -78,8 +78,11 @@ veridex:
       timeout: ${VERIDEX_PARSER_TIMEOUT:30s}
       temp-root: ${VERIDEX_PARSER_TEMP_ROOT:/tmp/veridex-parser}
     outbound:
-      allowed-hosts: ${VERIDEX_OUTBOUND_ALLOWED_HOSTS:}
-      allowed-ports: ${VERIDEX_OUTBOUND_ALLOWED_PORTS:}
+      # 默认 provider 为 deepseek：默认放行官方端点（https:443），保证零环境变量也能启动。
+      # 仍保持 fail-closed 语义——只放行声明的最小集合；ollama（localhost:11434 http）
+      # 等其它出站目标需显式经 VERIDEX_OUTBOUND_ALLOWED_* 覆盖放行。
+      allowed-hosts: ${VERIDEX_OUTBOUND_ALLOWED_HOSTS:api.deepseek.com}
+      allowed-ports: ${VERIDEX_OUTBOUND_ALLOWED_PORTS:443}
       allow-insecure-http: ${VERIDEX_OUTBOUND_ALLOW_INSECURE_HTTP:false}
   api:
     rate-limit-per-minute: ${VERIDEX_RATE_LIMIT_PER_MINUTE:600}

@@ -26,7 +26,10 @@ public class DeepSeekChatConfiguration {
             throw new IllegalStateException("veridex.chat.deepseek.base-url is required when provider=deepseek");
         }
         if (deepseek.apiKey() == null || deepseek.apiKey().isBlank()) {
-            throw new IllegalStateException("veridex.chat.deepseek.api-key is required when provider=deepseek");
+            throw new IllegalStateException(
+                    "veridex.chat.deepseek.api-key is required when provider=deepseek. "
+                    + "Set env DEEPSEEK_API_KEY or VERIDEX_DEEPSEEK_API_KEY (IntelliJ: Run Configuration → "
+                    + "Environment variables, or export in your shell before launching).");
         }
         outboundPolicy.validate(URI.create(deepseek.baseUrl()));
         var api = DeepSeekApi.builder()

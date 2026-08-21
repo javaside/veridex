@@ -23,7 +23,8 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 
 @SpringBootTest(classes = VeridexApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = {"spring.jpa.hibernate.ddl-auto=validate", "veridex.api.rate-limit-per-minute=3"})
+        properties = {"spring.jpa.hibernate.ddl-auto=validate", "veridex.api.rate-limit-per-minute=3",
+                "veridex.chat.provider=deterministic"})
 class RateLimitIntegrationTest extends PostgresIntegrationTest {
 
     private static final UUID ADMIN = UUID.fromString("00000000-0000-0000-0000-000000000001");

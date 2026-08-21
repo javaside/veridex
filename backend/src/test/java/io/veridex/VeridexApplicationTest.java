@@ -13,7 +13,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalManagementPort;
 import org.springframework.context.annotation.Import;
 
-@SpringBootTest(webEnvironment = RANDOM_PORT)
+@SpringBootTest(webEnvironment = RANDOM_PORT, properties = "veridex.chat.provider=deterministic")
 @Import(PostgresContainerConfiguration.class)
 class VeridexApplicationTest {
 

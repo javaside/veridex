@@ -8,7 +8,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 
 @SpringBootTest(classes = VeridexApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "spring.jpa.hibernate.ddl-auto=validate")
+        properties = {"spring.jpa.hibernate.ddl-auto=validate", "veridex.chat.provider=deterministic"})
 public abstract class PostgresIntegrationTest {
 
     /**
