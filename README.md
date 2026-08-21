@@ -39,10 +39,10 @@ Veridex 是面向企业私有化部署的 RAG（Retrieval-Augmented Generation�
 ## 当前限制
 
 - 默认 `DeterministicEmbeddingModel` 为 128 维确定性哈希（无语义）；可通过 `VERIDEX_EMBEDDING_PROVIDER=ollama` 切换 Ollama `qwen3-embedding`（真实语义，1024 维；同时需设置 `VERIDEX_EMBEDDING_DIMENSIONS=1024`）。
-- 默认 `DeterministicChatModel` 为确定性占位实现（不产生真实语义回答）；`chatModel` 目前仅作为配置/评测记录字段，未接入模型路由。
+- 默认对话模型由 `VERIDEX_CHAT_PROVIDER=deepseek` 决定（模型 `deepseek-v4-flash`，也可切换 `ollama`）；`veridex.chat.provider=deterministic` 时为确定性占位实现（不产生真实语义回答，供开发/测试）。配置 Profile 的 `chatModel`/`embeddingModel` 字段目前仅作标识记录，未接入运行时模型路由（当前单一模型装配）。
 - 评测为「仅自动指标」的同步运行；judge-model 自动评判与人工 PASS / MINOR_ISSUE / FAIL 评审尚未实现。
 - 回归门禁阈值为硬编码默认值（相对退化 10%），尚未配置化。
-- 配置版本（Profile）已驱动评测运行的检索/生成参数与 prompt 模板；在线问答（`/api/qa/ask`）仍使用各自服务内的硬编码默认值，尚未切换为读取 Profile。
+- 配置版本（Profile）已同时驱动评测运行与在线问答（`/api/qa/ask`）的检索/生成参数、prompt 模板、会话历史轮数，以及入库时的分块参数；`chatModel`/`embeddingModel` 仍仅作标识记录（不做模型路由）。改 `chunking` 后，仅对之后新入库的文档生效，存量文档需重新入库才会按新参数重切。
 - PDF / DOCX 的结构识别较基础；没有 Markdown 标题时主要按文本长度分块。
 - 失败消息进入 DLQ；自动重试、退避以及 Outbox 定时恢复仍待增强。
 - `deploy/compose/compose.yml` 可启动完整应用栈（基础设施 + backend + web）：`docker compose -f deploy/compose/compose.yml up -d --build backend web`；Prometheus 从 `backend:8081` 抓取，冒烟验收执行 `deploy/compose/smoke.sh`。
@@ -263,8 +263,11 @@ Spring Boot 配置位于 `backend/src/main/resources/application.yml`。常用�
 | `VERIDEX_EMBEDDING_DIMENSIONS` | `128` |
 | `VERIDEX_OLLAMA_BASE_URL` | `http://localhost:11434`（embedding 与 chat 共用） |
 | `VERIDEX_OLLAMA_EMBEDDING_MODEL` | `qwen3-embedding` |
-| `VERIDEX_CHAT_PROVIDER` | `deterministic`（测试占位）或 `ollama`（首个真实 Chat provider） |
+| `VERIDEX_CHAT_PROVIDER` | `deepseek`（默认）或 `ollama`；`deterministic` 为测试占位 |
 | `VERIDEX_CHAT_TIMEOUT` | `60s`（一次模型生成总时限） |
+| `VERIDEX_DEEPSEEK_BASE_URL` | `https://api.deepseek.com` |
+| `VERIDEX_DEEPSEEK_API_KEY` | 空；使用 deepseek 时必填（可经 `DEEPSEEK_API_KEY` 传入） |
+| `VERIDEX_DEEPSEEK_MODEL` | `deepseek-v4-flash` |
 | `VERIDEX_OLLAMA_CHAT_MODEL` | `qwen3:8b`（可用宿主机已装模型覆盖，如 `qwen3.5:9b-mlx`） |
 | `VERIDEX_OUTBOUND_ALLOWED_HOSTS` | 空；使用真实 Ollama 时填其 host |
 | `VERIDEX_OUTBOUND_ALLOWED_PORTS` | 空；Ollama 为 `11434` |
@@ -295,9 +298,9 @@ VERIDEX_DB_PASSWORD='replace-me' \
 
 ### Chat 生成模型（真实流式问答）
 
-- 默认 `deterministic` 是**测试占位**：从证据块模板拼接回答，无外部依赖、CI/离线可重复；
-  首个真实 Chat provider 为 **Ollama**。
-- 启用真实模型（需安装者预置 Ollama 与模型权重）：
+- 默认 `deepseek`（模型 `deepseek-v4-flash`）为**真实流式模型**，需提供 `VERIDEX_DEEPSEEK_API_KEY`；
+  `deterministic` 是测试占位（从证据块模板拼接回答，无外部依赖、CI/离线可重复）。
+- 切换为本地 **Ollama**（需安装者预置 Ollama 与模型权重）：
 
 ```bash
 VERIDEX_CHAT_PROVIDER=ollama \
