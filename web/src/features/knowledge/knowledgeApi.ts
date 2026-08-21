@@ -4,6 +4,7 @@ export type KnowledgeBase = { id: string; name: string; description: string | nu
 export type DocumentSummary = { id: string; filename: string; contentType: string; sizeBytes: number }
 export type DocumentVersion = {
   id: string
+  documentId: string
   versionNo: number
   status: string
   chunkCount: number

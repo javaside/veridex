@@ -2,7 +2,7 @@ import { FolderOpen, RocketLaunch } from '@phosphor-icons/react'
 import { useCallback, useEffect, useState } from 'react'
 import { Toast } from '../../components/Toast'
 import { PageHeader } from '../../app/PageHeader'
-import { knowledgeApi, type KnowledgeBase } from './knowledgeApi'
+import { knowledgeApi, type DocumentVersion, type KnowledgeBase } from './knowledgeApi'
 import { KnowledgeBaseList } from './components/KnowledgeBaseList'
 import { UploadForm } from './components/UploadForm'
 import { VersionList } from './components/VersionList'
@@ -17,6 +17,7 @@ export function KnowledgePage() {
   const [publishing, setPublishing] = useState(false)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [highlightReleaseId, setHighlightReleaseId] = useState<string | null>(null)
+  const [lastUploaded, setLastUploaded] = useState<{ documentId: string; versionId: string } | null>(null)
 
   const loadBases = useCallback(async () => {
     setLoading(true)
@@ -85,8 +86,8 @@ export function KnowledgePage() {
           {selected ? (
             <>
               <header className="knowledge-workspace-header"><div><p className="section-kicker">当前知识库</p><h2>{selected.name}</h2><p>{selected.description || '管理该知识库中的文档、版本和索引发布。'}</p></div><div className="workspace-header-actions"><button className="primary-button" type="button" onClick={() => void publishNow()} disabled={publishing}><RocketLaunch size={18} aria-hidden="true" />{publishing ? '正在发布' : '发布'}</button></div></header>
-              <UploadForm kbId={selected.id} onUploaded={() => setRefreshKey((key) => key + 1)} onNotify={(type, message) => setToast({ type, message })} />
-              <VersionList kbId={selected.id} refreshKey={refreshKey} highlightReleaseId={highlightReleaseId} />
+              <UploadForm kbId={selected.id} onUploaded={(version: DocumentVersion) => { setLastUploaded({ documentId: version.documentId, versionId: version.id }); setRefreshKey((key) => key + 1) }} onNotify={(type, message) => setToast({ type, message })} />
+              <VersionList kbId={selected.id} refreshKey={refreshKey} highlightReleaseId={highlightReleaseId} lastUploaded={lastUploaded} />
             </>
           ) : (
             <div className="panel state-block workspace-empty"><FolderOpen size={34} aria-hidden="true" /><h2>选择一个知识库</h2><p>从左侧选择知识库，或创建第一个知识库开始上传文档。</p></div>

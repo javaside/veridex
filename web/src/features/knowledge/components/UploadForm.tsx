@@ -1,10 +1,10 @@
 import { FileArrowUp } from '@phosphor-icons/react'
 import { useRef, useState } from 'react'
-import { knowledgeApi } from '../knowledgeApi'
+import { knowledgeApi, type DocumentVersion } from '../knowledgeApi'
 
 const formatBytes = (bytes: number) => bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
 
-export function UploadForm({ kbId, onUploaded, onNotify }: { kbId: string; onUploaded: () => void; onNotify?: (type: 'success' | 'error', message: string) => void }) {
+export function UploadForm({ kbId, onUploaded, onNotify }: { kbId: string; onUploaded: (version: DocumentVersion) => void; onNotify?: (type: 'success' | 'error', message: string) => void }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
@@ -16,11 +16,11 @@ export function UploadForm({ kbId, onUploaded, onNotify }: { kbId: string; onUpl
     setBusy(true)
     setError(null)
     try {
-      await knowledgeApi.upload(kbId, file)
+      const version = await knowledgeApi.upload(kbId, file)
       setFile(null)
       if (inputRef.current) inputRef.current.value = ''
-      onUploaded()
-      onNotify?.('success', '文档已提交处理')
+      onUploaded(version)
+      onNotify?.('success', '文档已提交，正在后台解析处理')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '文档上传失败')
       onNotify?.('error', caught instanceof Error ? caught.message : '文档上传失败')

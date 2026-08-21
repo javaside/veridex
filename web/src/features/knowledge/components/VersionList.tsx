@@ -7,7 +7,10 @@ import { StatusBadge } from './StatusBadge'
 
 const formatBytes = (bytes: number) => bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
 
-export function VersionList({ kbId, refreshKey, highlightReleaseId }: { kbId: string; refreshKey: number; highlightReleaseId?: string | null }) {
+/** 仍处于异步处理中的版本状态：这些状态会在后台 worker 完成后推进，需要轮询刷新。 */
+const PENDING_STATUSES = new Set(['UPLOADED', 'PROCESSING'])
+
+export function VersionList({ kbId, refreshKey, highlightReleaseId, lastUploaded }: { kbId: string; refreshKey: number; highlightReleaseId?: string | null; lastUploaded?: { documentId: string; versionId: string } | null }) {
   const [documents, setDocuments] = useState<DocumentSummary[]>([])
   const [versions, setVersions] = useState<Record<string, DocumentVersion[]>>({})
   const [releases, setReleases] = useState<Release[]>([])
@@ -25,18 +28,46 @@ export function VersionList({ kbId, refreshKey, highlightReleaseId }: { kbId: st
 
   useEffect(() => { void loadDocuments(); void loadReleases() }, [loadDocuments, loadReleases, refreshKey])
 
+  const loadVersions = useCallback(async (documentId: string) => {
+    setVersionErrors((current) => ({ ...current, [documentId]: '' }))
+    try {
+      const loadedVersions = await knowledgeApi.versions(documentId)
+      setVersions((current) => ({ ...current, [documentId]: loadedVersions }))
+      return loadedVersions
+    } catch (caught) {
+      setVersionErrors((current) => ({ ...current, [documentId]: caught instanceof Error ? caught.message : '版本加载失败' }))
+      return null
+    }
+  }, [])
+
   const toggleDoc = async (doc: DocumentSummary) => {
     if (expandedDoc === doc.id) { setExpandedDoc(null); return }
     setExpandedDoc(doc.id)
     if (versions[doc.id]) return
-    setVersionErrors((current) => ({ ...current, [doc.id]: '' }))
-    try {
-      const loadedVersions = await knowledgeApi.versions(doc.id)
-      setVersions((current) => ({ ...current, [doc.id]: loadedVersions }))
-    } catch (caught) {
-      setVersionErrors((current) => ({ ...current, [doc.id]: caught instanceof Error ? caught.message : '版本加载失败' }))
-    }
+    await loadVersions(doc.id)
   }
+
+  // 上传成功后自动展开对应文档并加载版本：即使相同文件名复用同一文档（文档列表不变），
+  // 用户也能立刻看到新版本行（状态「已上传/处理中」），不会误以为上传失败。
+  // lastUploaded 每次上传都是新对象（新 versionId），effect 只在上传成功时触发一次。
+  useEffect(() => {
+    if (!lastUploaded) return
+    setExpandedDoc(lastUploaded.documentId)
+    void loadVersions(lastUploaded.documentId)
+  }, [lastUploaded, loadVersions])
+
+  // 轮询：只要已展开文档里还有 UPLOADED/PROCESSING 版本，就定时刷新其状态，
+  // 直到全部推进为 READY/FAILED。避免用户手动反复刷新才能看到解析完成。
+  useEffect(() => {
+    const pendingDocIds = Object.entries(versions)
+      .filter(([, list]) => list.some((v) => PENDING_STATUSES.has(v.status)))
+      .map(([docId]) => docId)
+    if (pendingDocIds.length === 0) return
+    const timer = setInterval(() => {
+      pendingDocIds.forEach((docId) => { void loadVersions(docId) })
+    }, 2000)
+    return () => clearInterval(timer)
+  }, [versions, loadVersions])
 
   const showPreview = async (doc: DocumentSummary, version: DocumentVersion, button: HTMLButtonElement) => {
     previewButtonRef.current = button
