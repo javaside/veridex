@@ -46,11 +46,18 @@ import reactor.core.publisher.Flux;
 public class GenerationServiceImpl implements GenerationService {
 
     private static final String DEFAULT_SYSTEM_TEMPLATE =
-            "你是企业制度问答助手。只允许使用以下证据回答，不得使用模型通用知识补全。\n"
-            + "每个证据块以 [EVIDENCE 编号|标题|正文] 给出。回答时引用证据必须使用 [编号] 格式"
-            + "（例如 [1]、[2]，编号对应证据块开头的编号），不要写 [EVIDENCE ...] 字样。\n";
+            "你是企业制度问答助手。只允许使用以下证据回答，不得使用模型通用知识补全。\n";
     private static final GenerationParameters DEFAULT_PARAMETERS =
             new GenerationParameters(50, DEFAULT_SYSTEM_TEMPLATE, "deterministic");
+
+    /**
+     * 引用格式是系统的硬约束，与可配置的 systemTemplate 解耦：无论 profile 传入什么模板，
+     * 组装 prompt 时都强制追加，保证真实模型（deepseek/ollama）输出 [n] 引用标记，
+     * CitationValidator 才能解析出 citations（否则回答不带引用）。
+     */
+    private static final String CITATION_INSTRUCTION =
+            "每个证据块以 [EVIDENCE 编号|标题|正文] 给出。回答时引用证据必须使用 [编号] 格式"
+            + "（例如 [1]、[2]，编号对应证据块开头的编号），不要写 [EVIDENCE ...] 字样。\n";
 
     private final ChatModel model;
     private final ChatProperties chatProperties;
@@ -262,6 +269,7 @@ public class GenerationServiceImpl implements GenerationService {
 
     private String buildSystemPrompt(List<EvidencePiece> evidence, String systemTemplate) {
         StringBuilder sb = new StringBuilder(systemTemplate);
+        sb.append(CITATION_INSTRUCTION);
         for (EvidencePiece e : evidence) {
             sb.append("[EVIDENCE ").append(e.citationIndex()).append("|").append(e.title())
                     .append("|").append(e.text()).append("]\n");
