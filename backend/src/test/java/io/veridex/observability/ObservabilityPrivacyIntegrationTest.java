@@ -7,14 +7,13 @@ import io.veridex.shared.observability.MetricName;
 import io.veridex.shared.observability.TelemetryOutcome;
 import io.veridex.shared.observability.TelemetryTag;
 import io.veridex.shared.observability.VeridexObservability;
+import io.veridex.support.PostgresIntegrationTest;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest(properties = "veridex.chat.provider=deterministic")
-class ObservabilityPrivacyIntegrationTest {
+class ObservabilityPrivacyIntegrationTest extends PostgresIntegrationTest {
 
     @Autowired MeterRegistry meters;
     @Autowired VeridexObservability observability;

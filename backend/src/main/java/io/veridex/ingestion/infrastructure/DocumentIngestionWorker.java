@@ -3,7 +3,7 @@ package io.veridex.ingestion.infrastructure;
 import com.rabbitmq.client.Channel;
 import io.veridex.audit.api.AuditRecorder;
 import io.veridex.configuration.api.ConfigurationProfileQuery;
-import io.veridex.configuration.domain.ProfileDefaults;
+import io.veridex.configuration.api.ProfileDefaults;
 import io.veridex.ingestion.application.DocumentParser;
 import io.veridex.ingestion.application.StructureChunker;
 import io.veridex.ingestion.domain.Chunk;

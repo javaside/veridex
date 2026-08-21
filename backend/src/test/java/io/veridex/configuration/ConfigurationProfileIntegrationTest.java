@@ -12,7 +12,7 @@ import io.veridex.configuration.api.RetrievalConfig;
 import io.veridex.configuration.application.ConfigurationProfileService;
 import io.veridex.configuration.domain.ConfigurationProfile;
 import io.veridex.configuration.domain.ConfigurationProfileVersion;
-import io.veridex.configuration.domain.ProfileDefaults;
+import io.veridex.configuration.api.ProfileDefaults;
 import io.veridex.support.PostgresIntegrationTest;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;

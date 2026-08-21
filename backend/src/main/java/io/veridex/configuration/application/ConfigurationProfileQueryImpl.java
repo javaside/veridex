@@ -4,7 +4,7 @@ import io.veridex.configuration.api.ConfigurationProfileQuery;
 import io.veridex.configuration.api.ProfileConfig;
 import io.veridex.configuration.domain.ConfigurationProfileRepository;
 import io.veridex.configuration.domain.ConfigurationProfileVersionRepository;
-import io.veridex.configuration.domain.ProfileDefaults;
+import io.veridex.configuration.api.ProfileDefaults;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;

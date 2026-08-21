@@ -11,7 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.veridex.configuration.api.ConfigurationProfileQuery;
-import io.veridex.configuration.domain.ProfileDefaults;
+import io.veridex.configuration.api.ProfileDefaults;
 import io.veridex.conversation.api.ConversationService;
 import io.veridex.conversation.api.ConversationView;
 import io.veridex.generation.api.CitationView;

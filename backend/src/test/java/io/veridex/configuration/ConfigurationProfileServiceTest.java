@@ -12,7 +12,7 @@ import io.veridex.configuration.domain.ConfigurationProfile;
 import io.veridex.configuration.domain.ConfigurationProfileRepository;
 import io.veridex.configuration.domain.ConfigurationProfileVersion;
 import io.veridex.configuration.domain.ConfigurationProfileVersionRepository;
-import io.veridex.configuration.domain.ProfileDefaults;
+import io.veridex.configuration.api.ProfileDefaults;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;

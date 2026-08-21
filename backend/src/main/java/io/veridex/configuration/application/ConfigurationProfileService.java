@@ -5,7 +5,7 @@ import io.veridex.configuration.domain.ConfigurationProfile;
 import io.veridex.configuration.domain.ConfigurationProfileRepository;
 import io.veridex.configuration.domain.ConfigurationProfileVersion;
 import io.veridex.configuration.domain.ConfigurationProfileVersionRepository;
-import io.veridex.configuration.domain.ProfileDefaults;
+import io.veridex.configuration.api.ProfileDefaults;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
