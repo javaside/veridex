@@ -93,7 +93,8 @@ public class HybridSearchServiceImpl implements HybridSearchService {
                 parameters.rrfK());
         List<SearchHit> reranked = reranker.rerank(
                 fused.stream().map(f -> new SearchHit(f.knowledgeBaseId(), f.documentVersionId(), f.chunkIndex(),
-                        f.title(), f.structurePath(), f.text(), SearchHit.Channel.BM25, f.fusionScore())).toList(),
+                        f.title(), f.structurePath(), f.text(), SearchHit.Channel.BM25, f.fusionScore(),
+                        f.vectorScore())).toList(),
                 question);
         List<EvidencePiece> evidence = assembler.assemble(reranked.stream().map(r -> new RankFusion.RankedHit(
                 r.knowledgeBaseId(), r.documentVersionId(), r.chunkIndex(), r.title(), r.structurePath(),

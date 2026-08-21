@@ -1,4 +1,4 @@
-import { ChatCircleDots, PaperPlaneRight } from '@phosphor-icons/react'
+import { ChatCircleDots, PaperPlaneRight, Plus } from '@phosphor-icons/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { PageHeader } from '../../app/PageHeader'
 import { knowledgeApi, type KnowledgeBase } from '../knowledge/knowledgeApi'
@@ -16,7 +16,7 @@ type LocalMessage = {
   question?: string
 }
 
-const CONVERSATION_PAGE_SIZE = 50
+const CONVERSATION_PAGE_SIZE = 20
 
 const REASON_CODES: FeedbackReasonCode[] = ['WRONG_ANSWER', 'HALLUCINATION', 'MISSING_EVIDENCE', 'OUTDATED', 'WRONG_REFUSAL', 'OTHER']
 const REASON_LABELS: Record<FeedbackReasonCode, string> = {
@@ -131,6 +131,14 @@ export function QaPage() {
       setMessages([{ id: 'load-error', role: 'ERROR', content: '会话消息加载失败' }])
     }
   }, [])
+
+  /** 新建会话：清空当前对话与选中会话，回到空白提问状态（后端在首问时自动建会话）。 */
+  const newConversation = useCallback(() => {
+    setActiveConversationId(null)
+    setMessages([])
+    setQuestion('')
+    resetStream()
+  }, [resetStream])
 
   const ask = async () => {
     const trimmed = question.trim()
@@ -255,7 +263,12 @@ export function QaPage() {
             onToggleAll={() => setSelectedKbIds((current) => current.length === bases.length ? [] : bases.map((kb) => kb.id))}
           />
           <section className="qa-conversations" aria-label="最近会话">
-            <div className="qa-panel-heading"><span>最近会话</span></div>
+            <div className="qa-panel-heading">
+              <span>最近会话</span>
+              <button className="text-button" type="button" onClick={newConversation}>
+                <Plus size={13} weight="bold" aria-hidden="true" /> 新建
+              </button>
+            </div>
             {conversations.length === 0 ? (
               <p className="qa-empty-hint">暂无历史会话。</p>
             ) : (

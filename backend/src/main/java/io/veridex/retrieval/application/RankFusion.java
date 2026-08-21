@@ -2,6 +2,7 @@ package io.veridex.retrieval.application;
 
 import io.veridex.retrieval.api.SearchHit;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,10 +27,15 @@ public final class RankFusion {
     }
 
     private static void addChannel(List<SearchHit> hits, Map<String, RankedHit> out, int k, boolean bm25Channel) {
-        for (int i = 0; i < hits.size(); i++) {
-            SearchHit h = hits.get(i);
+        // 排名必须按「每个知识库内」计算，而不是按拼接后的全局位置。
+        // 否则 scope 里靠前的库会拿到 rank 0/1/2… 的高分，靠后的库（哪怕内容更相关）
+        // 被系统性压到低分，导致最相关的内容反而进不了上下文。
+        Map<UUID, Integer> rankPerKb = new HashMap<>();
+        for (SearchHit h : hits) {
+            int rank = rankPerKb.getOrDefault(h.knowledgeBaseId(), 0);
+            rankPerKb.put(h.knowledgeBaseId(), rank + 1);
             String key = h.documentVersionId() + ":" + h.chunkIndex();
-            double contribution = 1.0 / (k + i + 1);
+            double contribution = 1.0 / (k + rank + 1);
             RankedHit existing = out.get(key);
             if (existing == null) {
                 out.put(key, new RankedHit(h.knowledgeBaseId(), h.documentVersionId(), h.chunkIndex(),

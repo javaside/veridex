@@ -54,6 +54,9 @@ public class OpenSearchRetrievalReader {
                 if (src == null) {
                     continue;
                 }
+                double rawScore = hit.score() != null ? hit.score() : 0d;
+                // 向量通道的 score 即余弦相似度（跨库可比），保留为 vectorScore 供语义重排。
+                Double vectorScore = channel == SearchHit.Channel.VECTOR ? rawScore : null;
                 out.add(new SearchHit(
                         knowledgeBaseId,
                         UUID.fromString(String.valueOf(src.get("document_version_id"))),
@@ -62,7 +65,8 @@ public class OpenSearchRetrievalReader {
                         String.valueOf(src.get("structure_path")),
                         String.valueOf(src.get("text")),
                         channel,
-                        hit.score() != null ? hit.score() : 0d));
+                        rawScore,
+                        vectorScore));
             }
             return out;
         } catch (IOException e) {

@@ -70,7 +70,7 @@ public class EvaluationRunController {
                 .toList();
         return ResponseEntity.ok(new RunDetailView(run.getId(), run.getDatasetId(), run.getDatasetVersionId(),
                 run.getProfileId(), run.getProfileVersionNo(), run.getStatus().name(),
-                deserialize(run.getMetricsJson(), RunMetrics.class), run.getError(),
+                metricsOrNull(run), run.getError(),
                 run.getCreatedAt().toString(), run.getCompletedAt() == null ? null : run.getCompletedAt().toString(),
                 cases));
     }
@@ -84,8 +84,23 @@ public class EvaluationRunController {
     private RunView toRunView(EvaluationRun run) {
         return new RunView(run.getId(), run.getDatasetId(), run.getDatasetVersionId(), run.getProfileId(),
                 run.getProfileVersionNo(), run.getStatus().name(),
-                deserialize(run.getMetricsJson(), RunMetrics.class),
+                metricsOrNull(run),
                 run.getCreatedAt().toString(), run.getCompletedAt() == null ? null : run.getCompletedAt().toString());
+    }
+
+    /**
+     * 只有 COMPLETED 的 run 才反序列化指标；RUNNING/FAILED 的 metricsJson 为空对象 "{}"，
+     * 反序列化到 primitive double 的 RunMetrics 会抛 MismatchedInputException，导致列表/详情接口 500。
+     */
+    private RunMetrics metricsOrNull(EvaluationRun run) {
+        if (run.getStatus() != EvaluationRun.Status.COMPLETED) {
+            return null;
+        }
+        String json = run.getMetricsJson();
+        if (json == null || json.isBlank() || "{}".equals(json.trim())) {
+            return null;
+        }
+        return deserialize(json, RunMetrics.class);
     }
 
     private RunCaseView toRunCaseView(EvaluationRunCase c) {

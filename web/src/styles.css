@@ -226,7 +226,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .qa-scope-item:hover { background: var(--surface-muted); }
 .qa-scope-item[aria-pressed='true'] { background: var(--surface-accent); border-color: #b9d3cc; color: var(--accent); font-weight: 650; }
 .qa-check { display: inline-grid; place-items: center; width: 18px; height: 18px; color: var(--accent); }
-.qa-conversations ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.qa-conversations ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 360px; overflow-y: auto; }
 .qa-conv-item { width: 100%; display: flex; align-items: center; gap: 9px; padding: 8px; border: 1px solid transparent; border-radius: var(--radius-control); background: none; color: var(--text-secondary); font-size: 13px; text-align: left; cursor: pointer; overflow: hidden; }
 .qa-conv-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qa-conv-item:hover { background: var(--surface-muted); color: var(--text-primary); }

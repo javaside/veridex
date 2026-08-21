@@ -47,4 +47,14 @@ class CitationValidatorTest {
         assertThat(citations).hasSize(1);
         assertThat(citations.get(0).citationIndex()).isEqualTo(1);
     }
+
+    @Test
+    void deduplicatesRepeatedCitationIndex() {
+        var evidence = List.of(new EvidencePiece(1, UUID.randomUUID(), UUID.randomUUID(), 0, "t1", "1", "a"));
+        // [1] 出现两次，但引用列表应只保留一条
+        var citations = validator.validate("见[1]以及[1]", evidence, docIds(evidence.toArray(new EvidencePiece[0])));
+        assertThat(citations).hasSize(1);
+        assertThat(citations.get(0).citationIndex()).isEqualTo(1);
+        assertThat(citations.get(0).validationStatus()).isEqualTo("VALID");
+    }
 }

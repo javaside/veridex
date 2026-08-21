@@ -3,6 +3,7 @@ package io.veridex.generation.application;
 import io.veridex.generation.api.CitationView;
 import io.veridex.retrieval.api.EvidencePiece;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -26,13 +27,18 @@ public class CitationValidator {
         Set<Integer> validIndexes = evidence.stream().map(EvidencePiece::citationIndex).collect(Collectors.toSet());
         Map<Integer, EvidencePiece> byIndex = evidence.stream()
                 .collect(Collectors.toMap(EvidencePiece::citationIndex, e -> e));
-        List<CitationView> out = new ArrayList<>();
+        // 回答里同一个 [n] 可能多次出现（模型常重复引用同一证据），但引用列表必须去重：
+        // 每个 citationIndex 只保留首次出现的那条，避免前端底部重复渲染同一引用。
+        Map<Integer, CitationView> byIndexOrdered = new LinkedHashMap<>();
         Matcher matcher = CITATION.matcher(answer);
         while (matcher.find()) {
             int index = Integer.parseInt(matcher.group(1));
+            if (byIndexOrdered.containsKey(index)) {
+                continue;
+            }
             boolean valid = validIndexes.contains(index);
             EvidencePiece e = byIndex.get(index);
-            out.add(new CitationView(index,
+            byIndexOrdered.put(index, new CitationView(index,
                     e != null ? documentIdByVersionId.get(e.documentVersionId()) : null,
                     e != null ? e.documentVersionId() : null,
                     e != null ? e.chunkIndex() : 0,
@@ -40,6 +46,6 @@ public class CitationValidator {
                     "[" + index + "]",
                     valid ? "VALID" : "INVALID"));
         }
-        return out;
+        return new ArrayList<>(byIndexOrdered.values());
     }
 }

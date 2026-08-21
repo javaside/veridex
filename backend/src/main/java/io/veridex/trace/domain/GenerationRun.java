@@ -37,7 +37,7 @@ public class GenerationRun {
     @Column(name = "first_token_latency_ms", nullable = false)
     private long firstTokenLatencyMs;
 
-    @Column(length = 100)
+    @Column(length = 2000)
     private String degradation;
 
     @Column(name = "context_hash", length = 64)

@@ -156,7 +156,7 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
             recorder.recordGeneration(runId, new GenerationRecord(result.provider(), result.model(),
                     result.inputTokens(), result.outputTokens(), result.durationMs(),
                     result.firstTokenLatencyMs(),
-                    searchResult.degradations().isEmpty() ? null : String.join("; ", searchResult.degradations()),
+                    truncateDegradation(searchResult.degradations()),
                     result.contextHash()));
             recorder.addCitations(runId, result.citations().stream()
                     .map(c -> new CitationRecord(c.citationIndex(), c.documentVersionId(), c.chunkIndex(),
@@ -255,5 +255,13 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
 
     private static String truncate(String s, int max) {
         return s.length() <= max ? s : s.substring(0, max);
+    }
+
+    /** 与 generation_run.degradation 列宽（VARCHAR(2000)）对齐，防止检索降级消息超长写库失败。 */
+    private static String truncateDegradation(List<String> degradations) {
+        if (degradations == null || degradations.isEmpty()) {
+            return null;
+        }
+        return truncate(String.join("; ", degradations), 2000);
     }
 }

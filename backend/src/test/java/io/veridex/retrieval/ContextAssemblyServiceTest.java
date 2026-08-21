@@ -16,6 +16,10 @@ class ContextAssemblyServiceTest {
         return new RankFusion.RankedHit(UUID.randomUUID(), doc, 0, "标题", "1", text, 1.0, 1.0, 2.0);
     }
 
+    private RankFusion.RankedHit hitInKb(UUID kb, UUID doc, String text) {
+        return new RankFusion.RankedHit(kb, doc, 0, "标题", "1", text, 1.0, 1.0, 2.0);
+    }
+
     @Test
     void assembleNumbersEvidenceInRankOrder() {
         UUID a = UUID.randomUUID(), b = UUID.randomUUID();
@@ -50,5 +54,22 @@ class ContextAssemblyServiceTest {
         var hits = List.of(hit(a, "x"), hit(b, "y"), hit(c, "z"));
         var evidence = service.assemble(hits, "q", 2, 3, 4000);
         assertThat(evidence).hasSize(2);
+    }
+
+    @Test
+    void guaranteesEachKnowledgeBaseAtLeastOneEvidence() {
+        // 库 A 只查出 1 条相关证据，库 B 查出很多条（数量占优、分数靠前）。
+        // 旧逻辑全局 top-K 会把库 A 挤掉；新逻辑必须保证库 A 至少 1 条进上下文。
+        UUID kbA = UUID.randomUUID(), kbB = UUID.randomUUID();
+        UUID docA = UUID.randomUUID(), docB = UUID.randomUUID();
+        var hits = new java.util.ArrayList<RankFusion.RankedHit>();
+        for (int i = 0; i < 6; i++) {
+            hits.add(hitInKb(kbB, docB, "库B的第" + i + "条证据"));
+        }
+        hits.add(hitInKb(kbA, docA, "库A唯一相关证据"));
+
+        var evidence = service.assemble(hits, "q", 6, 3, 4000);
+
+        assertThat(evidence).anyMatch(e -> e.knowledgeBaseId().equals(kbA));
     }
 }
