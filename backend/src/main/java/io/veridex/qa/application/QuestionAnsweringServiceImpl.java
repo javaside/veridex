@@ -48,8 +48,6 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
 
     private static final Logger log = LoggerFactory.getLogger(QuestionAnsweringServiceImpl.class);
 
-    private static final int HISTORY_TURNS = 6;
-
     private final KnowledgeScopeQuery knowledgeScope;
     private final ConversationService conversations;
     private final QueryRunRecorder recorder;
@@ -113,10 +111,10 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
             runRef[0] = runId;
             sink.next(new QaEvent.RunStarted(runId, conversationId));
 
-            var history = conversations.recentMessages(conversationId, HISTORY_TURNS);
+            ProfileConfig profile = profileQuery.activeProfileConfig();
+            var history = conversations.recentMessages(conversationId, profile.generation().maxHistoryTurns());
             conversations.addMessage(conversationId, "USER", request.question(), runId);
 
-            ProfileConfig profile = profileQuery.activeProfileConfig();
             RetrievalParameters retrievalParams = toRetrieval(profile);
             GenerationParameters generationParams = toGeneration(profile);
 

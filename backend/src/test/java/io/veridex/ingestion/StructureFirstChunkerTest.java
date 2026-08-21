@@ -14,13 +14,17 @@ class StructureFirstChunkerTest {
 
     private final StructureChunker chunker = new StructureFirstChunker();
 
+    private static final int MAX_CHARS = 2000;
+    private static final int OVERLAP = 80;
+
     private String load(String resource) throws Exception {
         return Files.readString(Path.of("src/test/resources/sample/" + resource), StandardCharsets.UTF_8);
     }
 
     @Test
     void markdownHeadingStructureProducesChunksWithPaths() throws Exception {
-        var chunks = chunker.chunk(new ParsedDocument(load("docs.md"), "docs.md", "text/markdown"));
+        var chunks = chunker.chunk(new ParsedDocument(load("docs.md"), "docs.md", "text/markdown"),
+                MAX_CHARS, OVERLAP);
         assertThat(chunks).hasSizeGreaterThanOrEqualTo(5);
         assertThat(chunks.get(0).title()).isEqualTo("入职指南");
         assertThat(chunks.get(0).structurePath()).isEqualTo("1");
@@ -30,7 +34,8 @@ class StructureFirstChunkerTest {
 
     @Test
     void plainTextWithoutHeadingsStillChunksByParagraph() throws Exception {
-        var chunks = chunker.chunk(new ParsedDocument(load("memo.txt"), "memo.txt", "text/plain"));
+        var chunks = chunker.chunk(new ParsedDocument(load("memo.txt"), "memo.txt", "text/plain"),
+                MAX_CHARS, OVERLAP);
         assertThat(chunks).hasSizeGreaterThanOrEqualTo(1);
         assertThat(chunks.stream().allMatch(c -> !c.text().isBlank())).isTrue();
     }
@@ -38,7 +43,8 @@ class StructureFirstChunkerTest {
     @Test
     void longBodyIsHardSplitUnderMaxChars() {
         String longText = "段落开始。" + "x".repeat(5000);
-        var chunks = chunker.chunk(new ParsedDocument(longText, "long.txt", "text/plain"));
+        var chunks = chunker.chunk(new ParsedDocument(longText, "long.txt", "text/plain"),
+                MAX_CHARS, OVERLAP);
         assertThat(chunks.stream().allMatch(c -> c.text().length() <= 2000)).isTrue();
     }
 
@@ -46,7 +52,8 @@ class StructureFirstChunkerTest {
     void pdfShellCommentIsNotTreatedAsMarkdownHeading() {
         // PDF 解析出的文本里「# 命令」是 shell 注释，不应成为 chunk 标题。
         String pdfText = "例如，对于 Ubuntu，可以使用下面的命令：\n\n# sudo apt-get install libsctp1\n\n对于 Fedora，可以使用 yum：\n";
-        var chunks = chunker.chunk(new ParsedDocument(pdfText, "Netty实战.pdf", "application/pdf"));
+        var chunks = chunker.chunk(new ParsedDocument(pdfText, "Netty实战.pdf", "application/pdf"),
+                MAX_CHARS, OVERLAP);
         assertThat(chunks).isNotEmpty();
         assertThat(chunks.stream().allMatch(c -> !c.title().equals("sudo apt-get install libsctp1"))).isTrue();
         // 非 Markdown 文档没有标题 → 标题回退为文件名

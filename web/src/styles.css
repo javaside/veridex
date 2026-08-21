@@ -361,6 +361,9 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .config-section label { display: grid; gap: 5px; font-size: 11px; color: var(--text-secondary); }
 .config-section input, .config-section textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: #f8fafa; color: var(--text-primary); font: inherit; }
 .config-section textarea { resize: vertical; }
+.config-hint { margin: 0; padding: 6px 9px; border-radius: var(--radius-control); font-size: 11px; line-height: 1.5; color: var(--text-secondary); background: var(--surface-muted); }
+.config-hint-active { color: var(--success); background: var(--success-surface); }
+.config-hint-inactive { color: var(--danger); background: var(--danger-surface); }
 .config-preview { margin: 0; padding: 14px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--surface-muted); overflow-x: auto; white-space: pre-wrap; }
 
 /* Evaluation run */

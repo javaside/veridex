@@ -2,6 +2,8 @@ package io.veridex.ingestion.infrastructure;
 
 import com.rabbitmq.client.Channel;
 import io.veridex.audit.api.AuditRecorder;
+import io.veridex.configuration.api.ConfigurationProfileQuery;
+import io.veridex.configuration.domain.ProfileDefaults;
 import io.veridex.ingestion.application.DocumentParser;
 import io.veridex.ingestion.application.StructureChunker;
 import io.veridex.ingestion.domain.Chunk;
@@ -47,11 +49,12 @@ public class DocumentIngestionWorker {
     private final VeridexObservability observability;
     private final RabbitContextPropagation propagation;
     private final ParserExecutionGuard guard;
+    private final ConfigurationProfileQuery profileQuery;
 
     public DocumentIngestionWorker(DocumentVersionProcessing documents, ObjectStorage storage,
                                    DocumentParser parser, StructureChunker chunker,
                                    AuditRecorder audit, JsonMapper jsonMapper) {
-        this(documents, storage, parser, chunker, audit, jsonMapper, null, null, null);
+        this(documents, storage, parser, chunker, audit, jsonMapper, null, null, null, null);
     }
 
     @Autowired
@@ -59,7 +62,7 @@ public class DocumentIngestionWorker {
                                    DocumentParser parser, StructureChunker chunker,
                                    AuditRecorder audit, JsonMapper jsonMapper,
                                    VeridexObservability observability, RabbitContextPropagation propagation,
-                                   ParserExecutionGuard guard) {
+                                   ParserExecutionGuard guard, ConfigurationProfileQuery profileQuery) {
         this.documents = documents;
         this.storage = storage;
         this.parser = parser;
@@ -69,6 +72,7 @@ public class DocumentIngestionWorker {
         this.observability = observability;
         this.propagation = propagation;
         this.guard = guard;
+        this.profileQuery = profileQuery;
     }
 
     @RabbitListener(queues = io.veridex.shared.infrastructure.messaging.RabbitTopology.INGESTION_QUEUE)
@@ -111,7 +115,10 @@ public class DocumentIngestionWorker {
             ParsedDocument parsed = guard != null
                     ? guard.execute(versionId, taskDir -> parseDocument(objectKey, filename, contentType))
                     : parseDocument(objectKey, filename, contentType);
-            List<Chunk> chunks = chunker.chunk(parsed);
+            var chunking = profileQuery != null
+                    ? profileQuery.activeProfileConfig().chunking()
+                    : ProfileDefaults.defaults().chunking();
+            List<Chunk> chunks = chunker.chunk(parsed, chunking.maxChars(), chunking.overlap());
             List<Map<String, Object>> records = chunks.stream()
                     .map(c -> Map.<String, Object>of(
                             "index", c.index(), "text", c.text(), "title", c.title(), "structurePath", c.structurePath()))

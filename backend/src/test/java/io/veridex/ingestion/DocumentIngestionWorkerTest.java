@@ -51,7 +51,8 @@ class DocumentIngestionWorkerTest {
         when(storage.get(objectKey)).thenReturn(new ByteArrayInputStream("content".getBytes(StandardCharsets.UTF_8)));
         when(parser.parse(any(), eq("guide.md"), eq("text/markdown")))
                 .thenReturn(new ParsedDocument("content", "guide.md", "text/markdown"));
-        when(chunker.chunk(any())).thenReturn(List.of(new Chunk(0, "content", "guide.md", "1")));
+        when(chunker.chunk(any(), ArgumentMatchers.anyInt(), ArgumentMatchers.anyInt()))
+                .thenReturn(List.of(new Chunk(0, "content", "guide.md", "1")));
         // 写 chunks.json 时 MinIO 异常 → worker 失败
         doThrow(new IllegalStateException("put failed")).when(storage)
                 .put(anyString(), any(), anyString(), org.mockito.ArgumentMatchers.anyLong());
@@ -84,7 +85,8 @@ class DocumentIngestionWorkerTest {
         when(storage.get(objectKey)).thenReturn(new ByteArrayInputStream("content".getBytes(StandardCharsets.UTF_8)));
         when(parser.parse(any(), eq("guide.md"), eq("text/markdown")))
                 .thenReturn(new ParsedDocument("content", "guide.md", "text/markdown"));
-        when(chunker.chunk(any())).thenReturn(List.of(new Chunk(0, "content", "guide.md", "1")));
+        when(chunker.chunk(any(), ArgumentMatchers.anyInt(), ArgumentMatchers.anyInt()))
+                .thenReturn(List.of(new Chunk(0, "content", "guide.md", "1")));
 
         String payload = "{\"documentVersionId\":\"" + versionId
                 + "\",\"knowledgeBaseId\":\"" + knowledgeBaseId
