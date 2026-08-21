@@ -2,6 +2,9 @@ package io.veridex.shared.infrastructure.embedding;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.Embedding;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -21,6 +24,13 @@ import org.springframework.stereotype.Component;
 public class DeterministicEmbeddingModel implements EmbeddingModel {
 
     private static final int DIMENSIONS = 128;
+
+    private static final Logger log = LoggerFactory.getLogger(DeterministicEmbeddingModel.class);
+
+    @PostConstruct
+    void logProvider() {
+        log.info("veridex.embedding.provider=deterministic (测试桩，无语义；生产请设置 veridex.embedding.provider=ollama)");
+    }
 
     @Override
     public EmbeddingResponse call(EmbeddingRequest request) {
