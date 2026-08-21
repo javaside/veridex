@@ -79,6 +79,20 @@ public class ConfigurationProfileService {
                         "unknown version " + versionNo + " for profile " + profileId));
     }
 
+    /** 把某个已发布版本设为「当前生效」，并清空其它 profile 的生效标记（全局唯一）。 */
+    public void activateVersion(UUID profileId, int versionNo) {
+        ConfigurationProfile profile = require(profileId);
+        requireVersion(profileId, versionNo);
+        for (ConfigurationProfile other : profiles.findAll()) {
+            if (!other.getId().equals(profileId) && other.getActiveVersionNo() != null) {
+                other.setActiveVersionNo(null);
+                profiles.save(other);
+            }
+        }
+        profile.setActiveVersionNo(versionNo);
+        profiles.save(profile);
+    }
+
     public Integer latestVersionNo(UUID profileId) {
         return versions.findTopByProfileIdOrderByVersionNoDesc(profileId)
                 .map(ConfigurationProfileVersion::getVersionNo)

@@ -41,4 +41,15 @@ class StructureFirstChunkerTest {
         var chunks = chunker.chunk(new ParsedDocument(longText, "long.txt", "text/plain"));
         assertThat(chunks.stream().allMatch(c -> c.text().length() <= 2000)).isTrue();
     }
+
+    @Test
+    void pdfShellCommentIsNotTreatedAsMarkdownHeading() {
+        // PDF 解析出的文本里「# 命令」是 shell 注释，不应成为 chunk 标题。
+        String pdfText = "例如，对于 Ubuntu，可以使用下面的命令：\n\n# sudo apt-get install libsctp1\n\n对于 Fedora，可以使用 yum：\n";
+        var chunks = chunker.chunk(new ParsedDocument(pdfText, "Netty实战.pdf", "application/pdf"));
+        assertThat(chunks).isNotEmpty();
+        assertThat(chunks.stream().allMatch(c -> !c.title().equals("sudo apt-get install libsctp1"))).isTrue();
+        // 非 Markdown 文档没有标题 → 标题回退为文件名
+        assertThat(chunks.get(0).title()).isEqualTo("Netty实战.pdf");
+    }
 }

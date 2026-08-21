@@ -5,10 +5,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.veridex.configuration.api.ConfigurationProfileQuery;
+import io.veridex.configuration.domain.ProfileDefaults;
 import io.veridex.conversation.api.ConversationService;
 import io.veridex.conversation.api.ConversationView;
 import io.veridex.generation.api.CitationView;
@@ -32,6 +35,7 @@ import io.veridex.trace.api.TraceBodyCapture;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -53,6 +57,7 @@ class QuestionAnsweringServiceTest {
     @Mock TraceBodyCapture traceBodyCapture;
     @Mock HybridSearchService hybridSearch;
     @Mock GenerationService generation;
+    @Mock ConfigurationProfileQuery profileQuery;
     @Spy VeridexObservability observability = new VeridexObservability(new SimpleMeterRegistry(), ObservationRegistry.create());
 
     @InjectMocks QuestionAnsweringServiceImpl service;
@@ -60,6 +65,11 @@ class QuestionAnsweringServiceTest {
     private static final UUID USER = UUID.randomUUID();
     private static final UUID KB = UUID.randomUUID();
     private static final UUID CONV = UUID.randomUUID();
+
+    @BeforeEach
+    void stubProfile() {
+        lenient().when(profileQuery.activeProfileConfig()).thenReturn(ProfileDefaults.defaults());
+    }
 
     private static EvidencePiece evidence() {
         return new EvidencePiece(1, KB, UUID.randomUUID(), 0, "请假制度", "1",
@@ -86,8 +96,8 @@ class QuestionAnsweringServiceTest {
         when(knowledgeScope.resolve(USER, List.of(KB))).thenReturn(List.of(KB));
         when(conversations.findOwned(USER, CONV)).thenReturn(Optional.of(new ConversationView(CONV, "t", java.time.Instant.now())));
         when(recorder.start(any(), eq(CONV), eq(List.of(KB)), any())).thenReturn(UUID.randomUUID());
-        when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假")).thenReturn(searchResult);
-        when(generation.stream(eq("请假"), eq(evidence), any())).thenReturn(Flux.just(
+        when(hybridSearch.search(eq(USER), eq(List.of(KB)), eq(List.of(KB)), eq("请假"), any())).thenReturn(searchResult);
+        when(generation.stream(eq("请假"), eq(evidence), any(), any())).thenReturn(Flux.just(
                 new GenerationEvent.Delta("根据《请假制度》[1]"),
                 new GenerationEvent.Completed(new GenerationResult("根据《请假制度》[1]",
                         List.of(new CitationView(1, UUID.randomUUID(), ver, 0, "请假制度", "[1]", "VALID")),
@@ -115,8 +125,8 @@ class QuestionAnsweringServiceTest {
         when(knowledgeScope.resolve(USER, List.of(KB))).thenReturn(List.of(KB));
         when(conversations.findOwned(USER, CONV)).thenReturn(Optional.of(new ConversationView(CONV, "t", java.time.Instant.now())));
         when(recorder.start(any(), eq(CONV), eq(List.of(KB)), any())).thenReturn(UUID.randomUUID());
-        when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假")).thenReturn(searchResult);
-        when(generation.stream(eq("请假"), eq(evidence), any())).thenReturn(Flux.just(
+        when(hybridSearch.search(eq(USER), eq(List.of(KB)), eq(List.of(KB)), eq("请假"), any())).thenReturn(searchResult);
+        when(generation.stream(eq("请假"), eq(evidence), any(), any())).thenReturn(Flux.just(
                 new GenerationEvent.Refused(new GenerationResult(null, List.of(),
                         RefusalReason.INSUFFICIENT_EVIDENCE, "deterministic", "deterministic", 0, 0, 0, 0, true, null, List.of()))));
 
@@ -137,10 +147,10 @@ class QuestionAnsweringServiceTest {
         when(knowledgeScope.resolve(USER, List.of(KB))).thenReturn(List.of(KB));
         when(conversations.findOwned(USER, CONV)).thenReturn(Optional.of(new ConversationView(CONV, "t", java.time.Instant.now())));
         when(recorder.start(any(), eq(CONV), eq(List.of(KB)), any())).thenReturn(UUID.randomUUID());
-        when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假"))
+        when(hybridSearch.search(eq(USER), eq(List.of(KB)), eq(List.of(KB)), eq("请假"), any()))
                 .thenReturn(new HybridSearchResult(evidence, List.of(), List.of()));
         // 引用终检在 GenerationServiceImpl 内完成；编排层收到的是终检异常
-        when(generation.stream(eq("请假"), eq(evidence), any())).thenReturn(Flux.error(
+        when(generation.stream(eq("请假"), eq(evidence), any(), any())).thenReturn(Flux.error(
                 new io.veridex.generation.api.InvalidCitationException("invalid")));
 
         StepVerifier.create(service.ask(USER, new AskRequest("请假", List.of(KB), CONV)))
@@ -158,9 +168,9 @@ class QuestionAnsweringServiceTest {
         when(knowledgeScope.resolve(USER, List.of(KB))).thenReturn(List.of(KB));
         when(conversations.findOwned(USER, CONV)).thenReturn(Optional.of(new ConversationView(CONV, "t", java.time.Instant.now())));
         when(recorder.start(any(), eq(CONV), eq(List.of(KB)), any())).thenReturn(UUID.randomUUID());
-        when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假"))
+        when(hybridSearch.search(eq(USER), eq(List.of(KB)), eq(List.of(KB)), eq("请假"), any()))
                 .thenReturn(new HybridSearchResult(List.of(evidence()), List.of(), List.of()));
-        when(generation.stream(any(), any(), any()))
+        when(generation.stream(any(), any(), any(), any()))
                 .thenReturn(Flux.error(new io.veridex.generation.api.ModelTimeoutException("t")));
 
         StepVerifier.create(service.ask(USER, new AskRequest("请假", List.of(KB), CONV)))
@@ -177,9 +187,9 @@ class QuestionAnsweringServiceTest {
         when(knowledgeScope.resolve(USER, List.of(KB))).thenReturn(List.of(KB));
         when(conversations.findOwned(USER, CONV)).thenReturn(Optional.of(new ConversationView(CONV, "t", java.time.Instant.now())));
         when(recorder.start(any(), eq(CONV), eq(List.of(KB)), any())).thenReturn(UUID.randomUUID());
-        when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假"))
+        when(hybridSearch.search(eq(USER), eq(List.of(KB)), eq(List.of(KB)), eq("请假"), any()))
                 .thenReturn(new HybridSearchResult(List.of(evidence()), List.of(), List.of()));
-        when(generation.stream(any(), any(), any())).thenReturn(Flux.never());
+        when(generation.stream(any(), any(), any(), any())).thenReturn(Flux.never());
 
         StepVerifier.create(service.ask(USER, new AskRequest("请假", List.of(KB), CONV)))
                 .expectNextMatches(e -> e instanceof QaEvent.RunStarted)
@@ -195,7 +205,7 @@ class QuestionAnsweringServiceTest {
         when(knowledgeScope.resolve(USER, List.of(KB))).thenReturn(List.of(KB));
         when(conversations.create(any(), any())).thenReturn(new ConversationView(UUID.randomUUID(), "t", java.time.Instant.now()));
         when(recorder.start(any(), any(), any(), any())).thenReturn(UUID.randomUUID());
-        when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假")).thenThrow(new RuntimeException("opensearch down"));
+        when(hybridSearch.search(eq(USER), eq(List.of(KB)), eq(List.of(KB)), eq("请假"), any())).thenThrow(new RuntimeException("opensearch down"));
         StepVerifier.create(service.ask(USER, new AskRequest("请假", List.of(KB), null)))
                 .expectNextMatches(e -> e instanceof QaEvent.RunStarted)
                 .expectNextMatches(e -> e instanceof QaEvent.RunFailed)
@@ -209,9 +219,9 @@ class QuestionAnsweringServiceTest {
         when(knowledgeScope.resolve(USER, List.of(KB))).thenReturn(List.of(KB));
         when(conversations.create(USER, "请假")).thenReturn(conversation);
         when(recorder.start(any(), eq(conversation.id()), eq(List.of(KB)), any())).thenReturn(UUID.randomUUID());
-        when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假")).thenReturn(
+        when(hybridSearch.search(eq(USER), eq(List.of(KB)), eq(List.of(KB)), eq("请假"), any())).thenReturn(
                 new HybridSearchResult(List.of(), List.of(), List.of()));
-        when(generation.stream(eq("请假"), eq(List.of()), any())).thenReturn(Flux.just(
+        when(generation.stream(eq("请假"), eq(List.of()), any(), any())).thenReturn(Flux.just(
                 new GenerationEvent.Refused(new GenerationResult(null, List.of(),
                         RefusalReason.NO_RELEVANT_EVIDENCE, "deterministic", "deterministic", 0, 0, 0, 0, true, null, List.of()))));
 
@@ -227,13 +237,14 @@ class QuestionAnsweringServiceTest {
     void recordsCompletedQaRunWithBoundedTags() {
         SimpleMeterRegistry meters = new SimpleMeterRegistry();
         QuestionAnsweringServiceImpl instrumented = new QuestionAnsweringServiceImpl(knowledgeScope, conversations,
-                recorder, hybridSearch, generation, new VeridexObservability(meters, ObservationRegistry.create()), traceBodyCapture);
+                recorder, hybridSearch, generation, profileQuery,
+                new VeridexObservability(meters, ObservationRegistry.create()), traceBodyCapture);
         when(knowledgeScope.resolve(USER, List.of(KB))).thenReturn(List.of(KB));
         when(conversations.findOwned(USER, CONV)).thenReturn(Optional.of(new ConversationView(CONV, "t", java.time.Instant.now())));
         when(recorder.start(any(), eq(CONV), eq(List.of(KB)), any())).thenReturn(UUID.randomUUID());
-        when(hybridSearch.search(USER, List.of(KB), List.of(KB), "请假"))
+        when(hybridSearch.search(eq(USER), eq(List.of(KB)), eq(List.of(KB)), eq("请假"), any()))
                 .thenReturn(new HybridSearchResult(List.of(), List.of(), List.of()));
-        when(generation.stream(eq("请假"), eq(List.of()), any())).thenReturn(Flux.just(
+        when(generation.stream(eq("请假"), eq(List.of()), any(), any())).thenReturn(Flux.just(
                 new GenerationEvent.Refused(new GenerationResult(null, List.of(),
                         RefusalReason.NO_RELEVANT_EVIDENCE, "deterministic", "deterministic", 0, 0, 0, 0, true, null, List.of()))));
 

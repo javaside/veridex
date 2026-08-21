@@ -35,6 +35,9 @@ public class ConfigurationProfile {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 
+    @Column(name = "active_version_no")
+    private Integer activeVersionNo;
+
     protected ConfigurationProfile() {
     }
 
@@ -59,4 +62,8 @@ public class ConfigurationProfile {
     public UUID getCreatedBy() { return createdBy; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+    public Integer getActiveVersionNo() { return activeVersionNo; }
+
+    /** 标记该 profile 的某个版本为「当前生效」；null 表示未生效。 */
+    public void setActiveVersionNo(Integer versionNo) { this.activeVersionNo = versionNo; }
 }

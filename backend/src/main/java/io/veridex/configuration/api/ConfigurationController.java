@@ -80,6 +80,13 @@ public class ConfigurationController {
                 version.getCreatedAt().toString(), deserialize(version.getConfigJson())));
     }
 
+    @PostMapping("/{id}/versions/{versionNo}/activate")
+    public ResponseEntity<Void> activate(@PathVariable UUID id, @PathVariable int versionNo) {
+        requireAdmin();
+        service.activateVersion(id, versionNo);
+        return ResponseEntity.noContent().build();
+    }
+
     private void requireAdmin() {
         if (!authorization.isAdmin()) {
             throw new SecurityException("configuration management requires admin role");
@@ -88,7 +95,8 @@ public class ConfigurationController {
 
     private ProfileView toView(ConfigurationProfile p) {
         return new ProfileView(p.getId(), p.getName(), p.getDescription(),
-                (int) service.listVersions(p.getId()).size(), service.latestVersionNo(p.getId()));
+                (int) service.listVersions(p.getId()).size(), service.latestVersionNo(p.getId()),
+                p.getActiveVersionNo());
     }
 
     private ProfileDetailView toDetail(ConfigurationProfile p) {

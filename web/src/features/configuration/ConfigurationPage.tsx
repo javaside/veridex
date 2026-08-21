@@ -14,6 +14,7 @@ export function ConfigurationPage() {
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  const [activating, setActivating] = useState<number | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [versions, setVersions] = useState<VersionView[]>([])
   const [versionDetail, setVersionDetail] = useState<VersionDetail | null>(null)
@@ -86,6 +87,22 @@ export function ConfigurationPage() {
     }
   }
 
+  const activate = async (versionNo: number) => {
+    if (!selected) return
+    setActivating(versionNo)
+    setToast(null)
+    try {
+      await configurationApi.activate(selected.id, versionNo)
+      setToast({ type: 'success', message: `v${versionNo} 已设为当前生效` })
+      await loadProfiles()
+      setRefreshKey((k) => k + 1)
+    } catch (e) {
+      setToast({ type: 'error', message: e instanceof Error ? e.message : '设为生效失败' })
+    } finally {
+      setActivating(null)
+    }
+  }
+
   return (
     <section className="workspace-page configuration-page">
       <PageHeader title="配置版本" description="版本化 RAG 配置，供评测对比引用。" meta={`${profiles.length} 个配置`} />
@@ -99,7 +116,24 @@ export function ConfigurationPage() {
               <div className="panel version-panel">
                 <div className="panel-header"><h2>版本历史</h2></div>
                 <ul className="version-list">
-                  {versions.map((v) => <li key={v.id}><button type="button" onClick={() => void openVersion(v.versionNo)}><strong>v{v.versionNo}</strong><small>{v.createdAt}</small></button></li>)}
+                  {versions.map((v) => {
+                    const isActive = selected.activeVersionNo === v.versionNo
+                    return (
+                      <li key={v.id} className="profile-version-row">
+                        <button type="button" className="profile-version-main" onClick={() => void openVersion(v.versionNo)}>
+                          <strong>v{v.versionNo}</strong>
+                          <small>{v.createdAt}</small>
+                        </button>
+                        {isActive ? (
+                          <span className="version-active-badge">当前生效</span>
+                        ) : (
+                          <button className="text-button" type="button" disabled={activating === v.versionNo} onClick={() => void activate(v.versionNo)}>
+                            {activating === v.versionNo ? '生效中…' : '设为生效'}
+                          </button>
+                        )}
+                      </li>
+                    )
+                  })}
                   {versions.length === 0 && <li className="case-list-empty">尚未发布版本</li>}
                 </ul>
               </div>

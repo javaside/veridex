@@ -25,4 +25,10 @@ public interface GenerationService {
      * cold、单次订阅；错误经 Flux error channel 传播；引用终检失败抛 InvalidCitationException。
      */
     Flux<GenerationEvent> stream(String question, List<EvidencePiece> evidence, List<MessageRecord> history);
+
+    /**
+     * 参数化流式生成：供在线问答按 ProfileConfig 驱动拒答阈值与 prompt 模板。
+     */
+    Flux<GenerationEvent> stream(String question, List<EvidencePiece> evidence,
+                                 List<MessageRecord> history, GenerationParameters parameters);
 }

@@ -26,10 +26,13 @@ public class StructureFirstChunker implements StructureChunker {
         List<Section> sections = new ArrayList<>();
         Section current = null;
         String[] lines = document.text().split("\n", -1);
+        // 只有 Markdown 源文件才把「# xxx」当作标题；PDF/DOCX/TXT 解析出的「# 命令」
+        // 是 shell 注释（如 # sudo apt-get install …），误判会导致 chunk title 变成命令文本。
+        boolean markdown = isMarkdown(document);
 
         for (String line : lines) {
-            Matcher heading = MARKDOWN_HEADING.matcher(line);
-            if (heading.matches()) {
+            Matcher heading = markdown ? MARKDOWN_HEADING.matcher(line) : null;
+            if (heading != null && heading.matches()) {
                 if (current != null && !current.body.isEmpty()) {
                     sections.add(current);
                 }
@@ -59,6 +62,15 @@ public class StructureFirstChunker implements StructureChunker {
             }
         }
         return chunks;
+    }
+
+    private static boolean isMarkdown(ParsedDocument document) {
+        String contentType = document.contentType();
+        if (contentType != null && contentType.contains("markdown")) {
+            return true;
+        }
+        String filename = document.sourceFilename();
+        return filename != null && (filename.endsWith(".md") || filename.endsWith(".markdown"));
     }
 
     private static List<String> hardSplit(String body) {

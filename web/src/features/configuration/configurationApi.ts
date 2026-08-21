@@ -26,6 +26,7 @@ export type ProfileView = {
   description: string | null
   versionCount: number
   latestVersionNo: number | null
+  activeVersionNo: number | null
 }
 
 export type ProfileDetail = {
@@ -84,4 +85,8 @@ export const configurationApi = {
     fetch(`/api/configuration/profiles/${id}/versions`, { credentials: 'include' }).then((r) => json<VersionView[]>(r)),
   version: (id: string, versionNo: number): Promise<VersionDetail> =>
     fetch(`/api/configuration/profiles/${id}/versions/${versionNo}`, { credentials: 'include' }).then((r) => json<VersionDetail>(r)),
+  activate: (id: string, versionNo: number): Promise<void> =>
+    fetch(`/api/configuration/profiles/${id}/versions/${versionNo}/activate`, { method: 'POST', credentials: 'include', headers: csrfHeaders() }).then((r) => {
+      if (!r.ok) throw new Error(`设为生效失败 (${r.status})`)
+    }),
 }

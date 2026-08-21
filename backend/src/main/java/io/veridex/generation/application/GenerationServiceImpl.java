@@ -117,15 +117,22 @@ public class GenerationServiceImpl implements GenerationService {
 
     @Override
     public Flux<GenerationEvent> stream(String question, List<EvidencePiece> evidence, List<MessageRecord> history) {
-        RefusalReason refusal = refusalPolicy.evaluate(evidence, DEFAULT_PARAMETERS.minEvidenceChars());
+        return stream(question, evidence, history, DEFAULT_PARAMETERS);
+    }
+
+    @Override
+    public Flux<GenerationEvent> stream(String question, List<EvidencePiece> evidence,
+                                        List<MessageRecord> history, GenerationParameters parameters) {
+        GenerationParameters params = parameters != null ? parameters : DEFAULT_PARAMETERS;
+        RefusalReason refusal = refusalPolicy.evaluate(evidence, params.minEvidenceChars());
         if (refusal != null) {
-            GenerationResult result = refusedResult(DEFAULT_PARAMETERS, refusal);
+            GenerationResult result = refusedResult(params, refusal);
             observability.increment(MetricName.GENERATION_OUTCOME,
                     TelemetryTag.generationOutcome(TelemetryOutcome.Generation.REFUSED), providerTag());
             return Flux.just(new GenerationEvent.Refused(result));
         }
 
-        String system = buildSystemPrompt(evidence, DEFAULT_PARAMETERS.systemTemplate());
+        String system = buildSystemPrompt(evidence, params.systemTemplate());
         Prompt prompt = buildPrompt(system, history, question);
         List<PromptMessageView> promptMessages = promptViews(prompt);
         long start = System.nanoTime();

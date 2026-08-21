@@ -346,6 +346,10 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .version-list button:hover { background: var(--surface-muted); }
 .version-list strong { color: var(--text-primary); font-size: 12px; }
 .version-list small { color: var(--text-muted); font-size: 10px; }
+.profile-version-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.profile-version-main { flex: 1; display: grid; gap: 2px; }
+.profile-version-row .text-button { flex: 0 0 auto; }
+.version-active-badge { flex: 0 0 auto; padding: 2px 8px; border-radius: 999px; background: var(--surface-accent); border: 1px solid #b9d3cc; color: var(--accent); font-size: 11px; font-weight: 650; }
 .version-detail ol { margin: 0; padding: 8px 16px 16px 32px; }
 .version-detail li { padding: 7px 0; border-bottom: 1px solid var(--border); }
 .version-detail strong { display: block; font-size: 13px; }

@@ -1,8 +1,11 @@
 package io.veridex.qa.application;
 
+import io.veridex.configuration.api.ConfigurationProfileQuery;
+import io.veridex.configuration.api.ProfileConfig;
 import io.veridex.conversation.api.ConversationService;
 import io.veridex.conversation.api.ConversationView;
 import io.veridex.generation.api.GenerationEvent;
+import io.veridex.generation.api.GenerationParameters;
 import io.veridex.generation.api.GenerationResult;
 import io.veridex.generation.api.GenerationService;
 import io.veridex.generation.api.GenerationErrorCodes;
@@ -14,6 +17,7 @@ import io.veridex.qa.api.QaEvent;
 import io.veridex.retrieval.api.EvidencePiece;
 import io.veridex.retrieval.api.HybridSearchResult;
 import io.veridex.retrieval.api.HybridSearchService;
+import io.veridex.retrieval.api.RetrievalParameters;
 import io.veridex.shared.RefusalReason;
 import io.veridex.shared.observability.ObservationName;
 import io.veridex.shared.observability.TelemetryErrorCode;
@@ -51,18 +55,20 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
     private final QueryRunRecorder recorder;
     private final HybridSearchService hybridSearch;
     private final GenerationService generation;
+    private final ConfigurationProfileQuery profileQuery;
     private final VeridexObservability observability;
     private final TraceBodyCapture traceBodyCapture;
 
     public QuestionAnsweringServiceImpl(KnowledgeScopeQuery knowledgeScope, ConversationService conversations,
                                         QueryRunRecorder recorder, HybridSearchService hybridSearch,
-                                        GenerationService generation, VeridexObservability observability,
-                                        TraceBodyCapture traceBodyCapture) {
+                                        GenerationService generation, ConfigurationProfileQuery profileQuery,
+                                        VeridexObservability observability, TraceBodyCapture traceBodyCapture) {
         this.knowledgeScope = knowledgeScope;
         this.conversations = conversations;
         this.recorder = recorder;
         this.hybridSearch = hybridSearch;
         this.generation = generation;
+        this.profileQuery = profileQuery;
         this.observability = observability;
         this.traceBodyCapture = traceBodyCapture;
     }
@@ -110,7 +116,12 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
             var history = conversations.recentMessages(conversationId, HISTORY_TURNS);
             conversations.addMessage(conversationId, "USER", request.question(), runId);
 
-            HybridSearchResult searchResult = hybridSearch.search(userId, scope, request.knowledgeBaseIds(), normalized);
+            ProfileConfig profile = profileQuery.activeProfileConfig();
+            RetrievalParameters retrievalParams = toRetrieval(profile);
+            GenerationParameters generationParams = toGeneration(profile);
+
+            HybridSearchResult searchResult = hybridSearch.search(userId, scope, request.knowledgeBaseIds(), normalized,
+                    retrievalParams);
             sink.next(new QaEvent.RetrievalCompleted(searchResult.evidence().size()));
             recorder.markRetrieving(runId, searchResult.hits().stream()
                     .map(h -> new RetrievalHitRecord(h.knowledgeBaseId(), h.documentVersionId(), h.chunkIndex(),
@@ -120,7 +131,7 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
 
             recorder.markGenerating(runId);
             final UUID convId = conversationId;
-            modelSubscription[0] = generation.stream(normalized, searchResult.evidence(), history)
+            modelSubscription[0] = generation.stream(normalized, searchResult.evidence(), history, generationParams)
                     .subscribe(
                             event -> handleGenerationEvent(event, sink, observation, runId, convId,
                                     request, searchResult),
@@ -263,5 +274,16 @@ public class QuestionAnsweringServiceImpl implements QuestionAnsweringService {
             return null;
         }
         return truncate(String.join("; ", degradations), 2000);
+    }
+
+    private static RetrievalParameters toRetrieval(ProfileConfig profile) {
+        var r = profile.retrieval();
+        return new RetrievalParameters(r.topKPerChannel(), r.rrfK(), r.contextTopK(),
+                r.perDocumentMax(), r.contextMaxChars());
+    }
+
+    private static GenerationParameters toGeneration(ProfileConfig profile) {
+        return new GenerationParameters(profile.generation().minEvidenceChars(),
+                profile.prompt().systemTemplate(), profile.model().chatModel());
     }
 }
