@@ -2,6 +2,8 @@ package io.veridex.generation.infrastructure;
 
 import io.veridex.shared.infrastructure.security.OutboundAccessPolicy;
 import java.net.URI;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.ai.ollama.api.OllamaApi;
@@ -19,6 +21,8 @@ import org.springframework.context.annotation.Configuration;
 @ConditionalOnProperty(name = "veridex.chat.provider", havingValue = "ollama")
 public class OllamaChatConfiguration {
 
+    private static final Logger log = LoggerFactory.getLogger(OllamaChatConfiguration.class);
+
     @Bean
     ChatModel ollamaChatModel(ChatProperties properties, OutboundAccessPolicy outboundPolicy) {
         outboundPolicy.validate(URI.create(properties.ollama().baseUrl()));
@@ -28,9 +32,12 @@ public class OllamaChatConfiguration {
         var options = OllamaChatOptions.builder()
                 .model(properties.ollama().model())
                 .build();
-        return OllamaChatModel.builder()
+        OllamaChatModel model = OllamaChatModel.builder()
                 .ollamaApi(api)
                 .options(options)
                 .build();
+        log.info("veridex.chat.provider=ollama (model={}, baseUrl={})",
+                properties.ollama().model(), properties.ollama().baseUrl());
+        return model;
     }
 }

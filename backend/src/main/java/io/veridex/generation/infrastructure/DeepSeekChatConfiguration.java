@@ -2,6 +2,8 @@ package io.veridex.generation.infrastructure;
 
 import io.veridex.shared.infrastructure.security.OutboundAccessPolicy;
 import java.net.URI;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.deepseek.DeepSeekChatModel;
 import org.springframework.ai.deepseek.DeepSeekChatOptions;
@@ -18,6 +20,8 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 @ConditionalOnProperty(name = "veridex.chat.provider", havingValue = "deepseek")
 public class DeepSeekChatConfiguration {
+
+    private static final Logger log = LoggerFactory.getLogger(DeepSeekChatConfiguration.class);
 
     @Bean
     ChatModel deepSeekChatModel(ChatProperties properties, OutboundAccessPolicy outboundPolicy) {
@@ -39,10 +43,12 @@ public class DeepSeekChatConfiguration {
         var options = DeepSeekChatOptions.builder()
                 .model(resolveModel(deepseek.model()))
                 .build();
-        return DeepSeekChatModel.builder()
+        DeepSeekChatModel model = DeepSeekChatModel.builder()
                 .deepSeekApi(api)
                 .options(options)
                 .build();
+        log.info("veridex.chat.provider=deepseek (model={}, baseUrl={})", deepseek.model(), deepseek.baseUrl());
+        return model;
     }
 
     private static DeepSeekApi.ChatModel resolveModel(String model) {

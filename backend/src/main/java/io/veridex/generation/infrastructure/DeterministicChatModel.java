@@ -7,6 +7,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -27,6 +30,13 @@ import reactor.core.publisher.Flux;
 @Component
 @ConditionalOnProperty(name = "veridex.chat.provider", havingValue = "deterministic", matchIfMissing = true)
 public class DeterministicChatModel implements ChatModel {
+
+    private static final Logger log = LoggerFactory.getLogger(DeterministicChatModel.class);
+
+    @PostConstruct
+    void logProvider() {
+        log.info("veridex.chat.provider=deterministic (测试桩，非真实模型；生产请设置 veridex.chat.provider=deepseek 或 ollama)");
+    }
 
     private static final Pattern EVIDENCE = Pattern.compile("\\[EVIDENCE (\\d+)\\|([^|]+)\\|([^\\]]+)\\]");
     private static final int STREAM_CHUNK = 8;
