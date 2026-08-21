@@ -44,7 +44,10 @@ public class ContextAssemblyService {
                 if (perDoc.getOrDefault(hit.documentVersionId(), 0) >= perDocumentMax) {
                     continue;
                 }
-                if (total + hit.text().length() > maxChars) {
+                // 保证至少 1 条证据进入上下文：单条 chunk 超过 maxChars 时不能直接 break，
+                // 否则「检索命中却返回 NO_RELEVANT_EVIDENCE」（历史数据 chunking.maxChars 曾大于
+                // retrieval.contextMaxChars，导致每个 chunk 都超预算，证据恒为空）。
+                if (!picked.isEmpty() && total + hit.text().length() > maxChars) {
                     break;
                 }
                 picked.add(hit);
@@ -65,7 +68,7 @@ public class ContextAssemblyService {
             if (perDoc.getOrDefault(hit.documentVersionId(), 0) >= perDocumentMax) {
                 continue;
             }
-            if (total + hit.text().length() > maxChars) {
+            if (!picked.isEmpty() && total + hit.text().length() > maxChars) {
                 break;
             }
             picked.add(hit);

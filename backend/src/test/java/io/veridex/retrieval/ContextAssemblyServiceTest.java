@@ -49,6 +49,17 @@ class ContextAssemblyServiceTest {
     }
 
     @Test
+    void assembleKeepsAtLeastOneEvidenceWhenSingleChunkExceedsBudget() {
+        // 历史数据 chunking.maxChars(5000) 曾大于 contextMaxChars(4000)：单条 chunk 就超预算。
+        // 不能因此 break 成 0 条——检索命中却返回 NO_RELEVANT_EVIDENCE 是错误行为。
+        UUID doc = UUID.randomUUID();
+        var hits = List.of(hit(doc, "长".repeat(5000)), hit(doc, "短".repeat(100)));
+        var evidence = service.assemble(hits, "q", 6, 3, 4000);
+        assertThat(evidence).hasSize(1);
+        assertThat(evidence.get(0).text().length()).isEqualTo(5000);
+    }
+
+    @Test
     void assembleLimitsByTopK() {
         UUID a = UUID.randomUUID(), b = UUID.randomUUID(), c = UUID.randomUUID();
         var hits = List.of(hit(a, "x"), hit(b, "y"), hit(c, "z"));
