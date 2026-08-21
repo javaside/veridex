@@ -51,7 +51,7 @@ Veridex 是面向企业私有化部署的 RAG（Retrieval-Augmented Generation�
 
 ## 当前限制
 
-- 默认 `DeterministicEmbeddingModel` 为 128 维确定性哈希（无语义）；可通过 `VERIDEX_EMBEDDING_PROVIDER=ollama` 切换 Ollama `qwen3-embedding`（真实语义，1024 维；同时需设置 `VERIDEX_EMBEDDING_DIMENSIONS=1024`）。
+- 默认 `DeterministicEmbeddingModel` 为 128 维确定性哈希（无语义）；可通过 `VERIDEX_EMBEDDING_PROVIDER=ollama` 切换 Ollama `qwen3-embedding:0.6b`（真实语义，1024 维；同时需设置 `VERIDEX_EMBEDDING_DIMENSIONS=1024`）。
 - 默认对话模型由 `VERIDEX_CHAT_PROVIDER=deepseek` 决定（模型 `deepseek-v4-flash`，也可切换 `ollama`）；`deterministic` 为测试占位实现。配置 Profile 的 `chatModel`/`embeddingModel` 字段目前仅作标识记录，未接入运行时模型路由（当前单一模型装配）。
 - 评测为「仅自动指标」的同步运行；judge-model 自动评判与人工评审尚未实现。
 - 回归门禁阈值为硬编码默认值（相对退化 10%），尚未配置化。

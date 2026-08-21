@@ -43,7 +43,7 @@ backend:
     # Embedding 向量模型（默认 deterministic 无语义，必须切 ollama + 1024 维才有真实向量）
     VERIDEX_EMBEDDING_PROVIDER: deterministic
     VERIDEX_EMBEDDING_DIMENSIONS: "128"
-    VERIDEX_OLLAMA_EMBEDDING_MODEL: qwen3-embedding
+    VERIDEX_OLLAMA_EMBEDDING_MODEL: qwen3-embedding:0.6b
 
 web:
   replicaCount: 2

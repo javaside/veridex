@@ -36,7 +36,7 @@ Compose 会自动读取 `deploy/compose/.env`。可参考 `deploy/compose/.env.e
 | `VERIDEX_EMBEDDING_PROVIDER` | `deterministic` |
 | `VERIDEX_EMBEDDING_DIMENSIONS` | `128` |
 | `VERIDEX_OLLAMA_BASE_URL` | `http://localhost:11434`（embedding 与 chat 共用） |
-| `VERIDEX_OLLAMA_EMBEDDING_MODEL` | `qwen3-embedding` |
+| `VERIDEX_OLLAMA_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` |
 | `VERIDEX_CHAT_PROVIDER` | `deepseek`（默认）或 `ollama`；`deterministic` 为测试占位 |
 | `VERIDEX_CHAT_TIMEOUT` | `60s`（一次模型生成总时限） |
 | `VERIDEX_DEEPSEEK_BASE_URL` | `https://api.deepseek.com` |
@@ -97,7 +97,7 @@ VERIDEX_OUTBOUND_ALLOW_INSECURE_HTTP=true \
 
 ## Embedding 向量模型
 
-> ⚠️ **运行时/部署必须配好向量模型，默认 `deterministic` 没有用。** 它是 128 维无语义哈希，向量检索路基本失效，只能勉强靠 BM25 兜底。生产/真实问答必须切换到 `ollama`（`qwen3-embedding`，1024 维），并同步设 `VERIDEX_EMBEDDING_DIMENSIONS=1024`。
+> ⚠️ **运行时/部署必须配好向量模型，默认 `deterministic` 没有用。** 它是 128 维无语义哈希，向量检索路基本失效，只能勉强靠 BM25 兜底。生产/真实问答必须切换到 `ollama`（`qwen3-embedding:0.6b`，1024 维），并同步设 `VERIDEX_EMBEDDING_DIMENSIONS=1024`。
 
 向量模型由 `VERIDEX_EMBEDDING_PROVIDER` 决定，启动时后端会打印实际装配的 provider、模型与 baseUrl（例如 `veridex.embedding.provider=ollama (model=..., baseUrl=...)`）。
 
@@ -106,7 +106,7 @@ VERIDEX_OUTBOUND_ALLOW_INSECURE_HTTP=true \
 默认 `deterministic`（128 维确定性哈希，无语义）。切换真实语义模型：
 
 ```bash
-ollama pull qwen3-embedding
+ollama pull qwen3-embedding:0.6b
 ```
 
 以 `VERIDEX_EMBEDDING_PROVIDER=ollama VERIDEX_EMBEDDING_DIMENSIONS=1024` 启动：

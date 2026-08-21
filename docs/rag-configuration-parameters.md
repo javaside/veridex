@@ -58,7 +58,7 @@
 `chatModel` / `embeddingModel` 是配置 Profile 里的**标识记录字段**（默认值 `deterministic`），用于评测快照与结果可复现，**不参与运行时模型路由**。实际装配哪个模型由环境变量决定，与这两个字段解耦：
 
 - 对话模型：`veridex.chat.provider`（默认 `deepseek`，模型 `deepseek-v4-flash`；也可 `ollama`；`deterministic` 为测试占位实现）
-- 嵌入模型：`veridex.embedding.provider`（默认 `deterministic` 128 维确定性哈希；`ollama` 为真实语义 `qwen3-embedding` 1024 维）
+- 嵌入模型：`veridex.embedding.provider`（默认 `deterministic` 128 维确定性哈希；`ollama` 为真实语义 `qwen3-embedding:0.6b` 1024 维）
 
 > 注意：当前只有单一模型装配，`chatModel`/`embeddingModel` 字段值不会被用来在运行时切换 provider。要支持「按 Profile 切换模型」需先做多模型装配 + 路由，属未实现能力。
 

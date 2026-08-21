@@ -141,9 +141,11 @@ services:
       VERIDEX_OLLAMA_CHAT_MODEL: ${VERIDEX_OLLAMA_CHAT_MODEL:-qwen3:8b}
       VERIDEX_CHAT_TIMEOUT: ${VERIDEX_CHAT_TIMEOUT:-60s}
       # --- Embedding 向量模型（默认 deterministic 无语义，必须切 ollama 才有真实向量）---
-      VERIDEX_EMBEDDING_PROVIDER: ${VERIDEX_EMBEDDING_PROVIDER:-ollama}
-      VERIDEX_EMBEDDING_DIMENSIONS: ${VERIDEX_EMBEDDING_DIMENSIONS:-1024}
-      VERIDEX_OLLAMA_EMBEDDING_MODEL: ${VERIDEX_OLLAMA_EMBEDDING_MODEL:-qwen3-embedding}
+      # 默认值须与 backend application.yml 一致（deterministic / 128），保证「不配模型也能启动冒烟」；
+      # 真实使用请通过 .env 切 ollama 并同步设 1024 维（模型 qwen3-embedding:0.6b）。
+      VERIDEX_EMBEDDING_PROVIDER: ${VERIDEX_EMBEDDING_PROVIDER:-deterministic}
+      VERIDEX_EMBEDDING_DIMENSIONS: ${VERIDEX_EMBEDDING_DIMENSIONS:-128}
+      VERIDEX_OLLAMA_EMBEDDING_MODEL: ${VERIDEX_OLLAMA_EMBEDDING_MODEL:-qwen3-embedding:0.6b}
       # --- 出站策略（真实模型需显式放行对应 host/port）---
       VERIDEX_OUTBOUND_ALLOWED_HOSTS: ${VERIDEX_OUTBOUND_ALLOWED_HOSTS:-host.docker.internal}
       VERIDEX_OUTBOUND_ALLOWED_PORTS: ${VERIDEX_OUTBOUND_ALLOWED_PORTS:-11434}

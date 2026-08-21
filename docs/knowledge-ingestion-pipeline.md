@@ -111,7 +111,7 @@ for (i in bytes) vector[i % 128] += (byte - 128) / 128f;  // 然后 L2 归一化
 - 输出 128 维归一化向量
 - **这不是语义模型**：它只是把字节确定性映射到向量，相同文本必得相同向量，但**不包含语义相似度**（"苹果"和"水果"不会更接近）
 - **定位**：开发与集成测试的本地默认，**无需外部 API、无成本、可复现**——用于打通管道和验证幂等/检索流程
-- **生产**：按配置 `veridex.embedding.provider`（默认 `deterministic`）切换真实模型。当前已支持 `ollama`（Ollama `qwen3-embedding`，1024 维真实语义）。OpenSearch 索引的 `dimension` 由 `veridex.embedding.dimensions`（默认 128）决定，换模型后必须同步维度并重建索引
+- **生产**：按配置 `veridex.embedding.provider`（默认 `deterministic`）切换真实模型。当前已支持 `ollama`（Ollama `qwen3-embedding:0.6b`，1024 维真实语义）。OpenSearch 索引的 `dimension` 由 `veridex.embedding.dimensions`（默认 128）决定，换模型后必须同步维度并重建索引
 
 ### 2.6 OpenSearch — 检索索引（向量 + 全文）
 

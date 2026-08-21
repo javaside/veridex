@@ -48,7 +48,7 @@ docker compose -f deploy/compose/compose.yml logs -f
 
 > ⚠️ **启动前必须先配好模型，否则问答检索无法给出真实结果。**
 >
-> - **Embedding 向量模型**：默认 `deterministic` 是 128 维无语义哈希，**不能用于真实检索**。必须切换到 `ollama`（`qwen3-embedding`，1024 维），并同步设 `VERIDEX_EMBEDDING_DIMENSIONS=1024`。
+> - **Embedding 向量模型**：默认 `deterministic` 是 128 维无语义哈希，**不能用于真实检索**。必须切换到 `ollama`（`qwen3-embedding:0.6b`，1024 维），并同步设 `VERIDEX_EMBEDDING_DIMENSIONS=1024`。
 > - **Chat 对话模型**：默认 `deepseek` 是真实模型，但**必须提供 `VERIDEX_DEEPSEEK_API_KEY`**，否则调用会失败；也可切 `ollama`。
 >
 > 两者都要显式配置，**不要用默认的 `deterministic`**。具体变量与示例见 [配置说明](configuration.md) 的「Chat 生成模型」与「Embedding 向量模型」两节。
@@ -62,7 +62,7 @@ export VERIDEX_DEEPSEEK_API_KEY='<你的 API key>'
 export VERIDEX_EMBEDDING_PROVIDER=ollama
 export VERIDEX_EMBEDDING_DIMENSIONS=1024
 export VERIDEX_OLLAMA_BASE_URL=http://localhost:11434
-export VERIDEX_OLLAMA_EMBEDDING_MODEL=qwen3-embedding
+export VERIDEX_OLLAMA_EMBEDDING_MODEL=qwen3-embedding:0.6b
 export VERIDEX_OUTBOUND_ALLOWED_HOSTS=api.deepseek.com,localhost
 export VERIDEX_OUTBOUND_ALLOWED_PORTS=443,11434
 export VERIDEX_OUTBOUND_ALLOW_INSECURE_HTTP=true
