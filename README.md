@@ -1,5 +1,7 @@
 # Veridex
 
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 Veridex 是面向企业私有化部署的 RAG（Retrieval-Augmented Generation，检索增强生成）平台。目前项目已经完成 **Phase 4：质量评测与运营闭环**，支持创建知识库、上传文档、异步解析和分块、发布到 OpenSearch、授权员工流式问答并校验引用，以及版本化评测集、不可变 RAG 配置版本、评测运行、版本对比门禁和反馈转坏例闭环。
 
 > 应用已提供 backend/web 双容器镜像、Compose 完整应用栈、原生 Helm chart 与受限网络离线交付；详见下文「容器化与部署」。
@@ -433,7 +435,7 @@ docker compose -f deploy/compose/compose.yml logs opensearch
 
 - 使用种子用户名和密码 `veridex`；
 - 后端已启动并连接到 Compose 中的 PostgreSQL；
-- Flyway 已成功应用 V1–V11 迁移；
+- Flyway 已成功应用 V1–V17 迁移；
 - 如果数据库来自旧的本地实验数据，可在确认不需要保留数据后执行 `down -v` 重建。
 
 ### 文档一直处于 `UPLOADED` 或变成 `FAILED`
@@ -484,3 +486,11 @@ VERIDEX_EMBEDDING_DIMENSIONS=1024 \
 - [RAG 配置参数语义](docs/rag-configuration-parameters.md)
 - [容量与恢复报告（2026-08）](docs/capacity-report-2026-08.md)
 - [Phase 2 实施计划](docs/superpowers/plans/2026-08-11-knowledge-ingestion-vertical-slice.md)
+
+## 许可证
+
+Copyright 2026 Veridex Contributors。本项目以 [Apache License 2.0](LICENSE) 授权。
+
+## 贡献
+
+欢迎贡献！请先阅读[贡献指南](CONTRIBUTING.md)与[行为准则](CODE_OF_CONDUCT.md)。安全漏洞请按 [SECURITY.md](SECURITY.md) 所述方式私下报告，不要通过公开 issue 披露。变更历史见 [CHANGELOG.md](CHANGELOG.md)。

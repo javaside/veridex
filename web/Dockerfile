@@ -17,5 +17,9 @@ COPY --chown=101:101 web/public/error_page.html /usr/share/nginx/html/error_page
 COPY --from=build --chown=101:101 /build/dist/ /usr/share/nginx/html/
 COPY --chown=101:101 deploy/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY --chown=101:101 deploy/nginx/default.conf.template /etc/nginx/templates/default.conf.template
+LABEL org.opencontainers.image.title="veridex-web" \
+      org.opencontainers.image.source="https://github.com/javaside/veridex" \
+      org.opencontainers.image.description="Veridex RAG platform web console" \
+      org.opencontainers.image.licenses="Apache-2.0"
 EXPOSE 8080
 USER 101:101

@@ -20,9 +20,9 @@ RUN addgroup -g 10001 -S veridex && adduser -u 10001 -S -G veridex -H -D veridex
     && chown -R 10001:10001 /app /tmp/veridex-parser
 COPY --from=build --chown=10001:10001 /build/backend/target/veridex-backend-*.jar /app/veridex-backend.jar
 LABEL org.opencontainers.image.title="veridex-backend" \
-      org.opencontainers.image.source="https://github.com/veridex/veridex" \
+      org.opencontainers.image.source="https://github.com/javaside/veridex" \
       org.opencontainers.image.description="Veridex RAG platform backend" \
-      org.opencontainers.image.licenses="UNLICENSED"
+      org.opencontainers.image.licenses="Apache-2.0"
 EXPOSE 8080 8081
 USER 10001:10001
 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75.0", "-Djava.security.egd=file:/dev/./urandom", "-jar", "/app/veridex-backend.jar"]
