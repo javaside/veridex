@@ -25,12 +25,14 @@ trap 'rm -rf "${STAGING}"' EXIT
 command -v docker >/dev/null 2>&1 || { echo "build-compose-release: docker required" >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "build-compose-release: python3 required" >&2; exit 1; }
 
-# 版本号：参数 > Chart.yaml version
+# 版本号：参数 > Chart.yaml version。统一去掉前导 v（v0.1.0 → 0.1.0），
+# 产物名与镜像 tag 都使用不带 v 的版本号（与 Chart.yaml / images.txt 一致）。
 if [[ $# -ge 1 ]]; then
   VERSION="$1"
 else
   VERSION="$(awk '/^version:/ {print $2; exit}' "${CHART_DIR}/Chart.yaml")"
 fi
+VERSION="${VERSION#v}"
 [[ -n "${VERSION}" ]] || { echo "build-compose-release: unable to determine VERSION" >&2; exit 1; }
 
 PKG_DIR="${STAGING}/veridex-${VERSION}-compose"

@@ -46,9 +46,16 @@ gh release create v0.1.0 \
 
 > 注意：GitHub Release 页面解析不了 `docs/release-notes/` 里的相对链接。若 Release 说明里需要可点击的链接，发布时把相对路径替换为 `https://github.com/<owner>/<repo>/blob/<tag>/...` 绝对 URL，但**源文件保持相对路径不动**（不要为一个渲染环境污染另外三个环境）。
 
-## 构建离线交付包（用于 GitHub Release 资产）
+## 构建发布资产（offline + compose）
 
-发布物以源码为主，另附离线交付包作为可部署资产：构建镜像 → 生成离线交付物（镜像 tar + Helm chart + SHA-256 清单）→ 打包成 `dist/veridex-<版本>-offline.tar.gz`。
+Veridex 提供两种可部署资产，均随 GitHub Release 上传：
+
+- **离线交付包**（正式交付物）：面向 Kubernetes / 受限网络的私有化部署，内含 backend/web 镜像 tar、Helm chart 与 SHA-256 清单。安装步骤见 `deploy/offline/veridex-offline/INSTALL.txt`。
+- **Compose 单机包**（快速体验）：面向单机 Docker，内含应用镜像 + Compose 编排 + 安装说明，拿到手配 `.env` 跑一条命令即可起全栈。安装步骤见包内 `README.md`。
+
+### 离线交付包
+
+构建镜像 → 生成离线交付物（镜像 tar + Helm chart + SHA-256 清单）→ 打包成 `dist/veridex-<版本>-offline.tar.gz`。
 
 ```bash
 # 完整构建（含镜像构建）
@@ -58,11 +65,37 @@ gh release create v0.1.0 \
 SKIP_BUILD=1 ./scripts/build-release.sh v0.1.0
 ```
 
-产物输出到 `<repo>/dist/veridex-<版本>-offline.tar.gz`（及其 `.sha256`），`dist/` 已 git 忽略、不进仓库。上传到 Release：
+产物输出到 `<repo>/dist/veridex-<版本>-offline.tar.gz`（及其 `.sha256`），`dist/` 已 git 忽略、不进仓库。上传到 Release（`--clobber` 覆盖同名旧资产）：
 
 ```bash
-gh release upload v0.1.0 dist/veridex-0.1.0-offline.tar.gz
+gh release upload v0.1.0 \
+  dist/veridex-0.1.0-offline.tar.gz \
+  dist/veridex-0.1.0-offline.tar.gz.sha256 \
+  --clobber
 ```
+
+### Compose 单机包
+
+构建 backend/web 镜像 → 导出镜像 tar → 生成不含 `build` 段的 Compose 编排 + `.env` 模板 + 安装说明 → 打包成 `dist/veridex-<版本>-compose.tar.gz`。
+
+```bash
+# 完整构建（含镜像构建）
+./scripts/build-compose-release.sh v0.1.0
+
+# 复用本地已构建镜像（跳过镜像构建）
+SKIP_BUILD=1 ./scripts/build-compose-release.sh v0.1.0
+```
+
+上传到 Release：
+
+```bash
+gh release upload v0.1.0 \
+  dist/veridex-0.1.0-compose.tar.gz \
+  dist/veridex-0.1.0-compose.tar.gz.sha256 \
+  --clobber
+```
+
+> 两个脚本都接受 `v0.1.0` 或 `0.1.0`，内部统一去掉前导 `v`，产物名始终为 `veridex-<版本>-<offline|compose>.tar.gz`。
 
 ## 构建并推送 Docker 镜像（可选）
 

@@ -21,12 +21,14 @@ IMAGES_FILE="${OFFLINE_DIR}/images.txt"
 
 command -v docker >/dev/null 2>&1 || { echo "build-release: docker required" >&2; exit 1; }
 
-# 版本号：参数 > Chart.yaml version
+# 版本号：参数 > Chart.yaml version。统一去掉前导 v（v0.1.0 → 0.1.0），
+# 产物名与镜像 tag 都使用不带 v 的版本号（images.txt / Chart.yaml 均不带 v）。
 if [[ $# -ge 1 ]]; then
   VERSION="$1"
 else
   VERSION="$(awk '/^version:/ {print $2; exit}' "${CHART_DIR}/Chart.yaml")"
 fi
+VERSION="${VERSION#v}"
 [[ -n "${VERSION}" ]] || { echo "build-release: unable to determine VERSION" >&2; exit 1; }
 
 # 镜像名从 images.txt 解析（去掉注释/空行）。列表里的镜像名即为构建目标。
