@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -22,6 +23,19 @@ class TraceBodyCleanupIntegrationTest extends PostgresIntegrationTest {
     @Autowired JdbcTraceBodyMaintenanceRepository maintenance;
 
     private final List<UUID> runIds = new ArrayList<>();
+
+    /**
+     * {@code scrubQueryRuns} 是全表扫描：它按「question/normalized_question 非 [REDACTED] 或
+     * error 超出有界码表」判定 dirty。共享 PostgreSQL 容器里，其它集成测试（如 QA 问答）会遗留
+     * 真实的 query_run 行，这些行也会被当作 dirty，导致本测试「只 scrub 自己那一行」的断言随
+     * 执行顺序飘移。测试前清空 query_run / trace_body（trace_body 外键引用 query_run，须先删），
+     * 保证每个用例都在干净表上运行，与执行顺序无关。
+     */
+    @BeforeEach
+    void clearTables() {
+        jdbc.update("DELETE FROM trace_body");
+        jdbc.update("DELETE FROM query_run");
+    }
 
     @AfterEach
     void cleanupRows() {
