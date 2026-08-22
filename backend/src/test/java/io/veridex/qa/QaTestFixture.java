@@ -194,6 +194,23 @@ abstract class QaTestFixture extends PostgresIntegrationTest {
                 .build();
         HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isLessThan(300);
+
+        // 发布是异步的：/publish 立即返回 202（PUBLISHING），真正的索引与 alias 切换在后台线程执行。
+        // 若不等待发布完成就发起 ask，检索可能命中空结果（hitCount=0 → answer.refused），
+        // 且该竞态在 CI 全量并发 + 资源竞争下更容易暴露。这里轮询 release 状态直到 PUBLISHED。
+        awaitPublished(session, kbId);
+    }
+
+    private void awaitPublished(String session, String kbId) throws Exception {
+        long deadline = System.currentTimeMillis() + Duration.ofSeconds(30).toMillis();
+        while (System.currentTimeMillis() < deadline) {
+            String body = get(session, "/api/knowledge-bases/" + kbId + "/releases");
+            if (body.contains("\"status\":\"PUBLISHED\"")) {
+                return;
+            }
+            Thread.sleep(100);
+        }
+        throw new IllegalStateException("publish did not reach PUBLISHED within 30s for kb " + kbId);
     }
 
     protected List<String> eventNames(String sseBody) {
